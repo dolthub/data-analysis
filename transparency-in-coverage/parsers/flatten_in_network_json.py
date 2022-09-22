@@ -58,13 +58,21 @@ def walk(prefix, parser, output_dir, **uuids):
             
         if new_event in ['string', 'number']:
             data[pop(new_prefix)] = new_value
-            
             new_prefix, new_event, new_value = next(parser)
             continue
+            
+        if new_event == 'start_array':
+            new_prefix, new_event, new_value = next(parser)
 
+            if new_event in ['string', 'number']:
+                data[pop(new_prefix)] = []
+                while new_event != 'end_array':
+                    data[pop(new_prefix)].append(new_value)
+                    new_prefix, new_event, new_value = next(parser)
+                    
         if new_event == 'start_map':
             walk(new_prefix, parser, output_dir, **uuids)
-            
+                    
         new_prefix, new_event, new_value = next(parser)
                         
     # Once we've reached "end map" and the prefix
