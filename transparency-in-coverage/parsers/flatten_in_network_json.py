@@ -55,15 +55,12 @@ def walk(prefix, parser, output_dir, **uuids):
         if new_prefix == '':
             new_prefix = 'root'
             
-            
         if new_event in ['string', 'number']:
             data[pop(new_prefix)] = new_value
             new_prefix, new_event, new_value = next(parser)
             continue
 
         if new_event == 'start_map':
-            # Recurse to the next level down,
-            # passing in the uuids from the parents
             walk(new_prefix, parser, output_dir, **uuids)
             
         new_prefix, new_event, new_value = next(parser)
