@@ -4,14 +4,18 @@ import uuid
 import glob
 import os
 
-in_network_file = glob.glob("*.json")[0]
+in_network_file = "INSERT_FILE_HERE.json"
+
 
 def pop(string):
     """
-    A "string.like.this" becomes just "this".
-    ("pop" off the last part.)
+    Convenience function for making strings easier
+    to read.
+
+    "pop"s out the 'item' parts from a string. So that
+    "rate.item.price.item" becomes "rate.price"
     """
-    return string.split('.')[-1]
+    return '.'.join([s for s in string.split('.') if s != 'item'])
 
 def walk(prefix, parser, output_dir, **uuids):
     """
@@ -39,12 +43,9 @@ def walk(prefix, parser, output_dir, **uuids):
         prefix = 'root'
     
     data = {}
-            
-    # Add a new UUID field
+    
+    # Pass parent UUIDs to child            
     uuids[f'{pop(prefix)}_uuid'] = uuid.uuid4()
-
-    # Loop through all parent and child UUID
-    # fields and add to row
     for key, value in uuids.items():
         data[key] = value
 
@@ -57,6 +58,7 @@ def walk(prefix, parser, output_dir, **uuids):
             
         if new_event in ['string', 'number']:
             data[pop(new_prefix)] = new_value
+            
             new_prefix, new_event, new_value = next(parser)
             continue
 
@@ -68,11 +70,9 @@ def walk(prefix, parser, output_dir, **uuids):
     # Once we've reached "end map" and the prefix
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
-
-    output_filename = f"{output_dir}/{prefix}.csv"
+    output_filename = f"{output_dir}/{pop(prefix)}.csv"
 
     mode = "w+"
-
     if os.path.exists(output_filename):
         mode = "a"
 
