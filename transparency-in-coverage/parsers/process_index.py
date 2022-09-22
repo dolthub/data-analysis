@@ -132,8 +132,11 @@ def get_in_network_file_urls_from_index(index_file, limit = None):
 
 
 async def main():
-    urls = get_in_network_file_urls_from_index(args.file, limit = int(args.limit))
-    await fetch_and_process_in_network_urls(urls)
+    
+    if (index_filename := args.file):
+        urls = get_in_network_file_urls_from_index(index_filename, limit = int(args.limit))
+        await fetch_and_process_in_network_urls(urls)
+        
     os.rmdir(tmp_dir)
 
 asyncio.run(main())
