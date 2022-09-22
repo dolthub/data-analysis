@@ -95,7 +95,7 @@ def tableize_file(filename, output_dir = './flatten'):
         for file in glob.glob(f'output_dir/*'):
             os.rmdir(file)
 
-    with open(in_network_file, "r") as f:
+    with open(filename, "r") as f:
     
         parser = ijson.parse(f)
         prefix, event, value = next(parser)
