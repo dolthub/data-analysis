@@ -16,6 +16,40 @@ def pop(string):
     "rate.item.price.item" becomes "rate.price"
     """
     return '.'.join([s for s in string.split('.') if s != 'item'])
+    
+
+def write_data(output_dir, filename, data):
+    
+    file_loc = f"{output_dir}/{filename}.csv"
+    
+    fieldnames = [pop(k) for k in data.keys()]
+    
+    # TODO
+    # Fill this out for the rest of the tables
+    if filename == 'in_network.negotiated_rates.negotiated_prices':
+        fieldnames = ['root_uuid',
+                         'in_network_uuid',
+                         'in_network.negotiated_rates_uuid',
+                         'in_network.negotiated_rates.negotiated_prices_uuid',
+                         'in_network.negotiated_rates.negotiated_prices.negotiated_type',
+                         'in_network.negotiated_rates.negotiated_prices.negotiated_rate',
+                         'in_network.negotiated_rates.negotiated_prices.expiration_date',
+                         'in_network.negotiated_rates.negotiated_prices.service_code',
+                         'in_network.negotiated_rates.negotiated_prices.billing_class',
+                         'in_network.negotiated_rates.negotiated_prices.billing_code_modifier']
+    
+    if not os.path.exists(file_loc):
+        with open(file_loc, "w") as f:
+            writer = csv.DictWriter(f, fieldnames = fieldnames)
+            writer.writeheader()
+            writer.writerow(data)
+            return
+    
+    with open(file_loc, "a") as f:
+        writer = csv.DictWriter(f, fieldnames = fieldnames)
+        writer.writerow(data)
+        return
+
 
 def walk(prefix, parser, output_dir, **uuids):
     """
@@ -78,26 +112,13 @@ def walk(prefix, parser, output_dir, **uuids):
     # Once we've reached "end map" and the prefix
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
-    output_filename = f"{output_dir}/{pop(prefix)}.csv"
+    write_data(output_dir, pop(prefix), data)
 
-    mode = "w+"
-    if os.path.exists(output_filename):
-        mode = "a"
-
-    with open(output_filename, mode) as f:
-        fieldnames = [pop(k) for k in data.keys()]
-        writer = csv.DictWriter(f, fieldnames = fieldnames)
-
-        if mode == "w+":
-            writer.writeheader()
-
-        writer.writerow(data)
-        
 
 def tableize_file(filename, output_dir = './flatten'):
     
     if not os.path.exists(output_dir):
-        print('making dir')
+
         os.mkdir(output_dir)
         
     else:
