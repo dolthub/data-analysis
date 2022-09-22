@@ -1,3 +1,13 @@
+"""
+JSON Parser for the payor in-network files
+TODOs:
+1. Decide whether to use UUIDs or hashes. If hashes, what/how to hash?
+2. Finalize columns for flattened files. As of writing, we only have 
+this done for the negotiated rates file.
+3. Finalize column names
+4. Run tests and time
+"""
+
 import ijson
 import csv
 import uuid
@@ -16,7 +26,7 @@ def pop(string):
     "rate.item.price.item" becomes "rate.price"
     """
     return '.'.join([s for s in string.split('.') if s != 'item'])
-    
+
 
 def write_data(output_dir, filename, data):
     
