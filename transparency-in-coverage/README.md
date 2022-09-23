@@ -1,10 +1,10 @@
 # Transparency in Coverage
 
-This repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/), and then some -- because after a positive response from the community we decided to take a crack at building this database ourselves. 
+This repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/) (check the `size_of_in_network_files` folder.)
 
-Part of it will involve community work at DoltHub. But the data is too big for a Dolt database. We'll need a team.
+And, after a positive response from the community, we decided to take a crack at building this database ourselves. Or at least some of it. That work is going in the `parsers` folder.
 
-No matter how far we get, we'll learn something along the way.
+We'll need a team to do this. And no matter how far we get, we'll learn something along the way.
 
 ## Plans to build the database on DoltHub
 
