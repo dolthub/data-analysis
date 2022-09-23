@@ -1,3 +1,5 @@
+%%time
+
 """
 JSON Parser for the payor in-network files
 
@@ -65,14 +67,18 @@ a URL, an async function needs to fetch the provider information from
 that URL.
 """
 
+# The fastest backed for ijson. You'll need
+# YALJ installed. See http://lloyd.github.io/yajl/
+# Otherwise, just comment this line and 
+# uncomment the one below it
 import ijson.backends.yajl2 as ijson
+# import ijson
+import os
 import csv
 import uuid
 import glob
-import os
-
-in_network_file = './MY_IN_NETWORK_FILE.json'
-output_dir = './flatten'
+import requests
+import gzip
 
 # PRELIMINARY SCHEMA
 # Missing bundled codes, among other things
@@ -110,6 +116,7 @@ SCHEMA = {
         'in_network.negotiated_rates.negotiated_prices.expiration_date',
         'in_network.negotiated_rates.negotiated_prices.service_code',
         'in_network.negotiated_rates.negotiated_prices.billing_class',
+        'in_network.negotiated_rates.negotiated_prices.additional_information',
         'in_network.negotiated_rates.negotiated_prices.billing_code_modifier',],
 
     'in_network.negotiated_rates.provider_groups':[
@@ -214,7 +221,7 @@ def walk(prefix, parser, output_dir, **uuids):
     prefix, event, value = next(parser)
     
     while event != 'end_map':
-            
+        
         if event in ['string', 'number']:
             data[cull(prefix)] = value
             prefix, event, value = next(parser)
@@ -238,21 +245,56 @@ def walk(prefix, parser, output_dir, **uuids):
     # Once we've reached "end map" and the prefix
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
-
-    # write_data(output_dir = output_dir, filename = cull(prefix), data = data)
-
-
-if not os.path.exists(output_dir):
-    os.mkdir(output_dir)
     
-else:
-    # Remove files that are already in the folder
-    for file in glob.glob(f'{output_dir}/*'):
-        os.remove(file)
+    write_data(output_dir = output_dir, filename = cull(prefix), data = data)
 
-with open(in_network_file, 'r') as f:
 
-    parser = ijson.parse(f)
-    prefix, event, value = next(parser)
+def parse_json(in_network_file, output_dir = './flatten', remote = False):
+    """
+    Can parse inflated, gzipped, or remote gzipped JSON files.
 
-    walk(prefix = prefix, parser = parser, output_dir = output_dir)
+    Usage:
+        1. parse_json('in_network_file.json')
+        2. parse_json('in_network_file.json.gz')
+        3. parse_json('https://www.uhc.com/in_network_file.json.gz')
+
+    Thanks to @jakesnipes for working out the details on GZip and
+    streaming!
+    """
+
+    if os.path.exists(output_dir):
+        for file in glob.glob(f'{output_dir}/*'):
+            os.remove(file)
+    
+    else: os.mkdir(output_dir)
+    
+    if in_network_file.startswith('http'):
+        
+        with requests.get(in_network_file, stream=True) as r:
+            f = gzip.GzipFile(fileobj=r.raw)
+            parser = ijson.parse(f)
+            prefix, event, value = next(parser)
+            walk(prefix = prefix, parser = parser, output_dir = output_dir)
+    
+    elif in_network_file.endswith('.json'):
+    
+        with open(in_network_file, 'r') as f:
+            
+            parser = ijson.parse(f)
+            prefix, event, value = next(parser)
+            walk(prefix = prefix, parser = parser, output_dir = output_dir)
+            
+    elif in_network_file.endswith('.json.gz'):
+
+        with open(in_network_file, 'rb') as g:
+            
+            f = gzip.GzipFile(fileobj = g)
+            parser = ijson.parse(f)
+            prefix, event, value = next(parser)
+            walk(prefix = prefix, parser = parser, output_dir = output_dir)
+
+
+in_network_file = './YOUR_FILE_HERE.json'
+output_dir = './flatten'
+
+parse_json(in_network_file)
