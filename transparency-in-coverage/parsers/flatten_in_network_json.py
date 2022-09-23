@@ -315,7 +315,4 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
     print(f'Time taken: {td} s')
 
 
-in_network_file = './YOUR_FILE.json'
-output_dir = './flatten'
-
-parse_json(in_network_file)
+parse_json(in_network_file = './YOUR_IN_NETWORK_FILE.json', output_dir = './flatten')
