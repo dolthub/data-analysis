@@ -63,10 +63,9 @@ example -- we need to add that flexibilty.
 5. There is one more TODO here. When provider references are given as
 a URL, an async function needs to fetch the provider information from
 that URL.
-
 """
 
-import ijson
+import ijson.backends.yajl2 as ijson
 import csv
 import uuid
 import glob
@@ -240,7 +239,7 @@ def walk(prefix, parser, output_dir, **uuids):
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
 
-    write_data(output_dir = output_dir, filename = cull(prefix), data = data)
+    # write_data(output_dir = output_dir, filename = cull(prefix), data = data)
 
 
 if not os.path.exists(output_dir):
