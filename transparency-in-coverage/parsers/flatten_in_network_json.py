@@ -3,7 +3,8 @@ JSON PARSER FOR IN-NETWORK MRFS
 
 This script parses and saves in-network MRF files in a specific
 relational schema. It works with inflated, gzipped, and remote 
-gzipped JSON.
+gzipped JSON. That means you can plug in a URL and stream the JSON
+while writing it to file, without having to inflate it.
 
 ISSUES:
 
@@ -71,16 +72,20 @@ that URL.
 
 # The fastest backed for ijson. You'll need
 # YALJ installed. See http://lloyd.github.io/yajl/
-# Otherwise, just comment this line and 
-# uncomment the one below it
-import ijson.backends.yajl2 as ijson
+import ijson.backends.yajl2_c as ijson
+
+# If you have trouble installing, do
 # import ijson
+# but this is much slower for streaming
+
+import ijson
 import os
 import csv
 import uuid
 import glob
 import requests
 import gzip
+import time
 
 # PRELIMINARY SCHEMA
 # Missing bundled codes, among other things
@@ -172,7 +177,7 @@ def cull(prefix):
     if prefix == '':
         return 'root'
 
-    return '.'.join([s for s in prefix.split('.') if s != 'item'])
+    return prefix.replace('.item', '')
 
 
 def write_data(output_dir, filename, data):
@@ -248,7 +253,7 @@ def walk(prefix, parser, output_dir, **uuids):
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
     
-    write_data(output_dir = output_dir, filename = cull(prefix), data = data)
+    # write_data(output_dir = output_dir, filename = cull(prefix), data = data)
 
 
 def parse_json(in_network_file, output_dir = './flatten', remote = False):
@@ -263,6 +268,8 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
     Thanks to @jakesnipes for working out the details on GZip and
     streaming!
     """
+    s = time.time()
+    print(f'Using ijson backend: {ijson.backend}')
 
     if os.path.exists(output_dir):
         for file in glob.glob(f'{output_dir}/*'):
@@ -272,31 +279,44 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
     
     if in_network_file.startswith('http'):
         
-        with requests.get(in_network_file, stream=True) as r:
-            f = gzip.GzipFile(fileobj=r.raw)
-            parser = ijson.parse(f)
+        print(f'Streaming from: {in_network_file}')
+
+        with requests.get(in_network_file, stream = True) as r:
+
+            # use_float may give a slight performance boost
+            f = gzip.GzipFile(fileobj = r.raw)
+            parser = ijson.parse(f, use_float = True)
             prefix, event, value = next(parser)
             walk(prefix = prefix, parser = parser, output_dir = output_dir)
     
     elif in_network_file.endswith('.json'):
+
+        file_size_mb = os.path.getsize(in_network_file)//1_000_000
+        print(f'Streaming inflated file: {in_network_file} ({file_size_mb} MB)')
     
         with open(in_network_file, 'r') as f:
             
-            parser = ijson.parse(f)
+            parser = ijson.parse(f, use_float = True)
             prefix, event, value = next(parser)
             walk(prefix = prefix, parser = parser, output_dir = output_dir)
             
     elif in_network_file.endswith('.json.gz'):
 
+        file_size_mb = os.path.getsize(in_network_file)//1_000_000
+        print(f'Streaming gzipped file: {in_network_file} ({file_size_mb} MB)')
+
         with open(in_network_file, 'rb') as g:
             
             f = gzip.GzipFile(fileobj = g)
-            parser = ijson.parse(f)
+            parser = ijson.parse(f, use_float = True)
             prefix, event, value = next(parser)
             walk(prefix = prefix, parser = parser, output_dir = output_dir)
 
+    td = round(time.time() - s, 1)
+    print(f'Time taken: {td} s')
 
-in_network_file = './YOUR_FILE_HERE.json'
+
+in_network_file = './YOUR_FILE.json'
 output_dir = './flatten'
 
 parse_json(in_network_file)
