@@ -252,8 +252,7 @@ def walk(prefix, parser, output_dir, **uuids):
     # Once we've reached "end map" and the prefix
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
-    
-    # write_data(output_dir = output_dir, filename = cull(prefix), data = data)
+    write_data(output_dir = output_dir, filename = cull(prefix), data = data)
 
 
 def parse_json(in_network_file, output_dir = './flatten', remote = False):
