@@ -1,9 +1,11 @@
-%%time
-
 """
-JSON Parser for the payor in-network files
+JSON PARSER FOR IN-NETWORK MRFS
 
-Current issues (Sept. 23, 2022):
+This script parses and saves in-network MRF files in a specific
+relational schema. It works with inflated, gzipped, and remote 
+gzipped JSON.
+
+ISSUES:
 
 1. On my (@spacelove/Alec Stein) M1 Macbook Pro, processing a 1.3GB
 JSON file takes about 11 minutes. I thought that writing CSV files
