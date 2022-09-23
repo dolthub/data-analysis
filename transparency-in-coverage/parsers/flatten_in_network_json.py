@@ -70,6 +70,10 @@ columns actually fit the data. The SCHEMA below does not
 understand bundled codes, for example -- we need to add
 that flexibilty.
 
+5. There is one more TODO here. When provider references
+are given as a URL, an async function needs to fetch
+the provider information from that URL.
+
 """
 
 import ijson
@@ -78,59 +82,81 @@ import uuid
 import glob
 import os
 
-in_network_file = './YOUR_IN_NETWORK_FILE.json'
+in_network_file = './MY_IN_NETWORK_FILE.json'
 output_dir = './flatten'
 
+# PRELIMINARY SCHEMA
+# Missing bundled codes, among other things
 SCHEMA = {
     'root':[
-            'root_uuid',
-            'reporting_entity_name',
-            'reporting_entity_type',
-            'last_updated_on',
-            'version',],
+        'root_uuid',
+        'reporting_entity_name',
+        'reporting_entity_type',
+        'last_updated_on',
+        'version',],
 
     'in_network':[
-            'root_uuid',
-            'in_network_uuid',
-            'in_network.negotiation_arrangement',
-            'in_network.name',
-            'in_network.billing_code_type',
-            'in_network.billing_code_type_version',
-            'in_network.billing_code',
-            'in_network.description',],
+        'root_uuid',
+        'in_network_uuid',
+        'in_network.negotiation_arrangement',
+        'in_network.name',
+        'in_network.billing_code_type',
+        'in_network.billing_code_type_version',
+        'in_network.billing_code',
+        'in_network.description',],
 
     'in_network.negotiated_rates':[
-            'root_uuid',
-            'in_network_uuid',
-            'in_network.negotiated_rates_uuid',],
+        'root_uuid',
+        'in_network_uuid',
+        'in_network.negotiated_rates_uuid',
+        'in_network.negotiated_rates.provider_references',],
 
     'in_network.negotiated_rates.negotiated_prices':[
-            'root_uuid',
-            'in_network_uuid',
-            'in_network.negotiated_rates_uuid',
-            'in_network.negotiated_rates.negotiated_prices_uuid',
-            'in_network.negotiated_rates.negotiated_prices.negotiated_type',
-            'in_network.negotiated_rates.negotiated_prices.negotiated_rate',
-            'in_network.negotiated_rates.negotiated_prices.expiration_date',
-            'in_network.negotiated_rates.negotiated_prices.service_code',
-            'in_network.negotiated_rates.negotiated_prices.billing_class',
-            'in_network.negotiated_rates.negotiated_prices.billing_code_modifier',],
+        'root_uuid',
+        'in_network_uuid',
+        'in_network.negotiated_rates_uuid',
+        'in_network.negotiated_rates.negotiated_prices_uuid',
+        'in_network.negotiated_rates.negotiated_prices.negotiated_type',
+        'in_network.negotiated_rates.negotiated_prices.negotiated_rate',
+        'in_network.negotiated_rates.negotiated_prices.expiration_date',
+        'in_network.negotiated_rates.negotiated_prices.service_code',
+        'in_network.negotiated_rates.negotiated_prices.billing_class',
+        'in_network.negotiated_rates.negotiated_prices.billing_code_modifier',],
 
     'in_network.negotiated_rates.provider_groups':[
-            'root_uuid',
-            'in_network_uuid',
-            'in_network.negotiated_rates_uuid',
-            'in_network.negotiated_rates.provider_groups_uuid',
-            'in_network.negotiated_rates.provider_groups.npi',],
+        'root_uuid',
+        'in_network_uuid',
+        'in_network.negotiated_rates_uuid',
+        'in_network.negotiated_rates.provider_groups_uuid',
+        'in_network.negotiated_rates.provider_groups.npi',],
 
     'in_network.negotiated_rates.provider_groups.tin':[
-            'root_uuid',
-            'in_network_uuid',
-            'in_network.negotiated_rates_uuid',
-            'in_network.negotiated_rates.provider_groups_uuid',
-            'in_network.negotiated_rates.provider_groups.tin_uuid',
-            'in_network.negotiated_rates.provider_groups.tin.type',
-            'in_network.negotiated_rates.provider_groups.tin.value',],
+        'root_uuid',
+        'in_network_uuid',
+        'in_network.negotiated_rates_uuid',
+        'in_network.negotiated_rates.provider_groups_uuid',
+        'in_network.negotiated_rates.provider_groups.tin_uuid',
+        'in_network.negotiated_rates.provider_groups.tin.type',
+        'in_network.negotiated_rates.provider_groups.tin.value',],
+
+    'provider_references':[
+        'root_uuid',
+        'provider_references_uuid',
+        'provider_references.provider_group_id',],
+
+    'provider_references.provider_groups':[
+        'root_uuid',
+        'provider_references_uuid',
+        'provider_references.provider_groups_uuid',
+        'provider_references.provider_groups.npi',],
+
+    'provider_references.provider_groups.tin':[
+        'root_uuid',
+        'provider_references_uuid',
+        'provider_references.provider_groups_uuid',
+        'provider_references.provider_groups.tin_uuid',
+        'provider_references.provider_groups.tin.type',
+        'provider_references.provider_groups.tin.value',]
 }
 
 
@@ -155,7 +181,8 @@ def write_data(output_dir, filename, data):
     
     file_loc = f'{output_dir}/{filename}.csv'
     
-    fieldnames = SCHEMA[filename] # data.keys()
+    fieldnames = SCHEMA[filename]
+    # fieldnames = data.keys()
     
     if not os.path.exists(file_loc):
         with open(file_loc, 'w') as f:
