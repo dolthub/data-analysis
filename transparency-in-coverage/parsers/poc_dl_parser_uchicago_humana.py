@@ -48,12 +48,8 @@ with requests.get(url, stream = True) as r:
     
     line = next(f)
     fieldnames = line.decode().split('~')  
-    
-    print(fieldnames)
-    
     fieldnames = [fieldnames[k] for k in idxs]
     
-    print(fieldnames)
     
     # If the file doesn't exist, create it
     # and add the header
