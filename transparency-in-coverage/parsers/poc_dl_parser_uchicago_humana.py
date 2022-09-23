@@ -50,7 +50,6 @@ with requests.get(url, stream = True) as r:
     fieldnames = line.decode().split('~')  
     fieldnames = [fieldnames[k] for k in idxs]
     
-    
     # If the file doesn't exist, create it
     # and add the header
     if not os.path.exists(filename):
