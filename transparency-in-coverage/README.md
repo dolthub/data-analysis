@@ -1,6 +1,6 @@
 # TODOs
 
-1. Get a working JSON parser that can *filter by code*. This cuts down way on streaming speed.
+1. Get a working JSON parser that can *filter by code*. This cuts down way on time needed to stream
 2. Write a Humana parser that can put the CSV files in the same format as the JSON files
 
 # Transparency in Coverage
