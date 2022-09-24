@@ -1,3 +1,8 @@
+# TODOs
+
+1. Get a working JSON parser that can *filter by code*. This cuts down way on streaming speed.
+2. Write a Humana parser that can put the CSV files in the same format as the JSON files
+
 # Transparency in Coverage
 
 This repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/) (check the `size_of_in_network_files` folder.)

@@ -11,7 +11,7 @@ cur.execute("CREATE TABLE IF NOT EXISTS in_network_files (url PRIMARY KEY UNIQUE
 
 # The following values were inferred from looking at the network requests on the pages linked from here:
 # https://www.aetna.com/individuals-families/member-rights-resources/rights/disclosure-information.html
-brand_codes = ["ASH", "AETNACVS", "ALICUNDER100", "ALICFI"]
+brand_codes = ["ASH", "AETNACVS", "ALICUNDER100", "ALICFI", "ALICSI"]
 def resolve_urls(file_paths, brand_code):
     return [
         f"https://mrf.healthsparq.com/aetnacvs-egress.nophi.kyruushsq.com/prd/mrf/AETNACVS_I/{brand_code}/2022-08-05/inNetworkRates/{file_path}" 
