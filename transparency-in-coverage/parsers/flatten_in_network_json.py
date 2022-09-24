@@ -180,7 +180,7 @@ def cull(prefix):
     return prefix.replace('.item', '')
 
 
-def write_data(output_dir, filename, data):
+def write_to_csv(output_dir, filename, data):
     
     file_loc = f'{output_dir}/{filename}.csv'
     
@@ -200,7 +200,38 @@ def write_data(output_dir, filename, data):
         return
 
 
-def walk(prefix, parser, output_dir, **uuids):
+def direct_stream(in_network_file):
+    """Profiling tool"""
+    s = time.time()
+
+    if in_network_file.endswith('.json'):
+
+        file_size_mb = os.path.getsize(in_network_file)//1_000_000
+        print(f'Testing stream speed of inflated file: {in_network_file} ({file_size_mb} MB)')
+    
+        with open(in_network_file, 'r') as f:
+            
+            parser = ijson.parse(f, use_float = True)
+            for row in parser:
+                pass
+            
+    elif in_network_file.endswith('.json.gz'):
+
+        file_size_mb = os.path.getsize(in_network_file)//1_000_000
+        print(f'Testing stream speed of gzipped file: {in_network_file} ({file_size_mb} MB)')
+
+        with open(in_network_file, 'rb') as g:
+            
+            f = gzip.GzipFile(fileobj = g)
+            parser = ijson.parse(f, use_float = True)
+            for row in parser:
+                pass
+
+    td = round(time.time() - s, 2)
+    print(f'Time taken to stream without walking: {td} s\n')
+
+
+def walk(prefix, parser, output_dir, write_data = True, **uuids):
     """
     Walk the JSON rows and write the chunks to file.
 
@@ -245,17 +276,18 @@ def walk(prefix, parser, output_dir, **uuids):
                     prefix, event, value = next(parser)
                     
         if event == 'start_map':
-            walk(prefix, parser, output_dir, **uuids)
+            walk(prefix, parser, output_dir, write_data, **uuids)
                     
         prefix, event, value = next(parser)
                         
     # Once we've reached "end map" and the prefix
     # matches, we've captured everything at this level
     # in the JSON. Write it to file.
-    write_data(output_dir = output_dir, filename = cull(prefix), data = data)
+    if write_data:
+        write_to_csv(output_dir = output_dir, filename = cull(prefix), data = data)
 
 
-def parse_json(in_network_file, output_dir = './flatten', remote = False):
+def parse_json(in_network_file, output_dir = './flatten', remote = False, write_data = True):
     """
     Can parse inflated, gzipped, or remote gzipped JSON files.
 
@@ -269,6 +301,10 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
     """
     s = time.time()
     print(f'Using ijson backend: {ijson.backend}')
+    if write_data == False:
+        print('Debugging: not writing to file')
+    else:
+        print(f'Writing to output_dir = {output_dir}')
 
     if os.path.exists(output_dir):
         for file in glob.glob(f'{output_dir}/*'):
@@ -286,7 +322,7 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
             f = gzip.GzipFile(fileobj = r.raw)
             parser = ijson.parse(f, use_float = True)
             prefix, event, value = next(parser)
-            walk(prefix = prefix, parser = parser, output_dir = output_dir)
+            walk(prefix = prefix, parser = parser, output_dir = output_dir, write_data = write_data)
     
     elif in_network_file.endswith('.json'):
 
@@ -297,7 +333,7 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
             
             parser = ijson.parse(f, use_float = True)
             prefix, event, value = next(parser)
-            walk(prefix = prefix, parser = parser, output_dir = output_dir)
+            walk(prefix = prefix, parser = parser, output_dir = output_dir, write_data = write_data)
             
     elif in_network_file.endswith('.json.gz'):
 
@@ -309,10 +345,13 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False):
             f = gzip.GzipFile(fileobj = g)
             parser = ijson.parse(f, use_float = True)
             prefix, event, value = next(parser)
-            walk(prefix = prefix, parser = parser, output_dir = output_dir)
+            walk(prefix = prefix, parser = parser, output_dir = output_dir, write_data = write_data)
 
-    td = round(time.time() - s, 1)
-    print(f'Time taken: {td} s')
+    td = round(time.time() - s, 2)
+    print(f'Time taken to parse: {td} s\n')
 
+direct_stream(in_network_file = './TEST_FILE.json.gz')
 
-parse_json(in_network_file = './YOUR_IN_NETWORK_FILE.json', output_dir = './flatten')
+parse_json(in_network_file = './TEST_FILE.json.gz', output_dir = './flatten', write_data = False)
+
+parse_json(in_network_file = './TEST_FILE.json.gz', output_dir = './flatten')
