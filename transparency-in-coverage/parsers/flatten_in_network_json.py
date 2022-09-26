@@ -231,62 +231,6 @@ def direct_stream(in_network_file):
     print(f'Time taken to stream without walking: {td} s\n')
 
 
-def walk(prefix, parser, output_dir, write_data = True, **uuids):
-    """
-    Walk the JSON rows and write the chunks to file.
-
-    The ijson parser produces rows that are prefixed
-    by their location in the JSON. For example you might
-    see a prefix like
-
-    'parent.item.child.grandchild'
-
-    equivalent to the "culled" prefix
-
-    cull('parent.item.child.grandchild') = 'parent.child.grandchild'
-
-    Anything at the same level gets written to the same
-    file.
-    """
-    
-    data = {}
-    
-    # Pass parent UUIDs to child            
-    uuids[f'{cull(prefix)}_uuid'] = uuid.uuid4()
-    for key, value in uuids.items():
-        data[key] = value
-
-    prefix, event, value = next(parser)
-    
-    while event != 'end_map':
-        
-        if event in ['string', 'number']:
-            data[cull(prefix)] = value
-            prefix, event, value = next(parser)
-            continue
-            
-        if event == 'start_array':
-            prefix, event, value = next(parser)
-
-            if event in ['string', 'number']:
-                data[cull(prefix)] = []
-
-                while event != 'end_array':
-                    data[cull(prefix)].append(value)
-                    prefix, event, value = next(parser)
-                    
-        if event == 'start_map':
-            walk(prefix, parser, output_dir, write_data, **uuids)
-                    
-        prefix, event, value = next(parser)
-                        
-    # Once we've reached "end map" and the prefix
-    # matches, we've captured everything at this level
-    # in the JSON. Write it to file.
-    if write_data:
-        write_to_csv(output_dir = output_dir, filename = cull(prefix), data = data)
-
-
 def parse_json(in_network_file, output_dir = './flatten', remote = False, write_data = True):
     """
     Can parse inflated, gzipped, or remote gzipped JSON files.
@@ -349,6 +293,53 @@ def parse_json(in_network_file, output_dir = './flatten', remote = False, write_
 
     td = round(time.time() - s, 2)
     print(f'Time taken to parse: {td} s\n')
+    
+def walk(prefix, parser, output_dir, write_data = True, **uuids):
+    
+    data = {}
+    
+    # Pass parent UUIDs to child            
+    uuids[f'{cull(prefix)}_uuid'] = uuid.uuid4()
+    for key, value in uuids.items():
+        data[key] = value
+
+    prefix, event, value = next(parser)
+
+    while event != 'end_map':
+        
+        # Filter out in-network codes that we don't need
+        if (cull(prefix) == 'in_network.billing_code') and value not in billing_codes_list:
+            write_data = False
+            while (prefix != 'in_network.item.negotiated_rates.item') or (event != 'end_map'):
+                prefix, event, value = next(parser)
+        
+        if event in ['string', 'number']:
+            data[cull(prefix)] = value
+            prefix, event, value = next(parser)
+            continue
+            
+        if event == 'start_array':
+            prefix, event, value = next(parser)
+
+            if event in ['string', 'number']:
+                data[cull(prefix)] = []
+
+                while event != 'end_array':
+                    data[cull(prefix)].append(value)
+                    prefix, event, value = next(parser)
+                    
+        if event == 'start_map':
+            walk(prefix, parser, output_dir, write_data, **uuids)
+                    
+        prefix, event, value = next(parser)
+                        
+    # Once we've reached "end map" and the prefix
+    # matches, we've captured everything at this level
+    # in the JSON. Write it to file.
+    if write_data:
+        write_to_csv(output_dir = output_dir, filename = cull(prefix), data = data)
+
+billing_codes_list = ['27447']
 
 direct_stream(in_network_file = './TEST_FILE.json.gz')
 
