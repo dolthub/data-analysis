@@ -125,7 +125,12 @@ def write_dict_to_file(output_dir, filename, data):
 
 def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
     """Takes an object, turns it into a dict, and 
-    writes it to file
+    writes it to file.
+
+    We have to track the hash_ids. This requires us to loop
+    through the dict once to take out the plain values,
+    then loop through it again to take care of the nested 
+    dicts, while passing the hash_ids down as a param.
     """
 
     data = {}
@@ -172,6 +177,8 @@ def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
 
 
 def hashdict(data_dict):
+    """Get the hash of a dict (sort, convert to bytes, then hash)
+    """
     sorted_dict = dict(sorted(data_dict.items()))
     return hashlib.md5(json.dumps(sorted_dict).encode('utf-8')).hexdigest()
 
