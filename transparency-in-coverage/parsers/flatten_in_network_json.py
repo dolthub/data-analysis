@@ -341,8 +341,8 @@ def walk(prefix, parser, output_dir, write_data = True, **uuids):
 
 billing_codes_list = ['27447']
 
-direct_stream(in_network_file = './TEST_FILE.json.gz')
+# direct_stream(in_network_file = './tf.json.gz')
 
-parse_json(in_network_file = './TEST_FILE.json.gz', output_dir = './flatten', write_data = False)
+# parse_json(in_network_file = './tf.json.gz', output_dir = './flatten', write_data = False)
 
-parse_json(in_network_file = './TEST_FILE.json.gz', output_dir = './flatten')
+parse_json(in_network_file = './tf.json.gz', output_dir = './flatten')

@@ -1,3 +1,18 @@
+"""
+Open questions:
+
+1. How to make this async?
+2. Is there a better way to scan through the file? Current method:
+    - Check if there are codes matching our billing_code_list
+    - If so, get the provider references
+    - Seek to the beginning of file
+    - Write the front matter
+    - Then write the matching provider references
+    But this seems to work pretty slowly
+
+"""
+
+
 import ijson
 import os
 import csv
@@ -136,7 +151,7 @@ def flatten_to_file(obj, output_dir, prefix = '', **uuids):
                 
             else:
                 for subvalue in value:
-                    flatten_data(subvalue, output_dir, key_id, **uuids)
+                    flatten_to_file(subvalue, output_dir, key_id, **uuids)
                     
     write_dict_to_file(output_dir, prefix, data)
 
@@ -169,7 +184,7 @@ def parse_to_file(f, billing_code_list, output_dir, overwrite = True):
             codes_found = True
 
             # Write the object
-            flatten_data(obj, output_dir, prefix = 'in_network', **uuids)
+            flatten_to_file(obj, output_dir, prefix = 'in_network', **uuids)
 
             for negotiated_rate in obj['negotiated_rates']:
                 for provider_reference in negotiated_rate['provider_references']:
@@ -193,25 +208,29 @@ def parse_to_file(f, billing_code_list, output_dir, overwrite = True):
         if event == 'start_array':
             break
 
-    write_to_csv(output_dir, 'root', data)
+    write_dict_to_file(output_dir, 'root', data)
 
     # Go back to the beginning of the file to scrape the provider refs
     objs = ijson.items(parser, 'provider_references.item', use_float = True)
 
     for obj in objs:
         if obj['provider_group_id'] in provider_references_list:
-            flatten_data(obj, output_dir, prefix = 'provider_references', **uuids)
+            flatten_to_file(obj, output_dir, prefix = 'provider_references', **uuids)
 
 
 def open_and_parse(in_network_file_loc, billing_code_list, output_dir, overwrite = True):
     """Handles different file types"""
 
+    s = time.time()
     if in_network_file_loc.startswith('http'):
         print(f'Streaming from remote URL: {in_network_file_loc}')
         with httpio.open(url) as r:
         # with requests.get(in_network_file_loc, stream = True) as r:
             f = gzip.GzipFile(fileobj = r)
+            td = time.time() - s
+            print(f'Time taken to download file: {round(td, 2)} s')
             parse_to_file(f, billing_code_list, output_dir, overwrite)
+            print(f'Time taken to parse and save file: {round(td, 2)} s')
             
     elif in_network_file_loc.endswith('.json'):
         file_size_mb = os.path.getsize(in_network_file_loc)//1_000_000
