@@ -12,7 +12,6 @@ Open questions:
 
 """
 
-
 import ijson
 import os
 import csv
@@ -32,7 +31,8 @@ SCHEMA = {
         'reporting_entity_name',
         'reporting_entity_type',
         'last_updated_on',
-        'version',],
+        'version',
+        'url',],
 
     'in_network':[
         'root_uuid',
@@ -156,12 +156,7 @@ def flatten_to_file(obj, output_dir, prefix = '', **uuids):
     write_dict_to_file(output_dir, prefix, data)
 
 
-def parse_to_file(f, billing_code_list, output_dir, overwrite = True):
-    """Given an input file f and a billing code list, write all the 
-    matching objects in the code list (plus their corresponding
-    provider references) to file. This requires seeking through
-    the file twice
-    """
+def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
     
     if os.path.exists(output_dir):
         if overwrite:
@@ -175,76 +170,53 @@ def parse_to_file(f, billing_code_list, output_dir, overwrite = True):
     provider_references_list = []
     codes_found = False
 
-    objs = ijson.items(f, 'in_network.item', use_float = True)
-    
-    for obj in objs:
+    print(f'Streaming from remote URL: {url}\n')
+    with httpio.open(url) as r:
+        f = gzip.GzipFile(fileobj = r)
 
-        # Loop through objects
-        if obj['billing_code'] in billing_code_list:
-            codes_found = True
+        objs = ijson.items(f, 'in_network.item', use_float = True)
+        
+        for obj in objs:
 
-            # Write the object
-            flatten_to_file(obj, output_dir, prefix = 'in_network', **uuids)
+            # Loop through objects
+            if obj['billing_code'] in billing_code_list:
+                codes_found = True
 
-            for negotiated_rate in obj['negotiated_rates']:
-                for provider_reference in negotiated_rate['provider_references']:
-                    provider_references_list.append(provider_reference)
-                    
-    if not codes_found:
-        return
-    
-    print('Codes found. Writing to file!')
-    f.seek(0)
+                # Write the object
+                flatten_to_file(obj, output_dir, prefix = 'in_network', **uuids)
 
-    # Once we know that there are codes,
-    # get the front matter
-    data = {'root_uuid': uuids['root_uuid']}
-    parser = ijson.parse(f)
+                for negotiated_rate in obj['negotiated_rates']:
+                    for provider_reference in negotiated_rate['provider_references']:
+                        provider_references_list.append(provider_reference)
+                        
+        if not codes_found:
+            return
+        
+        f.seek(0)
 
-    for prefix, event, value in parser:
-        if event in ['string', 'number']:
-            data[f'{prefix}'] = value
-
-        if event == 'start_array':
-            break
-
-    write_dict_to_file(output_dir, 'root', data)
-
-    # Go back to the beginning of the file to scrape the provider refs
-    objs = ijson.items(parser, 'provider_references.item', use_float = True)
-
-    for obj in objs:
-        if obj['provider_group_id'] in provider_references_list:
-            flatten_to_file(obj, output_dir, prefix = 'provider_references', **uuids)
-
-
-def open_and_parse(in_network_file_loc, billing_code_list, output_dir, overwrite = True):
-    """Handles different file types"""
-
-    s = time.time()
-    if in_network_file_loc.startswith('http'):
-        print(f'Streaming from remote URL: {in_network_file_loc}')
-        with httpio.open(url) as r:
-        # with requests.get(in_network_file_loc, stream = True) as r:
-            f = gzip.GzipFile(fileobj = r)
-            td = time.time() - s
-            print(f'Time taken to download file: {round(td, 2)} s')
-            parse_to_file(f, billing_code_list, output_dir, overwrite)
-            print(f'Time taken to parse and save file: {round(td, 2)} s')
+        # Once we know that there are codes,
+        # get the front matter
+        data = {}
+        data['root_uuid'] = uuids['root_uuid']
+        data['url'] = url
             
-    elif in_network_file_loc.endswith('.json'):
-        file_size_mb = os.path.getsize(in_network_file_loc)//1_000_000
-        print(f'Streaming inflated file: {in_network_file_loc} ({file_size_mb} MB)')
-        with open(in_network_file_loc, 'r') as f:
-            parse_to_file(f, billing_code_list, output_dir, overwrite)
-            
-    elif in_network_file_loc.endswith('.json.gz'):
-        file_size_mb = os.path.getsize(in_network_file_loc)//1_000_000
-        print(f'Streaming gzipped file: {in_network_file_loc} ({file_size_mb} MB)')
+        parser = ijson.parse(f)
 
-        with open(in_network_file_loc, 'rb') as g:
-            f = gzip.GzipFile(fileobj = g)
-            parse_to_file(f, billing_code_list, output_dir, overwrite)
+        for prefix, event, value in parser:
+            if event in ['string', 'number']:
+                data[f'{prefix}'] = value
+
+            if event == 'start_array':
+                break
+
+        write_dict_to_file(output_dir, 'root', data)
+
+        # Go back to the beginning of the file to scrape the provider refs
+        objs = ijson.items(parser, 'provider_references.item', use_float = True)
+
+        for obj in objs:
+            if obj['provider_group_id'] in provider_references_list:
+                flatten_to_file(obj, output_dir, prefix = 'provider_references', **uuids)
 
 
 # EXAMPLE usage
@@ -304,7 +276,9 @@ urls = ['https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_Unit
  'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Pilot-Flying-J_CSP-932-C555_in-network-rates.json.gz',
  'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company_Insurer_Cisco-Systems_CSP-952-C932_in-network-rates.json.gz',]
 
-mycodelist = ['86328', '0001U', '97802', '99423']
+my_code_list = ['86328', '0001U', '97802', '99423']
+my_output_dir = 'flatten'
 
 for url in tqdm(urls):
-    open_and_parse(url, billing_code_list = mycodelist, output_dir = 'mytest', overwrite = False)
+    parse_to_file(url, billing_code_list = my_code_list, output_dir = my_output_dir, overwrite = False)
+
