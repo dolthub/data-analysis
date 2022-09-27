@@ -13,13 +13,14 @@ Open questions:
 """
 
 import ijson
+import json
 import os
 import csv
-import uuid
 import glob
 import requests
 import gzip
 import time
+import hashlib
 from tqdm import tqdm
 
 # not clear if this saves time or not
@@ -27,7 +28,7 @@ import httpio # for seeking through streamed files
 
 SCHEMA = {
     'root':[
-        'root_uuid',
+        'root_hash_id',
         'reporting_entity_name',
         'reporting_entity_type',
         'last_updated_on',
@@ -35,8 +36,8 @@ SCHEMA = {
         'url',],
 
     'in_network':[
-        'root_uuid',
-        'in_network_uuid',
+        'root_hash_id',
+        'in_network_hash_id',
         'in_network.negotiation_arrangement',
         'in_network.name',
         'in_network.billing_code_type',
@@ -45,16 +46,16 @@ SCHEMA = {
         'in_network.description',],
 
     'in_network.negotiated_rates':[
-        'root_uuid',
-        'in_network_uuid',
-        'in_network.negotiated_rates_uuid',
+        'root_hash_id',
+        'in_network_hash_id',
+        'in_network.negotiated_rates_hash_id',
         'in_network.negotiated_rates.provider_references',],
 
     'in_network.negotiated_rates.negotiated_prices':[
-        'root_uuid',
-        'in_network_uuid',
-        'in_network.negotiated_rates_uuid',
-        'in_network.negotiated_rates.negotiated_prices_uuid',
+        'root_hash_id',
+        'in_network_hash_id',
+        'in_network.negotiated_rates_hash_id',
+        'in_network.negotiated_rates.negotiated_prices_hash_id',
         'in_network.negotiated_rates.negotiated_prices.negotiated_type',
         'in_network.negotiated_rates.negotiated_prices.negotiated_rate',
         'in_network.negotiated_rates.negotiated_prices.expiration_date',
@@ -64,40 +65,41 @@ SCHEMA = {
         'in_network.negotiated_rates.negotiated_prices.billing_code_modifier',],
 
     'in_network.negotiated_rates.provider_groups':[
-        'root_uuid',
-        'in_network_uuid',
-        'in_network.negotiated_rates_uuid',
-        'in_network.negotiated_rates.provider_groups_uuid',
+        'root_hash_id',
+        'in_network_hash_id',
+        'in_network.negotiated_rates_hash_id',
+        'in_network.negotiated_rates.provider_groups_hash_id',
         'in_network.negotiated_rates.provider_groups.npi',],
 
     'in_network.negotiated_rates.provider_groups.tin':[
-        'root_uuid',
-        'in_network_uuid',
-        'in_network.negotiated_rates_uuid',
-        'in_network.negotiated_rates.provider_groups_uuid',
-        'in_network.negotiated_rates.provider_groups.tin_uuid',
+        'root_hash_id',
+        'in_network_hash_id',
+        'in_network.negotiated_rates_hash_id',
+        'in_network.negotiated_rates.provider_groups_hash_id',
+        'in_network.negotiated_rates.provider_groups.tin_hash_id',
         'in_network.negotiated_rates.provider_groups.tin.type',
         'in_network.negotiated_rates.provider_groups.tin.value',],
 
     'provider_references':[
-        'root_uuid',
-        'provider_references_uuid',
+        'root_hash_id',
+        'provider_references_hash_id',
         'provider_references.provider_group_id',],
 
     'provider_references.provider_groups':[
-        'root_uuid',
-        'provider_references_uuid',
-        'provider_references.provider_groups_uuid',
+        'root_hash_id',
+        'provider_references_hash_id',
+        'provider_references.provider_groups_hash_id',
         'provider_references.provider_groups.npi',],
 
     'provider_references.provider_groups.tin':[
-        'root_uuid',
-        'provider_references_uuid',
-        'provider_references.provider_groups_uuid',
-        'provider_references.provider_groups.tin_uuid',
+        'root_hash_id',
+        'provider_references_hash_id',
+        'provider_references.provider_groups_hash_id',
+        'provider_references.provider_groups.tin_hash_id',
         'provider_references.provider_groups.tin.type',
         'provider_references.provider_groups.tin.value',]
 }
+
 
 def write_dict_to_file(output_dir, filename, data):
     """Write dictionary to one of the files
@@ -105,7 +107,7 @@ def write_dict_to_file(output_dir, filename, data):
     """
     
     file_loc = f'{output_dir}/{filename}.csv'
-    
+
     fieldnames = SCHEMA[filename]
     
     if not os.path.exists(file_loc):
@@ -121,39 +123,57 @@ def write_dict_to_file(output_dir, filename, data):
         return
 
 
-def flatten_to_file(obj, output_dir, prefix = '', **uuids):
+def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
     """Takes an object, turns it into a dict, and 
     writes it to file
     """
 
     data = {}
 
-    uuids[f'{prefix}_uuid'] = uuid.uuid4()
-    
-    for key, value in uuids.items():
-        data[key] = value
-        
     for key, value in obj.items():
         
         key_id = f'{prefix}.{key}' if prefix else key
-        
-        if type(value) in [str, int, float]: 
-            data[key_id] = value
+
+        plain_value = False
+
+        if type(value) in [str, int, float]:
+            plain_value = True
+
+        elif type(value) == list and len(value) == 0:
+            plain_value = True
 
         elif type(value) == list:
-            
-            if len(value) == 0: 
-                data[key_id] = None
-                
-            elif type(value[0]) in [str, int, float]:
-                data[key_id] = value
-                
-                
-            else:
-                for subvalue in value:
-                    flatten_to_file(subvalue, output_dir, key_id, **uuids)
-                    
+            if type(value[0]) in [str, int, float]:
+                plain_value = True
+        
+        if plain_value:
+            data[key_id] = value
+
+    hash_ids[f'{prefix}_hash_id'] = hashdict(data)
+
+    for key, value in hash_ids.items():
+        data[key] = value
+
+    for key, value in obj.items():
+
+        key_id = f'{prefix}.{key}' if prefix else key
+
+        dict_value = False
+
+        if type(value) == list and value:
+            if type(value[0]) in [dict]:
+                dict_value = True
+
+        if dict_value:
+            for subvalue in value:
+                flatten_to_file(subvalue, output_dir, key_id, **hash_ids)
+                   
     write_dict_to_file(output_dir, prefix, data)
+
+
+def hashdict(data_dict):
+    sorted_dict = dict(sorted(data_dict.items()))
+    return hashlib.md5(json.dumps(sorted_dict).encode('utf-8')).hexdigest()
 
 
 def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
@@ -165,42 +185,15 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
     else:
         os.mkdir(output_dir)
 
-    uuids = {'root_uuid':uuid.uuid4()}
-
-    provider_references_list = []
-    codes_found = False
 
     print(f'Streaming from remote URL: {url}\n')
     with httpio.open(url) as r:
         f = gzip.GzipFile(fileobj = r)
 
-        objs = ijson.items(f, 'in_network.item', use_float = True)
-        
-        for obj in objs:
-
-            # Loop through objects
-            if obj['billing_code'] in billing_code_list:
-                codes_found = True
-
-                # Write the object
-                flatten_to_file(obj, output_dir, prefix = 'in_network', **uuids)
-
-                for negotiated_rate in obj['negotiated_rates']:
-                    for provider_reference in negotiated_rate['provider_references']:
-                        provider_references_list.append(provider_reference)
-                        
-        if not codes_found:
-            return
-        
-        f.seek(0)
-
-        # Once we know that there are codes,
-        # get the front matter
         data = {}
-        data['root_uuid'] = uuids['root_uuid']
-        data['url'] = url
-            
-        parser = ijson.parse(f)
+        hash_ids = {}
+
+        parser = ijson.parse(f, use_float = True)
 
         for prefix, event, value in parser:
             if event in ['string', 'number']:
@@ -209,13 +202,41 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
             if event == 'start_array':
                 break
 
-        write_dict_to_file(output_dir, 'root', data)
+        data['url'] = url
+        data['root_hash_id'] = hashdict(data)
 
-        objs = ijson.items(parser, 'provider_references.item', use_float = True)
+        hash_ids['root_hash_id'] = data['root_hash_id']
+
+        provider_references_list = []
+        codes_found = False
+
+        objs = ijson.items(parser, 'in_network.item', use_float = True)
+        
+        for obj in objs:
+
+            # Loop through objects
+            if obj['billing_code'] in billing_code_list:
+                codes_found = True
+
+                # Write the object
+                flatten_to_file(obj, output_dir, prefix = 'in_network', **hash_ids)
+
+                for negotiated_rate in obj['negotiated_rates']:
+                    for provider_reference in negotiated_rate['provider_references']:
+                        provider_references_list.append(provider_reference)
+                        
+        if not codes_found:
+            return
+
+        write_dict_to_file(output_dir, 'root', data)
+        
+        f.seek(0)
+
+        objs = ijson.items(f, 'provider_references.item', use_float = True)
 
         for obj in objs:
             if obj['provider_group_id'] in provider_references_list:
-                flatten_to_file(obj, output_dir, prefix = 'provider_references', **uuids)
+                flatten_to_file(obj, output_dir, prefix = 'provider_references', **hash_ids)
 
 
 # EXAMPLE usage
@@ -692,7 +713,34 @@ urls = ['https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_Unit
  'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-728-A351_in-network-rates.json.gz',
  'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_University-of-Missouri---Columbia_CSP-933-C637_in-network-rates.json.gz',
  'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_University-of-Missouri---Columbia_CSP-935-C638_in-network-rates.json.gz',
- 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_NYU-School-of-Medicine_CSP-902-C012_in-network-rates.json.gz']
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_NYU-School-of-Medicine_CSP-902-C012_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_NYU-Langone-Health-System_CSP-902-C012_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-907-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UMR--Inc-_TPA_GOLDEN-NUGGET_U8_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-906-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-910-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-662-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-687-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_HEALTHSCOPE-BENEFITS_TPA_SHO_U1_3342_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Texas-Health-Resources_GSP-901-C008_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-902-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-764-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-427-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Qualcomm---Premier-ACO_CSP-914-C783_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Qualcomm---Premier-ACO_CSP-933-C741_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-633-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Electric-Reliability-Council-of-Texas--ERCOT-_GSP-986-C655_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UMR--Inc-_TPA_GEHA-UBH-PLAN_UBH_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-783-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_University-of-Missouri---Columbia_GSP-913-C497_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_University-of-Missouri---Columbia_GSP-915-C508_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_General-Electric---Conv-Care-Adv-Prog_GSP-820-C667_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Caterpillar_CSP-911-T129_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-822-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Qualcomm---Premier-ACO_GSP-932-C740_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Illinois--Inc-_Insurer_Illinois-Provider-Network_ILNETWORK_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-Insurance-Company-of-New-York_Insurer_Empire_CSP-477-A351_in-network-rates.json.gz',
+ 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_NYU-Langone-Health-System_CSP-904-C020_in-network-rates.json.gz']
 
 my_code_list = ['86328', '0001U', '97802', '99423']
 my_output_dir = 'flatten'
