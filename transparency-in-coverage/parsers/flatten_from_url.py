@@ -17,11 +17,12 @@ import json
 import os
 import csv
 import glob
-import requests
+# import requests
 import gzip
 import time
 import hashlib
 from tqdm import tqdm
+import io
 
 # not clear if this saves time or not
 import httpio # for seeking through streamed files
@@ -31,7 +32,7 @@ SCHEMA = {
         'root_hash_id',
         'reporting_entity_name',
         'reporting_entity_type',
-        'last_updated_on',
+        'last_updated_on',  
         'version',
         'url',],
 
@@ -194,8 +195,10 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
 
     print(f'Streaming from remote URL: {url}\n')
-    with httpio.open(url) as r:
-        f = gzip.GzipFile(fileobj = r)
+    with httpio.open(url, block_size = 2048) as r:
+        # buf = io.BytesIO(r.read())
+
+        f = gzip.GzipFile(fileobj = r) # buf)
 
         data = {}
         hash_ids = {}
@@ -241,10 +244,11 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
         objs = ijson.items(f, 'provider_references.item', use_float = True)
 
+        s = time.time()
         for obj in objs:
             if obj['provider_group_id'] in provider_references_list:
+                pass
                 flatten_to_file(obj, output_dir, prefix = 'provider_references', **hash_ids)
-
 
 # EXAMPLE usage
 
