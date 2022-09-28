@@ -5,6 +5,7 @@ TODO:
 3. provider_references.provider_groups.npi is sometimes blank -- is this correct?
 """
 
+
 import ijson
 import json
 import os
@@ -110,7 +111,6 @@ def write_dict_to_file(output_dir, filename, data):
     with open(file_loc, 'a') as f:
         writer = csv.DictWriter(f, fieldnames = fieldnames)
         writer.writerow(data)
-        return
 
 
 def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
@@ -126,9 +126,7 @@ def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
     data = {}
 
     for key, value in obj.items():
-        
         key_id = f'{prefix}.{key}' if prefix else key
-
         plain_value = False
 
         if type(value) in [str, int, float]:
@@ -150,9 +148,7 @@ def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
         data[key] = value
 
     for key, value in obj.items():
-
         key_id = f'{prefix}.{key}' if prefix else key
-
         dict_value = False
 
         if type(value) == list and value:
@@ -211,7 +207,6 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
     create_output_dir(output_dir, overwrite)
 
     with requests.get(url, stream = True) as r:
-
         f = gzip.GzipFile(fileobj = r.raw)
 
         parser = ijson.parse(f, use_float = True)
