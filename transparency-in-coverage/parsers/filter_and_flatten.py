@@ -80,7 +80,8 @@ SCHEMA = {
         'root_hash_id',
         'provider_references_hash_id',
         'provider_references.provider_groups_hash_id',
-        'provider_references.provider_groups.npi',],
+        'provider_references.provider_groups.npi',
+        ],
 
     'provider_references.provider_groups.tin':[
         'root_hash_id',
@@ -100,7 +101,7 @@ def write_dict_to_file(output_dir, filename, data):
     file_loc = f'{output_dir}/{filename}.csv'
 
     fieldnames = SCHEMA[filename]
-    
+
     if not os.path.exists(file_loc):
         with open(file_loc, 'w') as f:
             writer = csv.DictWriter(f, fieldnames = fieldnames)
@@ -127,21 +128,18 @@ def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
 
     for key, value in obj.items():
         key_id = f'{prefix}.{key}' if prefix else key
-        plain_value = False
 
         if type(value) in [str, int, float]:
-            plain_value = True
+            data[key_id] = value
 
         elif type(value) == list and len(value) == 0:
-            plain_value = True
+            # Can set to false to not keep empty lists
+            data[key_id] = value
 
         elif type(value) == list:
             if type(value[0]) in [str, int, float]:
-                plain_value = True
+                data[key_id] = value
         
-        if plain_value:
-            data[key_id] = value
-
     hash_ids[f'{prefix}_hash_id'] = hashdict(data)
 
     for key, value in hash_ids.items():
@@ -149,15 +147,14 @@ def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
 
     for key, value in obj.items():
         key_id = f'{prefix}.{key}' if prefix else key
-        dict_value = False
-
+        
         if type(value) == list and value:
-            if type(value[0]) in [dict]:
-                dict_value = True
-
-        if dict_value:
-            for subvalue in value:
-                flatten_to_file(subvalue, output_dir, key_id, **hash_ids)
+            if type(value[0])  == dict:
+                for subvalue in value:
+                    flatten_to_file(subvalue, output_dir, key_id, **hash_ids)
+        
+        elif type(value) == dict:            
+            flatten_to_file(value, output_dir, key_id, **hash_ids)
 
     write_dict_to_file(output_dir, prefix, data)
 
@@ -211,7 +208,7 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
         parser = ijson.parse(f, use_float = True)
 
-        root_data = {'url': ur}
+        root_data = {'url': url}
         for prefix, event, value in parser:
             if event in ['string', 'number']:
                 root_data[f'{prefix}'] = value
@@ -225,6 +222,9 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
         provider_references = next(ijson.items(parser, 'provider_references', use_float = True))
         
         in_network_items = ijson.items(parser, 'in_network.item', use_float = True)
+
+        # Generator expression is possible here
+        # in_network_items = (i for i in in_network_items if item['billing_code'] in billing_code_list)
 
         matching_in_network_items = False
         provider_references_list = []
