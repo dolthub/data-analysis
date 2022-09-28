@@ -211,7 +211,7 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
         parser = ijson.parse(f, use_float = True)
 
-        root_data = {}
+        root_data = {'url': ur}
         for prefix, event, value in parser:
             if event in ['string', 'number']:
                 root_data[f'{prefix}'] = value
@@ -247,7 +247,7 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
             if provider_reference['provider_group_id'] in provider_references_list:
                 flatten_to_file(provider_reference, output_dir, prefix = 'provider_references', **hash_ids)
         
-# Example
+
 my_code_list = ['68788-7616-03', '85004', '85007', '85008', '85009', '85013', '85014', '85018', '85032', '85041', '85048', '85049']
 my_output_dir = 'flatten'
 my_url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_ALL-SAVERS-INSURANCE-COMPANY_Insurer_PPO---NDC_PPO-NDC_in-network-rates.json.gz'
