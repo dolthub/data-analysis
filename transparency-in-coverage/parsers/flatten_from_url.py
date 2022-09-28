@@ -17,7 +17,7 @@ import json
 import os
 import csv
 import glob
-# import requests
+import requests
 import gzip
 import time
 import hashlib
@@ -195,21 +195,21 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
 
     print(f'Streaming from remote URL: {url}\n')
-    with httpio.open(url, block_size = 2048) as r:
-        # buf = io.BytesIO(r.read())
+    # with httpio.open(url, block_size = 2048) as r:
+    with requests.get(url, stream = True) as r:
 
-        f = gzip.GzipFile(fileobj = r) # buf)
+        f = gzip.GzipFile(fileobj = r.raw)
 
         data = {}
         hash_ids = {}
 
         parser = ijson.parse(f, use_float = True)
-
+        
         for prefix, event, value in parser:
             if event in ['string', 'number']:
                 data[f'{prefix}'] = value
 
-            if event == 'start_array':
+            if (prefix, event, value) == ('', 'map_key', 'provider_references'):
                 break
 
         data['url'] = url
@@ -217,11 +217,13 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
         hash_ids['root_hash_id'] = data['root_hash_id']
 
-        provider_references_list = []
-        codes_found = False
-
+        provider_data = next(ijson.items(parser, 'provider_references', use_float = True))
+            
         objs = ijson.items(parser, 'in_network.item', use_float = True)
         
+        codes_found = False
+        provider_references_list = []
+
         for obj in objs:
 
             # Loop through objects
@@ -240,12 +242,7 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
 
         write_dict_to_file(output_dir, 'root', data)
         
-        f.seek(0)
-
-        objs = ijson.items(f, 'provider_references.item', use_float = True)
-
-        s = time.time()
-        for obj in objs:
+        for obj in provider_data:
             if obj['provider_group_id'] in provider_references_list:
                 pass
                 flatten_to_file(obj, output_dir, prefix = 'provider_references', **hash_ids)
