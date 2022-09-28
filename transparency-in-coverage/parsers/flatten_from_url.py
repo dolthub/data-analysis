@@ -2,14 +2,7 @@
 Open questions:
 
 1. How to make this async?
-2. Is there a better way to scan through the file? Current method:
-    - Check if there are codes matching our billing_code_list
-    - If so, get the provider references
-    - Seek to the beginning of file
-    - Write the front matter
-    - Then write the matching provider references
-    But this seems to work pretty slowly
-
+2. Check for bugs
 """
 
 import ijson
@@ -24,8 +17,6 @@ import hashlib
 from tqdm import tqdm
 import io
 
-# not clear if this saves time or not
-import httpio # for seeking through streamed files
 
 SCHEMA = {
     'root':[
