@@ -9,10 +9,12 @@ import hashlib
 import ijson
 import sys
 import logging
+from urllib.parse import urlparse
 from schema import SCHEMA
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
+
 
 def create_output_dir(output_dir, overwrite):
 	if os.path.exists(output_dir):
@@ -96,6 +98,7 @@ def flatten_dict_to_file(obj, output_dir, prefix = '', **hash_ids):
 
 	write_dict_to_file(output_dir, prefix, data)
 
+
 def get_mrfs_from_index(index_file_url):
 	"""The in-network files are references from index.json files
 	on the payor websites. This will stream one of those files
@@ -108,12 +111,22 @@ def get_mrfs_from_index(index_file_url):
 		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
 		LOG.info(f"Size of file: {url_size} MB")
 
-		f = r.content
+		if urlparse(index_file_url)[2].endswith('.json.gz'):
+			f = gzip.GzipFile(fileobj = r.raw)
+			LOG.info(f"Unzipping streaming file.")
+		elif urlparse(index_file_url)[2].endswith('.json'):
+			f = r.content
+		else:
+			LOG.info(f"File does not have an extension. Aborting.")
+			return
 
-		objs = ijson.items(f, 'reporting_structure.item.in_network_files')
-		for obj in objs:
-			for in_network_file_obj in obj:
-				in_network_file_urls.append(in_network_file_obj['location'])
+		parser = ijson.parse(f, use_float = True)
+
+		for prefix, event, value in parser:
+			if (prefix, event) == ('reporting_structure.item.in_network_files.item.location', 'string'):
+				LOG.debug(f"Found in-network file: {value}")
+				in_network_file_urls.append(value)
+				break
 
 	td = time.time() - s
 	LOG.info(f"Found: {len(in_network_file_urls)} in-network files.")
@@ -149,13 +162,14 @@ def parse_to_file(url, output_dir, billing_code_list = []):
 
 	with requests.get(url, stream = True) as r:
 		LOG.info(f"Began streaming file: {url}")
+		print(r.headers)
 		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
 		LOG.info(f"Size of file: {url_size} MB")
 
-		if url.endswith('json.gz'):
+		if urlparse(url)[2].endswith('.json.gz'):
 			f = gzip.GzipFile(fileobj = r.raw)
 			LOG.info(f"Unzipping streaming file.")
-		elif url.endswith('.json'):
+		elif urlparse(url)[2].endswith('.json'):
 			f = r.content
 		else:
 			LOG.info(f"File does not have an extension. Aborting.")

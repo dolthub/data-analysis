@@ -60,7 +60,8 @@ my_code_list = [
 	'80307',]
 
 my_output_dir = 'flatten'
-index_file_url = 'https://www.centene.com/content/dam/centene/Centene%20Corporate/json/DOCUMENT/2022-06-29_ambetter_index.json'
+# index_file_url = 'https://www.centene.com/content/dam/centene/Centene%20Corporate/json/DOCUMENT/2022-06-29_ambetter_index.json'
+index_file_url = 'https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-09-01_anthem_index.json.gz'
 my_urls = get_mrfs_from_index(index_file_url)
 
 create_output_dir(my_output_dir, overwrite = True)
