@@ -7,7 +7,7 @@ from tqdm.contrib.logging import logging_redirect_tqdm
 logger = logging.getLogger('helpers')
 logger.setLevel(level=logging.DEBUG)
 
-my_code_list = [
+BILLING_CODE_LIST = [
 	'36415',
 	'80053',
 	'85025',
@@ -59,15 +59,17 @@ my_code_list = [
 	'81003',
 	'80307',]
 
-my_output_dir = 'flatten'
+OUTPUT_DIR = 'flatten'
 # index_file_url = 'https://www.centene.com/content/dam/centene/Centene%20Corporate/json/DOCUMENT/2022-06-29_ambetter_index.json'
-index_file_url = 'https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-09-01_anthem_index.json.gz'
-my_urls = get_mrfs_from_index(index_file_url)
+# index_file_url = "https://mrf.healthsparq.com/aetnacvs-egress.nophi.kyruushsq.com/prd/mrf/AETNACVS_I/ALICSI/2022-09-05/tableOfContents/2022-09-05_97109000_index.json.gz"
+INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_-Big-Valley-Construction-LLC_index.json'
 
-create_output_dir(my_output_dir, overwrite = True)
+my_urls = get_mrfs_from_index(INDEX_FILE_URL)
+
+create_output_dir(OUTPUT_DIR, overwrite = True)
 
 with logging_redirect_tqdm():
 	for url in tqdm(my_urls):
-		parse_to_file(url, output_dir = my_output_dir, billing_code_list = my_code_list)
+		parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_list = BILLING_CODE_LIST)
 
 

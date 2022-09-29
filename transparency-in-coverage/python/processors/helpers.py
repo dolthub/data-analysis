@@ -108,8 +108,11 @@ def get_mrfs_from_index(index_file_url):
 
 	with requests.get(index_file_url, stream = True) as r:
 		LOG.info(f"Began streaming file: {index_file_url}")
-		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
-		LOG.info(f"Size of file: {url_size} MB")
+		try:
+			url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
+			LOG.info(f"Size of file: {url_size} MB")
+		except KeyError:
+			LOG.info(f"Size of index file unknown.")
 
 		if urlparse(index_file_url)[2].endswith('.json.gz'):
 			f = gzip.GzipFile(fileobj = r.raw)
@@ -126,7 +129,6 @@ def get_mrfs_from_index(index_file_url):
 			if (prefix, event) == ('reporting_structure.item.in_network_files.item.location', 'string'):
 				LOG.debug(f"Found in-network file: {value}")
 				in_network_file_urls.append(value)
-				break
 
 	td = time.time() - s
 	LOG.info(f"Found: {len(in_network_file_urls)} in-network files.")
@@ -134,7 +136,7 @@ def get_mrfs_from_index(index_file_url):
 	return in_network_file_urls
 
 
-def parse_to_file(url, output_dir, billing_code_list = []):
+def parse_to_file(input_url, output_dir, billing_code_list = []):
 	"""This streams through a file, flattens it, and writes it to 
 	file. It streams the zipped files, avoiding saving them to disk.
 
@@ -160,16 +162,24 @@ def parse_to_file(url, output_dir, billing_code_list = []):
 	"""
 	s = time.time()
 
-	with requests.get(url, stream = True) as r:
+	with requests.get(input_url, stream = True) as r:
+
+		parsed_url = urlparse(input_url)
+		url = (parsed_url[1] + parsed_url[2]).strip()
+
 		LOG.info(f"Began streaming file: {url}")
-		print(r.headers)
+
 		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
 		LOG.info(f"Size of file: {url_size} MB")
 
-		if urlparse(url)[2].endswith('.json.gz'):
+		# if url_size > 40:
+		# 	LOG.info("File too big for testing. Skipping.")
+		# 	return 
+
+		if parsed_url[2].endswith('.json.gz'):
 			f = gzip.GzipFile(fileobj = r.raw)
 			LOG.info(f"Unzipping streaming file.")
-		elif urlparse(url)[2].endswith('.json'):
+		elif parsed_url[2].endswith('.json'):
 			f = r.content
 		else:
 			LOG.info(f"File does not have an extension. Aborting.")
@@ -179,50 +189,92 @@ def parse_to_file(url, output_dir, billing_code_list = []):
 		# Break as soon as we get to provider references
 		parser = ijson.parse(f, use_float = True)
 
+		LOG.info(f"Parsing top matter...")
 		root_data = {'url': url}
+		provider_refs_exist = False
+
 		for prefix, event, value in parser:
 			if event in ['string', 'number']:
 				root_data[f'{prefix}'] = value
 				prefix, event, value = next(parser)
-			if (prefix, event, value) == ('', 'map_key', 'provider_references'):
+			if (prefix, event) == ('provider_references', 'start_array'):
+				provider_refs_exist = True
 				break
+			elif (prefix, event) == ('in_network', 'start_array'):
+				break
+
 		LOG.info(f"Successfully parsed top matter.")
 
 		root_data['root_hash_id'] = hashdict(root_data)
 		hash_ids = {'root_hash_id': root_data['root_hash_id']}
 		
-		# There will always be one or less provider references item
-		# Cache this in a variable for later use
-		objs = ijson.items(parser, 'provider_references', use_float = True)
-		provider_refs_exist = False
-		try:
-			provider_references = next(objs)
-			provider_refs_exist = True
-			p_ref_size = round(sys.getsizeof(provider_references)/1_000_000, 3)
-			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
+		if provider_refs_exist:
 			provider_references_list = []
-		except StopIteration:
-			pass
-		
-		objs = ijson.items(parser, 'in_network.item', use_float = True)
-		matching_codes_exist = False
-		
-		if billing_code_list:
-			in_network_items = (o for o in objs if o['billing_code'] in billing_code_list)
-		else:
-			in_network_items = objs
+			LOG.info(f"Found provider refs")
 
-		LOG.info(f"Started looping through in_network_items...")
-		# First, search for matching codes and write them to file,
-		# or end execution if not found
-		for item in in_network_items:
-			LOG.debug(f"Found billing code: {item['billing_code_type']}: {item['billing_code']}")
-			matching_in_network_items = True
-			flatten_dict_to_file(item, output_dir, prefix = 'in_network', **hash_ids)
-			if provider_refs_exist:
-				for negotiated_rate in item['negotiated_rates']:
-					for provider_reference in negotiated_rate['provider_references']:
-						provider_references_list.append(provider_reference)
+			while (prefix, event) != ('provider_references', 'end_array'):
+				if event != 'start_array':
+					prefix, event, value = next(parser)
+					continue
+
+				if (prefix, event) == ('provider_references', 'end_array'):
+					break
+
+				if prefix.startswith('provider_references'):
+					builder = ijson.ObjectBuilder()
+					builder.event(event, value)
+					for nprefix, event, value in parser:
+						if (nprefix, event) == (prefix, 'end_array'):
+							break
+						builder.event(event, value)
+					provider_references = builder.value[0]
+
+			p_ref_size = round(sys.getsizeof(provider_references)/1_000_000, 4)
+			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
+
+		matching_codes_exist = False
+		LOG.info(f"Streaming through in_network_items...")
+
+		while (prefix, event) != ('in_network', 'end_array'):
+			if event != 'start_array':
+				prefix, event, value = next(parser)
+				continue
+
+			if prefix.startswith('in_network'):
+				build = True
+				LOG.debug(f"{nprefix}, {event}, {value}")
+				builder = ijson.ObjectBuilder()
+				builder.event(event, value)
+				for nprefix, event, value in parser:
+
+					if (nprefix, event) == (prefix, 'end_array'):
+						break
+
+					elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
+						if value not in billing_code_list:
+							LOG.debug("Code found but not in BILLING_CODE_LIST. Continuing...")
+							build = False
+
+					if build: 
+						builder.event(event, value)
+
+				if not build:
+					continue
+
+				in_network_item = builder.value[0]
+				print(in_network_item)
+				LOG.debug(f"Built item: {in_network_item['billing_code']}")
+
+			if in_network_item['billing_code'] in billing_code_list:
+				matching_codes_exist = True
+				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
+				LOG.debug(f"Found billing code: {in_network_item['billing_code_type']}: {in_network_item['billing_code']}")
+		
+				if provider_refs_exist:
+					for negotiated_rate in in_network_item['negotiated_rates']:
+						for provider_reference in negotiated_rate['provider_references']:
+							provider_references_list.append(provider_reference)
+
 
 		LOG.info(f"Finished looping through in_network_items.")
 		if not matching_codes_exist:
