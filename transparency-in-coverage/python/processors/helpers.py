@@ -248,17 +248,17 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 
 					elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
 						if value not in billing_code_list:
-							LOG.debug("Code found but not in BILLING_CODE_LIST. Continuing...")
 							build = False
 
 					if build: 
 						builder.event(event, value)
 
 				if not build:
+					LOG.debug("Code found but not in BILLING_CODE_LIST. Continuing...")
 					continue
 
 				in_network_item = builder.value[0]
-				LOG.debug(f"Built item: {in_network_item['billing_code']}")
+				LOG.debug(f"Billing code in BILLING_CODE_LIST found: {in_network_item['billing_code']}")
 
 			if in_network_item['billing_code'] in billing_code_list:
 				matching_codes_exist = True

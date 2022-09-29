@@ -1,7 +1,8 @@
 # TODOs
 
-1. Get a working JSON parser that can *filter by code*. This cuts down way on time needed to stream
-2. Write a Humana parser that can put the CSV files in the same format as the JSON files
+1. Write a CSV parser for Humana
+2. Compress the provider_references information to save memory
+3. Loop over remote provider references to get data
 
 # Transparency in Coverage
 
