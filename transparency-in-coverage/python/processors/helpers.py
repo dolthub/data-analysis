@@ -206,7 +206,7 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 		
 		if provider_refs_exist:
 			provider_references_list = []
-			LOG.info(f"Found provider refs")
+			LOG.info(f"Found provider refs. Caching.")
 
 			while (prefix, event) != ('provider_references', 'end_array'):
 				if event != 'start_array':
@@ -229,7 +229,7 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
 
 		matching_codes_exist = False
-		LOG.info(f"Streaming through in_network_items...")
+		LOG.info(f"Streaming through in-network items (codes)...")
 
 		while (prefix, event) != ('in_network', 'end_array'):
 			if event != 'start_array':
@@ -238,7 +238,6 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 
 			if prefix.startswith('in_network'):
 				build = True
-				LOG.debug(f"{nprefix}, {event}, {value}")
 				builder = ijson.ObjectBuilder()
 				builder.event(event, value)
 				for nprefix, event, value in parser:
@@ -248,13 +247,13 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 
 					elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
 						if value not in billing_code_list:
+							LOG.debug(f"Code found ({value}) but not in BILLING_CODE_LIST. Continuing...")
 							build = False
 
 					if build: 
 						builder.event(event, value)
 
 				if not build:
-					LOG.debug("Code found but not in BILLING_CODE_LIST. Continuing...")
 					continue
 
 				in_network_item = builder.value[0]
