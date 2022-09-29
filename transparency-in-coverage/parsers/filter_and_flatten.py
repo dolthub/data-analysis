@@ -114,6 +114,12 @@ def write_dict_to_file(output_dir, filename, data):
         writer.writerow(data)
 
 
+def compress_data(data):
+    json_data = json.dumps(data)
+    encoded = json_data.encode('utf-8')
+    compressed = gzip.compress(encoded)
+
+
 def flatten_to_file(obj, output_dir, prefix = '', **hash_ids):
     """Takes an object, turns it into a dict, and 
     writes it to file.
@@ -175,9 +181,9 @@ def create_output_dir(output_dir, overwrite):
         os.mkdir(output_dir)
 
 
-def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
+def parse_to_file(url, billing_code_list, output_dir, overwrite = False, logging = False):
     """This streams through a file, flattens it, and writes it to 
-    file without caching the file in the process.
+    file. It streams the zipped files.
 
     MRFs are structured, schematically, like:
 
@@ -216,6 +222,7 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
             if (prefix, event, value) == ('', 'map_key', 'provider_references'):
                 break
 
+        print("Got front matter")
         root_data['root_hash_id'] = hashdict(root_data)
         
         # There will always be exactly one item
@@ -230,6 +237,7 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
         provider_references_list = []
         hash_ids = {'root_hash_id': root_data['root_hash_id']}
 
+        print("Looking for matching codes")
         for item in in_network_items:
             if item['billing_code'] in billing_code_list:
                 matching_in_network_items = True
@@ -241,16 +249,10 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
         if not matching_in_network_items:
             return
 
+        print("Matching codes found.")
         write_dict_to_file(output_dir, 'root', root_data)
 
         for provider_reference in provider_references:
             if provider_reference['provider_group_id'] in provider_references_list:
                 flatten_to_file(provider_reference, output_dir, prefix = 'provider_references', **hash_ids)
         
-
-my_code_list = ['68788-7616-03', '85004', '85007', '85008', '85009', '85013', '85014', '85018', '85032', '85041', '85048', '85049']
-my_output_dir = 'flatten'
-my_url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_ALL-SAVERS-INSURANCE-COMPANY_Insurer_PPO---NDC_PPO-NDC_in-network-rates.json.gz'
-parse_to_file(my_url, billing_code_list = my_code_list, output_dir = my_output_dir, overwrite = True)
-
-

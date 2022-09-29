@@ -184,9 +184,6 @@ def parse_to_file(url, billing_code_list, output_dir, overwrite = False):
     else:
         os.mkdir(output_dir)
 
-
-    print(f'Streaming from remote URL: {url}\n')
-    # with httpio.open(url, block_size = 2048) as r:
     with requests.get(url, stream = True) as r:
 
         f = gzip.GzipFile(fileobj = r.raw)

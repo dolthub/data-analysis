@@ -97,6 +97,10 @@ def flatten_dict_to_file(obj, output_dir, prefix = '', **hash_ids):
 	write_dict_to_file(output_dir, prefix, data)
 
 def get_mrfs_from_index(index_file_url):
+	"""The in-network files are references from index.json files
+	on the payor websites. This will stream one of those files
+	"""
+	s = time.time()
 	in_network_file_urls = []
 
 	with requests.get(index_file_url, stream = True) as r:
@@ -110,8 +114,10 @@ def get_mrfs_from_index(index_file_url):
 		for obj in objs:
 			for in_network_file_obj in obj:
 				in_network_file_urls.append(in_network_file_obj['location'])
-	
+
+	td = time.time() - s
 	LOG.info(f"Found: {len(in_network_file_urls)} in-network files.")
+	LOG.info(f"Time taken: {round(td/60, 3)} min.")
 	return in_network_file_urls
 
 
@@ -150,7 +156,10 @@ def parse_to_file(url, output_dir, billing_code_list = []):
 			f = gzip.GzipFile(fileobj = r.raw)
 			LOG.info(f"Unzipping streaming file.")
 		elif url.endswith('.json'):
-			f = r.raw
+			f = r.content
+		else:
+			LOG.info(f"File does not have an extension. Aborting.")
+			return
 		
 		# Create a parser and loop through the top matter
 		# Break as soon as we get to provider references
@@ -173,7 +182,7 @@ def parse_to_file(url, output_dir, billing_code_list = []):
 		objs = ijson.items(parser, 'provider_references', use_float = True)
 		provider_refs_exist = False
 		try:
-			provider_references = next(obs)
+			provider_references = next(objs)
 			provider_refs_exist = True
 			p_ref_size = round(sys.getsizeof(provider_references)/1_000_000, 3)
 			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
