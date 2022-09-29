@@ -143,7 +143,7 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 	MRFs are structured, schematically like
 	{
 		file_metadata (top matter),
-		provider_references (always one line),
+		provider_references (always one line, if exists)
 		[in_network_items] (multiple lines),
 	}
 
@@ -171,10 +171,6 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 
 		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
 		LOG.info(f"Size of file: {url_size} MB")
-
-		# if url_size > 40:
-		# 	LOG.info("File too big for testing. Skipping.")
-		# 	return 
 
 		if parsed_url[2].endswith('.json.gz'):
 			f = gzip.GzipFile(fileobj = r.raw)
@@ -262,7 +258,6 @@ def parse_to_file(input_url, output_dir, billing_code_list = []):
 					continue
 
 				in_network_item = builder.value[0]
-				print(in_network_item)
 				LOG.debug(f"Built item: {in_network_item['billing_code']}")
 
 			if in_network_item['billing_code'] in billing_code_list:

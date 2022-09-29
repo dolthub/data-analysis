@@ -60,8 +60,6 @@ BILLING_CODE_LIST = [
 	'80307',]
 
 OUTPUT_DIR = 'flatten'
-# index_file_url = 'https://www.centene.com/content/dam/centene/Centene%20Corporate/json/DOCUMENT/2022-06-29_ambetter_index.json'
-# index_file_url = "https://mrf.healthsparq.com/aetnacvs-egress.nophi.kyruushsq.com/prd/mrf/AETNACVS_I/ALICSI/2022-09-05/tableOfContents/2022-09-05_97109000_index.json.gz"
 INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_-Big-Valley-Construction-LLC_index.json'
 
 my_urls = get_mrfs_from_index(INDEX_FILE_URL)
