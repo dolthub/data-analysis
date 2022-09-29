@@ -2,18 +2,9 @@ import json
 import os
 import csv
 import glob
-import requests
-import gzip
-import time
 import hashlib
 import ijson
-import sys
-import logging
-from urllib.parse import urlparse
 from schema import SCHEMA
-
-LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 
 def create_output_dir(output_dir, overwrite):
@@ -99,192 +90,63 @@ def flatten_dict_to_file(obj, output_dir, prefix = '', **hash_ids):
 	write_dict_to_file(output_dir, prefix, data)
 
 
-def get_mrfs_from_index(index_file_url):
-	"""The in-network files are references from index.json files
-	on the payor websites. This will stream one of those files
-	"""
-	s = time.time()
-	in_network_file_urls = []
+def parse_top_matter(parser):
 
-	with requests.get(index_file_url, stream = True) as r:
-		LOG.info(f"Began streaming file: {index_file_url}")
-		try:
-			url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
-			LOG.info(f"Size of file: {url_size} MB")
-		except KeyError:
-			LOG.info(f"Size of index file unknown.")
+	prefix, event, value = next(parser)
 
-		if urlparse(index_file_url)[2].endswith('.json.gz'):
-			f = gzip.GzipFile(fileobj = r.raw)
-			LOG.info(f"Unzipping streaming file.")
-		elif urlparse(index_file_url)[2].endswith('.json'):
-			f = r.content
-		else:
-			LOG.info(f"File does not have an extension. Aborting.")
-			return
+	while event != 'start_array':
 
-		parser = ijson.parse(f, use_float = True)
+		builder = ijson.ObjectBuilder()
+		builder.event(event, value)
 
-		for prefix, event, value in parser:
-			if (prefix, event) == ('reporting_structure.item.in_network_files.item.location', 'string'):
-				LOG.debug(f"Found in-network file: {value}")
-				in_network_file_urls.append(value)
+		for nprefix, event, value in parser:
+			if event == 'start_array':	
+				return builder.value, (nprefix, event, value)
 
-	td = time.time() - s
-	LOG.info(f"Found: {len(in_network_file_urls)} in-network files.")
-	LOG.info(f"Time taken: {round(td/60, 3)} min.")
-	return in_network_file_urls
+			builder.event(event, value)
+
+		prefix, event, value = next(parser)
 
 
-def parse_to_file(input_url, output_dir, billing_code_list = []):
-	"""This streams through a file, flattens it, and writes it to 
-	file. It streams the zipped files, avoiding saving them to disk.
+def parse_provider_refs(init_row, parser):
 
-	MRFs are structured, schematically like
-	{
-		file_metadata (top matter),
-		provider_references (always one line, if exists)
-		[in_network_items] (multiple lines),
-	}
+	prefix, event, value = init_row
 
-	But the in_network_items are linked to provider references. The
-	problem we have to solve is: how do we collect only the codes
-	and provider references we want, while reading the file once?
+	while event != 'start_array':
+		prefix, event, value = next(parser)
 
-	The answer is: cache the provider references during streaming,
-	then filter the in_network_items. Once you know which provider
-	references to keep, you can filter the cached object.
+	builder = ijson.ObjectBuilder()
+	builder.event(event, value)
 
-	The steps we take are:
-	1. Check to see if there are matching codes. If so, write them
-	2. Write the top matter to file
-	3. Write the provider references to file
-	"""
-	s = time.time()
+	for nprefix, event, value in parser:
 
-	with requests.get(input_url, stream = True) as r:
+		if (nprefix, event) == (prefix, 'end_array'):
+			provider_references = builder.value
+			return provider_references, (nprefix, event, value)
 
-		parsed_url = urlparse(input_url)
-		url = (parsed_url[1] + parsed_url[2]).strip()
-
-		LOG.info(f"Began streaming file: {url}")
-
-		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
-		LOG.info(f"Size of file: {url_size} MB")
-
-		if parsed_url[2].endswith('.json.gz'):
-			f = gzip.GzipFile(fileobj = r.raw)
-			LOG.info(f"Unzipping streaming file.")
-		elif parsed_url[2].endswith('.json'):
-			f = r.content
-		else:
-			LOG.info(f"File does not have an extension. Aborting.")
-			return
-		
-		# Create a parser and loop through the top matter
-		# Break as soon as we get to provider references
-		parser = ijson.parse(f, use_float = True)
-
-		LOG.info(f"Parsing top matter...")
-		root_data = {'url': url}
-		provider_refs_exist = False
-
-		for prefix, event, value in parser:
-			if event in ['string', 'number']:
-				root_data[f'{prefix}'] = value
-				prefix, event, value = next(parser)
-			if (prefix, event) == ('provider_references', 'start_array'):
-				provider_refs_exist = True
-				break
-			elif (prefix, event) == ('in_network', 'start_array'):
-				break
-
-		LOG.info(f"Successfully parsed top matter.")
-
-		root_data['root_hash_id'] = hashdict(root_data)
-		hash_ids = {'root_hash_id': root_data['root_hash_id']}
-		
-		if provider_refs_exist:
-			provider_references_list = []
-			LOG.info(f"Found provider refs. Caching.")
-
-			while (prefix, event) != ('provider_references', 'end_array'):
-				if event != 'start_array':
-					prefix, event, value = next(parser)
-					continue
-
-				if (prefix, event) == ('provider_references', 'end_array'):
-					break
-
-				if prefix.startswith('provider_references'):
-					builder = ijson.ObjectBuilder()
-					builder.event(event, value)
-					for nprefix, event, value in parser:
-						if (nprefix, event) == (prefix, 'end_array'):
-							break
-						builder.event(event, value)
-					provider_references = builder.value[0]
-
-			p_ref_size = round(sys.getsizeof(provider_references)/1_000_000, 4)
-			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
-
-		matching_codes_exist = False
-		LOG.info(f"Streaming through in-network items (codes)...")
-
-		while (prefix, event) != ('in_network', 'end_array'):
-			if event != 'start_array':
-				prefix, event, value = next(parser)
-				continue
-
-			if prefix.startswith('in_network'):
-				build = True
-				builder = ijson.ObjectBuilder()
-				builder.event(event, value)
-				for nprefix, event, value in parser:
-
-					if (nprefix, event) == (prefix, 'end_array'):
-						break
-
-					elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
-						if value not in billing_code_list:
-							LOG.debug(f"Code found ({value}) but not in BILLING_CODE_LIST. Continuing...")
-							build = False
-
-					if build: 
-						builder.event(event, value)
-
-				if not build:
-					continue
-
-				in_network_item = builder.value[0]
-				LOG.debug(f"Billing code in BILLING_CODE_LIST found: {in_network_item['billing_code']}")
-
-			if in_network_item['billing_code'] in billing_code_list:
-				matching_codes_exist = True
-				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
-				LOG.debug(f"Found billing code: {in_network_item['billing_code_type']}: {in_network_item['billing_code']}")
-		
-				if provider_refs_exist:
-					for negotiated_rate in in_network_item['negotiated_rates']:
-						for provider_reference in negotiated_rate['provider_references']:
-							provider_references_list.append(provider_reference)
+		builder.event(event, value)
 
 
-		LOG.info(f"Finished looping through in_network_items.")
-		if not matching_codes_exist:
-			LOG.info(f"No matching codes found. Stopping.")
-			return
+def parse_in_network(init_row, parser, billing_code_filter = []):
 
-		# If we've found codes, write the top matter to file
-		LOG.info(f"Wrote top matter to file.")
-		write_dict_to_file(output_dir, 'root', root_data)
+	prefix, event, value = init_row
 
-		# Finally, write the matching provider references to file
-		if provider_refs_exist: 
-			for provider_reference in provider_references:
-				if provider_reference['provider_group_id'] in provider_references_list:
-					flatten_dict_to_file(provider_reference, output_dir, prefix = 'provider_references', **hash_ids)
-			LOG.info(f"Wrote provider references to file.")
+	while (prefix, event) != ('in_network.item', 'start_map'):
+		prefix, event, value = next(parser)
 
-		td = time.time() - s
-		LOG.info(f'Total time taken: {round(td/60, 3)} min.')
+	builder = ijson.ObjectBuilder()
+	builder.event(event, value)
+
+	for nprefix, event, value in parser:
+		if (nprefix, event) == (prefix, 'end_map'):
+			in_network = builder.value
+			return in_network, (nprefix, event, value)
+
+		elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
+			if billing_code_filter:
+				if value not in billing_code_filter:					
+					return None, (nprefix, event, value)
+
+		builder.event(event, value)
+
+

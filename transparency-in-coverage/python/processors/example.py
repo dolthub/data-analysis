@@ -1,5 +1,5 @@
-from helpers import parse_to_file, create_output_dir, \
-				    get_mrfs_from_index
+from core import parse_to_file, get_mrfs_from_index
+from helpers import create_output_dir
 import logging
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
@@ -8,6 +8,8 @@ logger = logging.getLogger('helpers')
 logger.setLevel(level=logging.DEBUG)
 
 BILLING_CODE_LIST = [
+	'0001A',
+	'0001F',
 	'36415',
 	'80053',
 	'85025',
@@ -60,7 +62,7 @@ BILLING_CODE_LIST = [
 	'80307',]
 
 OUTPUT_DIR = 'flatten'
-INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_-Big-Valley-Construction-LLC_index.json'
+INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_CLEVELAND-CLINIC-FLORIDA-GROUP-BENEFIT-PLAN_index.json'
 
 my_urls = get_mrfs_from_index(INDEX_FILE_URL)
 
@@ -68,6 +70,6 @@ create_output_dir(OUTPUT_DIR, overwrite = True)
 
 with logging_redirect_tqdm():
 	for url in tqdm(my_urls):
-		parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_list = BILLING_CODE_LIST)
+		parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_filter = BILLING_CODE_LIST)
 
 
