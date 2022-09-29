@@ -212,6 +212,7 @@ def parse_to_file(url, output_dir, billing_code_list = []):
 
 		LOG.info(f"Finished looping through in_network_items.")
 		if not matching_codes_exist:
+			LOG.info(f"No matching codes found. Stopping.")
 			return
 
 		# If we've found codes, write the top matter to file
