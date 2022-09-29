@@ -115,6 +115,8 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 		hash_ids = {'root_hash_id': root_data['root_hash_id']}
 
 		LOG.info(f"Streaming in-network items (codes)...")
+
+		# PARSE IN-NETWORK OBJECTS ONE AT A TIME
 		while (prefix, event) != ('in_network', 'end_array'):
 
 			in_network_item, (prefix, event, value) = parse_in_network((prefix, event, value), parser, billing_code_filter)

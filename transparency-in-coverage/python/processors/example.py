@@ -4,7 +4,7 @@ import logging
 from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
-logger = logging.getLogger('helpers')
+logger = logging.getLogger('core')
 logger.setLevel(level=logging.DEBUG)
 
 BILLING_CODE_LIST = [
