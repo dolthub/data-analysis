@@ -118,15 +118,16 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 		# PARSE IN-NETWORK OBJECTS ONE AT A TIME
 		codes_exist = False
 		written_provider_refs = set()
+
 		while (prefix, event) != ('in_network', 'end_array'):
 
 			in_network_item, (prefix, event, value) = parse_in_network((prefix, event, value), parser, billing_code_filter)
 
-			if (not in_network_item) and (value):
+			if value and not in_network_item :
 				LOG.debug(f"Code found ({value}) but not in BILLING_CODE_LIST. Continuing...")
 				continue
 
-			if (not in_network_item) and not (value):
+			if not in_network_item and not value:
 				LOG.debug(f"No more in-network items.")
 				continue
 
@@ -137,24 +138,55 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
 				continue
 
-			write_item = False
+			# If provider references exist for the in-network item,
+			# but they don't meet a condition, don't write either object
+			save_in_network_item = False
+			new_negotiated_rates = []
+
 			for negotiated_rate in in_network_item['negotiated_rates']:
 				for provider_reference in negotiated_rate['provider_references']:
 					if provider_reference in written_provider_refs:
-						write_item = True
+						new_negotiated_rates.append(negotiated_rate)
 						continue
-					
+
 					provider_item = provider_references[provider_reference]
+					save_negotiated_rate = False
+
+					...
+					npis = []
+					pgroups = provider_item['provider_groups']
+					for pgroup in pgroups:
+						npis.extend(pgroup['npi'])
+
+					if not 1932719580 in npis:
+						LOG.debug(f"No matching NPIs found. Not writing.")
+						continue
+
+					save_negotiated_rate = True
+					...
+
+					if not save_negotiated_rate:
+						continue
+
+					save_in_network_item = True
+
+					
+					new_negotiated_rates.append(negotiated_rate)
 
 					flatten_dict_to_file(provider_item, output_dir, prefix = 'provider_references', **hash_ids)
 					written_provider_refs.add(provider_reference)
 					LOG.debug(f"Wrote provider reference ({provider_reference}) to file.")
 
-			if write_item:
-				codes_exist = True
-				LOG.debug(f"Writing {in_network_item['billing_code']} to file...")
-				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
+				if not new_negotiated_rates:
+					continue
 
+			if not save_in_network_item:
+				continue
+
+			codes_exist = True
+			in_network_item['negotiated_rates'] = new_negotiated_rates
+			LOG.debug(f"Writing {in_network_item['billing_code']} to file...")
+			flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
 
 		if not codes_exist:
 			return
