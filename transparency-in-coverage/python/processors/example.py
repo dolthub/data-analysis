@@ -8,8 +8,8 @@ logger = logging.getLogger('core')
 logger.setLevel(level=logging.DEBUG)
 
 BILLING_CODE_LIST = [
-	'0001A',
-	'0001F',
+	# '0001A',
+	# '0001F',
 	'36415',
 	'80053',
 	'85025',
@@ -59,7 +59,7 @@ BILLING_CODE_LIST = [
 	'84165',
 	'83880',
 	'81003',
-	'99499',
+	# '99499',
 	'80307',]
 
 OUTPUT_DIR = 'flatten'
