@@ -70,10 +70,10 @@ BILLING_CODE_LIST = [
 
 INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_CLEVELAND-CLINIC-FLORIDA-GROUP-BENEFIT-PLAN_index.json'
 
-my_urls = get_mrfs_from_index(INDEX_FILE_URL)
+# my_urls = get_mrfs_from_index(INDEX_FILE_URL)
 
-with logging_redirect_tqdm():
-	for url in tqdm(my_urls):
-		parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_filter = BILLING_CODE_LIST)
+# with logging_redirect_tqdm():
+	# for url in tqdm(my_urls):
+		# parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_filter = BILLING_CODE_LIST)
 
 

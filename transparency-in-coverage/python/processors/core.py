@@ -103,8 +103,7 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 		# PARSE PROVIDER REFS
 		if (prefix, event) == ('provider_references', 'start_array'):
 			LOG.info(f"Streaming provider references...")
-			provider_refs_exist = True
-			provider_references_list = []
+			provider_refs_exist = True			
 			provider_references, (prefix, event, value) = parse_provider_refs((prefix, event, value), parser)
 			p_ref_size = round(sys.getsizeof(provider_references)/1_000_000, 4)
 			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
@@ -118,34 +117,43 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 
 		# PARSE IN-NETWORK OBJECTS ONE AT A TIME
 		codes_exist = False
+		written_provider_refs = set()
 		while (prefix, event) != ('in_network', 'end_array'):
 
 			in_network_item, (prefix, event, value) = parse_in_network((prefix, event, value), parser, billing_code_filter)
 
-			if in_network_item:
-				codes_exist = True
-				LOG.debug(f"Billing code in BILLING_CODE_LIST found: {in_network_item['billing_code']}")
-				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
-				if provider_refs_exist:
-					for negotiated_rate in in_network_item['negotiated_rates']:
-						for provider_reference in negotiated_rate['provider_references']:
-							provider_references_list.append(provider_reference)
-			else:
+			if (not in_network_item) and (value):
 				LOG.debug(f"Code found ({value}) but not in BILLING_CODE_LIST. Continuing...")
+				continue
+
+			if (not in_network_item) and not (value):
+				LOG.debug(f"No more in-network items.")
+				continue
+
+			LOG.debug(f"Billing code in BILLING_CODE_LIST found: {in_network_item['billing_code']}")
+
+			if not provider_refs_exist:
+				continue
+
+			for negotiated_rate in in_network_item['negotiated_rates']:
+				for provider_reference in negotiated_rate['provider_references']:
+					if provider_reference in written_provider_refs:
+						continue
+
+					provider_item = provider_references[provider_reference]
+
+					flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
+					codes_exist = True
+
+					flatten_dict_to_file(provider_item, output_dir, prefix = 'provider_references', **hash_ids)
+					written_provider_refs.add(provider_reference)
+					LOG.debug(f"Wrote provider reference ({provider_reference}) to file.")
 
 		if not codes_exist:
 			return
 
-		LOG.debug(f'Wrote all in-network items to file')
-
 		write_dict_to_file(output_dir, 'root', root_data)
 		LOG.info(f"Wrote top matter to file.")
-
-		if provider_refs_exist: 
-			for provider_reference in provider_references:
-				if provider_reference['provider_group_id'] in provider_references_list:
-					flatten_dict_to_file(provider_reference, output_dir, prefix = 'provider_references', **hash_ids)
-			LOG.info(f"Wrote provider references to file.")
 
 		td = time.time() - s
 		LOG.info(f'Total time taken: {round(td/60, 3)} min.')
