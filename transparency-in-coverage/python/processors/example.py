@@ -59,16 +59,18 @@ BILLING_CODE_LIST = [
 	'84165',
 	'83880',
 	'81003',
+	'99499',
 	'80307',]
 
 OUTPUT_DIR = 'flatten'
 INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_CLEVELAND-CLINIC-FLORIDA-GROUP-BENEFIT-PLAN_index.json'
 
-my_urls = get_mrfs_from_index(INDEX_FILE_URL)
+# my_urls = get_mrfs_from_index(INDEX_FILE_URL)
 
 create_output_dir(OUTPUT_DIR, overwrite = True)
 
 with logging_redirect_tqdm():
+	my_urls = ['https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Racine-Unified-School-District_CSP-976-T103_in-network-rates.json.gz']
 	for url in tqdm(my_urls):
 		parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_filter = BILLING_CODE_LIST)
 

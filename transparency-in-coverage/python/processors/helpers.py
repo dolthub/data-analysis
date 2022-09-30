@@ -132,6 +132,10 @@ def parse_in_network(init_row, parser, billing_code_filter = []):
 	prefix, event, value = init_row
 
 	while (prefix, event) != ('in_network.item', 'start_map'):
+		
+		if (prefix, event) == ('in_network', 'end_array'):
+			return None, (prefix, event, value)
+
 		prefix, event, value = next(parser)
 
 	builder = ijson.ObjectBuilder()

@@ -6,7 +6,7 @@ import gzip
 import sys
 from helpers import parse_in_network, parse_provider_refs, \
 					parse_top_matter, flatten_dict_to_file, \
-					hashdict
+					hashdict, write_dict_to_file
 from urllib.parse import urlparse
 
 LOG = logging.getLogger(__name__)
@@ -117,6 +117,7 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 		LOG.info(f"Streaming in-network items (codes)...")
 
 		# PARSE IN-NETWORK OBJECTS ONE AT A TIME
+		codes_exist = False
 		while (prefix, event) != ('in_network', 'end_array'):
 
 			in_network_item, (prefix, event, value) = parse_in_network((prefix, event, value), parser, billing_code_filter)
