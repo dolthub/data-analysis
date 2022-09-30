@@ -133,21 +133,28 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 			LOG.debug(f"Billing code in BILLING_CODE_LIST found: {in_network_item['billing_code']}")
 
 			if not provider_refs_exist:
+				codes_exist = True
+				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
 				continue
 
+			write_item = False
 			for negotiated_rate in in_network_item['negotiated_rates']:
 				for provider_reference in negotiated_rate['provider_references']:
 					if provider_reference in written_provider_refs:
+						write_item = True
 						continue
-
+					
 					provider_item = provider_references[provider_reference]
-
-					flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
-					codes_exist = True
 
 					flatten_dict_to_file(provider_item, output_dir, prefix = 'provider_references', **hash_ids)
 					written_provider_refs.add(provider_reference)
 					LOG.debug(f"Wrote provider reference ({provider_reference}) to file.")
+
+			if write_item:
+				codes_exist = True
+				LOG.debug(f"Writing {in_network_item['billing_code']} to file...")
+				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
+
 
 		if not codes_exist:
 			return
