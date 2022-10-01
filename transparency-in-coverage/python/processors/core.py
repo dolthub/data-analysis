@@ -153,16 +153,17 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 					save_negotiated_rate = False
 
 					...
-					npis = []
-					pgroups = provider_item['provider_groups']
-					for pgroup in pgroups:
-						npis.extend(pgroup['npi'])
+					# PUT YOUR LOGIC HERE
+					# npis = []
+					# pgroups = provider_item['provider_groups']
+					# for pgroup in pgroups:
+					# 	npis.extend(pgroup['npi'])
 
-					if not 1932719580 in npis:
-						LOG.debug(f"No matching NPIs found. Not writing.")
-						continue
+					# if not 1932719580 in npis:
+					# 	LOG.debug(f"No matching NPIs found. Not writing.")
+					# 	continue
 
-					save_negotiated_rate = True
+					# save_negotiated_rate = True
 					...
 
 					if not save_negotiated_rate:
