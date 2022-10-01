@@ -163,7 +163,7 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 					# 	LOG.debug(f"No matching NPIs found. Not writing.")
 					# 	continue
 
-					# save_negotiated_rate = True
+					save_negotiated_rate = True
 					...
 
 					if not save_negotiated_rate:
