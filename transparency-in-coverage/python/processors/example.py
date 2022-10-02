@@ -1,4 +1,4 @@
-from core import parse_to_file, get_mrfs_from_index
+from core import stream_json_to_csv, get_mrfs_from_index
 from helpers import create_output_dir
 import logging
 from tqdm import tqdm
@@ -12,68 +12,13 @@ OUTPUT_DIR = 'flatten'
 
 create_output_dir(OUTPUT_DIR, overwrite = True)
 
-url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Racine-Unified-School-District_CSP-976-T103_in-network-rates.json.gz'
-parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_filter = [])
+urls = [
+	'https://raw.githubusercontent.com/CMSgov/price-transparency-guide/c3ba257f41f4b289b574557e2fcf0833c36ef79f/examples/in-network-rates/in-network-rates-bundle-single-plan-sample.json',
+	'https://raw.githubusercontent.com/CMSgov/price-transparency-guide/c3ba257f41f4b289b574557e2fcf0833c36ef79f/examples/in-network-rates/in-network-rates-capitation-single-plan-sample.json',
+	'https://raw.githubusercontent.com/CMSgov/price-transparency-guide/c3ba257f41f4b289b574557e2fcf0833c36ef79f/examples/in-network-rates/in-network-rates-fee-for-service-single-plan-sample.json',
+	'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Racine-Unified-School-District_CSP-976-T103_in-network-rates.json.gz',
+]
 
-# SECOND EXAMPLE
-BILLING_CODE_LIST = [
-	'36415',
-	'80053',
-	'85025',
-	'80061',
-	'84443',
-	'83036',
-	'82306',
-	'81001',
-	'82570',
-	'87086',
-	'84439',
-	'82607',
-	'87088',
-	'82043',
-	'80048',
-	'84153',
-	'85027',
-	'86003',
-	'83540',
-	'82728',
-	'83550',
-	'U0003',
-	'83735',
-	'85652',
-	'87186',
-	'86140',
-	'82746',
-	'84550',
-	'87077',
-	'U0005',
-	'85610',
-	'83970',
-	'82784',
-	'86235',
-	'84156',
-	'84481',
-	'84100',
-	'82550',
-	'84436',
-	'G0103',
-	'84403',
-	'82248',
-	'80069',
-	'86038',
-	'86769',
-	'83521',
-	'84165',
-	'83880',
-	'81003',
-	'80307',]
-
-INDEX_FILE_URL = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_CLEVELAND-CLINIC-FLORIDA-GROUP-BENEFIT-PLAN_index.json'
-
-# my_urls = get_mrfs_from_index(INDEX_FILE_URL)
-
-# with logging_redirect_tqdm():
-	# for url in tqdm(my_urls):
-		# parse_to_file(url, output_dir = OUTPUT_DIR, billing_code_filter = BILLING_CODE_LIST)
-
-
+with logging_redirect_tqdm():
+	for url in tqdm(urls):
+		stream_json_to_csv(url, output_dir = OUTPUT_DIR, code_filter = [])

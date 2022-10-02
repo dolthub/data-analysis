@@ -4,10 +4,12 @@ import logging
 import ijson
 import gzip
 import sys
-from helpers import parse_in_network, parse_provider_refs, \
-					parse_top_matter, flatten_dict_to_file, \
-					hashdict, write_dict_to_file
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urljoin
+from helpers import parse_innetwork, parse_provrefs, \
+					parse_root, flatten_obj, \
+					hashdict, dict_to_csv, fetch_remoteprovrefs, \
+					process_innetwork
+
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -49,8 +51,8 @@ def get_mrfs_from_index(index_file_url):
 	return in_network_file_urls
 
 
-def parse_to_file(input_url, output_dir, billing_code_filter = []):
-	"""This streams through a file, flattens it, and writes it to 
+def stream_json_to_csv(input_url, output_dir, code_filter = []):
+	"""This streams through a JSON, flattens it, and writes it to 
 	file. It streams the zipped files, avoiding saving them to disk.
 
 	MRFs are structured, schematically like
@@ -75,125 +77,88 @@ def parse_to_file(input_url, output_dir, billing_code_filter = []):
 	"""
 	s = time.time()
 
-	parsed_url = urlparse(input_url)
-	url = (parsed_url[1] + parsed_url[2]).strip()
-	LOG.info(f"Streaming file: {url}")
-
 	with requests.get(input_url, stream = True) as r:
 
-		url_size = round(int(r.headers['Content-length'])/1_000_000, 3)
-		LOG.info(f"Size of file: {url_size} MB")
+		urlpath = urlparse(input_url).path
+		url = urljoin(input_url, urlpath)
+		LOG.info(f"Streaming file: {url}")
 
-		if parsed_url[2].endswith('.json.gz'):
+		url_size_mb = round(int(r.headers['Content-length'])/1_000_000, 3)
+		LOG.info(f"Size of file: {url_size_mb} MB")
+
+		if urlpath.endswith('.json.gz'):
 			f = gzip.GzipFile(fileobj = r.raw)
-		elif parsed_url[2].endswith('.json'):
+		elif urlpath.endswith('.json'):
 			f = r.content
 		else:
-			LOG.info(f"File does not have an extension. Aborting.")
+			LOG.warning(f"Unknown extension. Stopping.")
 			return
 		
 		parser = ijson.parse(f, use_float = True)
 
-
 		## PARSE TOP MATTER
-		LOG.info(f"Streaming top matter...")
-		root_data, (prefix, event, value) = parse_top_matter(parser)
-		LOG.info(f"Successfully parsed top matter.")
+		root_data, row = parse_root(parser)
+		LOG.info(f"Parsed root.")
 
 		# PARSE PROVIDER REFS
-		if (prefix, event) == ('provider_references', 'start_array'):
-			LOG.info(f"Streaming provider references...")
-			provider_refs_exist = True			
-			provider_references, (prefix, event, value) = parse_provider_refs((prefix, event, value), parser)
-			p_ref_size = round(sys.getsizeof(provider_references)/1_000_000, 4)
-			LOG.info(f"Cached provider references. Size: {p_ref_size} MB.")
+		exist_provrefs = False
+		if row == ('provider_references', 'start_array', None):
+			exist_provrefs = True
+			provrefs, row = parse_provrefs(row, parser)
+			provref_id_map = {r['provider_group_id']:i for i, r in enumerate(provrefs)}
+			LOG.info(f"Parsed provider references.")
+
+			provrefs_size = round(sys.getsizeof(provrefs)/1_000_000, 4)
+			LOG.debug(f"Cached provider references. Size: {provrefs_size} MB.")
+
+			provrefs = fetch_remoteprovrefs(provrefs)
+			LOG.debug(f"Fetched remote provider references.")
 
 		root_data['url'] = url
 		root_data['root_hash_id'] = hashdict(root_data)
 
 		hash_ids = {'root_hash_id': root_data['root_hash_id']}
 
-		LOG.info(f"Streaming in-network items (codes)...")
-
 		# PARSE IN-NETWORK OBJECTS ONE AT A TIME
-		codes_exist = False
-		written_provider_refs = set()
+		exist_codes = False
+		provref_id_set = set()
 
-		while (prefix, event) != ('in_network', 'end_array'):
+		LOG.debug(f"Streaming in-network items (codes)...")
+		while row != ('in_network', 'end_array', None):
 
-			in_network_item, (prefix, event, value) = parse_in_network((prefix, event, value), parser, billing_code_filter)
-
-			if value and not in_network_item :
-				LOG.debug(f"Code found ({value}) but not in BILLING_CODE_LIST. Continuing...")
+			try:
+				innetwork, row = parse_innetwork(row, parser, code_filter)
+			except ValueError as err:
+				message, row = err.args
+				LOG.debug(message)
 				continue
 
-			if not in_network_item and not value:
-				LOG.debug(f"No more in-network items.")
+			if not exist_provrefs:
+				exist_codes = True
+				flatten_obj(innetwork, output_dir, 'in_network', **hash_ids)
 				continue
 
-			LOG.debug(f"Billing code in BILLING_CODE_LIST found: {in_network_item['billing_code']}")
-
-			if not provider_refs_exist:
-				codes_exist = True
-				flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
-				continue
-
-			# If provider references exist for the in-network item,
-			# but they don't meet a condition, don't write either object
-			save_in_network_item = False
-			new_negotiated_rates = []
-
-			for negotiated_rate in in_network_item['negotiated_rates']:
-				for provider_reference in negotiated_rate['provider_references']:
-					if provider_reference in written_provider_refs:
-						new_negotiated_rates.append(negotiated_rate)
+			for neg_rate in innetwork['negotiated_rates']:
+				new_neg_rate = neg_rate.copy()
+				for provref_id in neg_rate.get('provider_references', []):
+					if provref_id in provref_id_set:
 						continue
 
-					provider_item = provider_references[provider_reference]
-					save_negotiated_rate = False
+					provref_index = provref_id_map[provref_id]
+					provref = provrefs[provref_index]
+					provref_id_set.add(provref_id)
+					flatten_obj(provref, output_dir, 'provider_references', **hash_ids)
+					LOG.info(f"Wrote provider reference {provref_id} to file.")
+			
+			flatten_obj(innetwork, output_dir, 'in_network', **hash_ids)
+			LOG.info(f"Wrote billing code {innetwork['billing_code']} to file.")
+			exist_codes = True
 
-					...
-					# PUT YOUR LOGIC HERE
-					# npis = []
-					# pgroups = provider_item['provider_groups']
-					# for pgroup in pgroups:
-					# 	npis.extend(pgroup['npi'])
-
-					# if not 1932719580 in npis:
-					# 	LOG.debug(f"No matching NPIs found. Not writing.")
-					# 	continue
-
-					save_negotiated_rate = True
-					...
-
-					if not save_negotiated_rate:
-						continue
-
-					save_in_network_item = True
-
-					
-					new_negotiated_rates.append(negotiated_rate)
-
-					flatten_dict_to_file(provider_item, output_dir, prefix = 'provider_references', **hash_ids)
-					written_provider_refs.add(provider_reference)
-					LOG.debug(f"Wrote provider reference ({provider_reference}) to file.")
-
-				if not new_negotiated_rates:
-					continue
-
-			if not save_in_network_item:
-				continue
-
-			codes_exist = True
-			in_network_item['negotiated_rates'] = new_negotiated_rates
-			LOG.debug(f"Writing {in_network_item['billing_code']} to file...")
-			flatten_dict_to_file(in_network_item, output_dir, prefix = 'in_network', **hash_ids)
-
-		if not codes_exist:
+		if not exist_codes:
 			return
 
-		write_dict_to_file(output_dir, 'root', root_data)
-		LOG.info(f"Wrote top matter to file.")
+		dict_to_csv(root_data, output_dir, 'root')
+		LOG.info(f"Wrote root to file.")
 
 		td = time.time() - s
 		LOG.info(f'Total time taken: {round(td/60, 3)} min.')
