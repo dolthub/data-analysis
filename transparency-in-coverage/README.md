@@ -17,20 +17,20 @@ To get a feel for what the data output looks like. The file `example2.py` loops 
 ## How it works
 A few magical snippets and the package `ijson` do all of the work.
 
-Streaming the gzipped files is done with:
+Streaming the GZipped files is done with:
 
 ```py
 with requests.get(url, stream = True) as r:
 	f = gzip.GzipFile(fileobj = r.raw)
 ```
 
-I didn't know it was possible to stream a GZipped file before this. Once you're streaming, you create a parser with `ijson`:
+Once you're streaming, you create a parser with `ijson`:
 
 ```py
 parser = ijson.parse(f, use_float = True)
 ```
 
-Then, you simply go through each row of the JSON line by line and parse it. 
+Then, you simply go through each row of the JSON line by line and parse it. (I had no idea this was possible.)
 
 Streaming the file means you only get a chance to read each line once. This creates a problem since, occasionally, some of the later lines of the file (the negotiated rates) only make sense when given the providers that they reference, which are in the beginning of the file. Or, similarly, you may want to filter the billing codes, then only keep the provider references which are needed.
 
