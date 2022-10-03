@@ -20,12 +20,11 @@ def create_output_dir(output_dir, overwrite):
 
 def read_billing_codes_from_csv(filename):
 
-	with open(filename, 'r'):
-		reader = csv.DictReader(filename)
+	with open(filename, 'r') as f:
+		reader = csv.DictReader(f)
 		codes = []
 		for row in reader:
-		    codes.append(d)
-
+			codes.append((row['billing_code_type'], row['billing_code']))
 	return codes
 
 
@@ -194,14 +193,20 @@ def parse_innetwork(init_row, parser, code_filter = []):
 	builder.event(event, value)
 
 	for nprefix, event, value in parser:
+
 		if (nprefix, event) == (prefix, 'end_map'):
 			innetwork = builder.value
 			return innetwork, (nprefix, event, value)
 
-		elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
+		elif (nprefix) == ('in_network.item.negotiated_rates'):
 			if code_filter:
-				if value not in code_filter:
-					msg = f'Code found ({value}) but not in code_filter.'
+				billing_code_type = builder.value['billing_code_type']
+				billing_code = str(builder.value['billing_code'])
+				code_to_check = (billing_code_type, billing_code)
+
+				if code_to_check not in code_filter:
+
+					msg = f'Code found ({billing_code_type}: {billing_code}) but not in code_filter.'
 					raise ValueError(msg, (prefix, event, value))
 
 		builder.event(event, value)
@@ -212,13 +217,8 @@ def fetch_remoteprovrefs(provrefs):
 	for provref in provrefs:
 		new_provref = provref.copy()
 		if (loc := provref.get('location')):
-			try:
-				r = requests.get(loc)			
-				new_provref['provider_groups'] = r.json()['provider_groups']
-			except:
-				loc = 'https://raw.githubusercontent.com/CMSgov/price-transparency-guide/master/examples/provider-reference/provider-reference.json'
-				r = requests.get(loc)			
-				new_provref['provider_groups'] = r.json()['provider_groups']
+			r = requests.get(loc)			
+			new_provref['provider_groups'] = r.json()['provider_groups']
 			new_provref.pop('location')
 		new_provrefs.append(new_provref)
 	return new_provrefs
@@ -246,15 +246,3 @@ def filter_provrefs(provref, npi_filter = [1111111111]):
             new_provrefs.append(new_provref)
             
     return new_provrefs
-
-
-def process_innetwork(innetwork, provrefs, npi_filter = []):
-	# new_neg_rates = []
-	# for neg_rate in innetwork['negotiated_rates']:
-	# 	new_neg_rate = neg_rate.copy()
-	# 	for provref_id in neg_rate['provider_references']:
-	# 		new_neg_rate['provider_groups'].extend(provrefs[provref_id])
-	# 	new_neg_rates.append(new_neg_rate)
-	# innetwork['negotiated_rates'] = new_neg_rates
-	return innetwork
-

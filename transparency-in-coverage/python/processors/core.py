@@ -8,7 +8,7 @@ from urllib.parse import urlparse, urljoin
 from helpers import parse_innetwork, parse_provrefs, \
 					parse_root, flatten_obj, \
 					hashdict, dict_to_csv, fetch_remoteprovrefs, \
-					process_innetwork, normalize_innetwork
+					normalize_innetwork
 
 
 LOG = logging.getLogger(__name__)
