@@ -45,7 +45,8 @@ SCHEMA = {
         'root_hash_id',
         'in_network_hash_id',
         'in_network.negotiated_rates_hash_id',
-        'in_network.negotiated_rates.provider_references',],
+        # 'in_network.negotiated_rates.provider_references',
+        ],
 
     'in_network.negotiated_rates.negotiated_prices':[
         'root_hash_id',
@@ -76,36 +77,36 @@ SCHEMA = {
         'in_network.negotiated_rates.provider_groups.tin.type',
         'in_network.negotiated_rates.provider_groups.tin.value',],
 
-    'provider_references':[
-        'root_hash_id',
-        'provider_references_hash_id',
-        'provider_references.provider_group_id',],
+    # 'provider_references':[
+    #     'root_hash_id',
+    #     'provider_references_hash_id',
+    #     'provider_references.provider_group_id',],
 
-    'provider_references.provider_groups':[
-        'root_hash_id',
-        'provider_references_hash_id',
-        'provider_references.provider_groups_hash_id',
-        'provider_references.provider_groups.npi',],
+    # 'provider_references.provider_groups':[
+    #     'root_hash_id',
+    #     'provider_references_hash_id',
+    #     'provider_references.provider_groups_hash_id',
+    #     'provider_references.provider_groups.npi',],
 
-    'provider_references.provider_groups.tin':[
-        'root_hash_id',
-        'provider_references_hash_id',
-        'provider_references.provider_groups_hash_id',
-        'provider_references.provider_groups.tin_hash_id',
-        'provider_references.provider_groups.tin.type',
-        'provider_references.provider_groups.tin.value',],
+    # 'provider_references.provider_groups.tin':[
+    #     'root_hash_id',
+    #     'provider_references_hash_id',
+    #     'provider_references.provider_groups_hash_id',
+    #     'provider_references.provider_groups.tin_hash_id',
+    #     'provider_references.provider_groups.tin.type',
+    #     'provider_references.provider_groups.tin.value',],
 
-    'provider_references.provider_group':[
-        'root_hash_id',
-        'provider_references_hash_id',
-        'provider_references.provider_group_hash_id',
-        'provider_references.provider_group.npi',],
+    # 'provider_references.provider_group':[
+    #     'root_hash_id',
+    #     'provider_references_hash_id',
+    #     'provider_references.provider_group_hash_id',
+    #     'provider_references.provider_group.npi',],
 
-    'provider_references.provider_group.tin':[
-        'root_hash_id',
-        'provider_references_hash_id',
-        'provider_references.provider_group_hash_id',
-        'provider_references.provider_group.tin_hash_id',
-        'provider_references.provider_group.tin.type',
-        'provider_references.provider_group.tin.value',]
+    # 'provider_references.provider_group.tin':[
+    #     'root_hash_id',
+    #     'provider_references_hash_id',
+    #     'provider_references.provider_group_hash_id',
+    #     'provider_references.provider_group.tin_hash_id',
+    #     'provider_references.provider_group.tin.type',
+    #     'provider_references.provider_group.tin.value',]
 }

@@ -1,7 +1,7 @@
-### If you were shocked to find
-that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, well, so was I. Initially, I balked at the idea that these were processable on a normal machine, but with some trial and error (and some help from our Discord), we have a working flattener that will stream, filter, and flatten these files. 
-
 > If you're coming here from HN, this repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/)
+
+### If you were shocked to find
+that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, well, so was I. Initially, I balked at the idea that these were processable on a normal machine, but with some trial and error (and some help from our Discord), we have a working flattener that will stream, filter, and flatten these files on a machine with < 2GB RAM (conservatively -- it's probably lower.)
 
 At the moment, because of the complexity of the files, only filtering by billing code is supported. But we'll slowly flesh out the parser to handle more cases.
 
@@ -64,10 +64,12 @@ The reasons for this are two-fold. Because we expect to build this database with
 
 Write me at alec@dolthub.com if you know of a better way.
 
-# TODOs
+## How you can help
 
-1. Parser for Humana CSV files that matches the schema
-2. Make decisions on how to filter NPIs
+1. Make a pull request to this repo to make this scraper better written and more robust
+2. Help us design a good schema for these flattened files
+3. Write a parser for Humana's CSV files
+4. Add features (like filtering by NPI number -- how do we handle provider references in this case?)
 
 ## Plans to build the database on DoltHub
 

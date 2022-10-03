@@ -18,6 +18,17 @@ def create_output_dir(output_dir, overwrite):
 		os.mkdir(output_dir)
 
 
+def read_billing_codes_from_csv(filename):
+
+	with open(filename, 'r'):
+		reader = csv.DictReader(filename)
+		codes = []
+		for row in reader:
+		    codes.append(d)
+
+	return codes
+
+
 def clean_url(url):
 	parsed_url = urlparse(input_url)
 	cleaned_url = (parsed_url[1] + parsed_url[2]).strip()
@@ -73,7 +84,7 @@ def flatten_obj(obj, output_dir, prefix = '', **hash_ids):
 
 		elif type(value) == list and len(value) == 0:
 			# Can set to false to not keep empty lists
-			data[key_id] = value
+			data[key_id] = None
 
 		elif type(value) == list:
 			if type(value[0]) in [str, int, float]:
@@ -130,9 +141,41 @@ def parse_provrefs(init_row, parser):
 
 		if (nprefix, event) == (prefix, 'end_array'):
 			provrefs = builder.value
+			provrefs = normalize_provrefs(provrefs)
 			return provrefs, (nprefix, event, value)
 
 		builder.event(event, value)
+
+
+def normalize_provrefs(provrefs):
+	"""Some provider_references have the key 'provider_group'
+	instead of 'provider_groups' with an array. Normalize
+	them to that they all match.
+	"""
+	for i, provref in enumerate(provrefs):
+		if provref.get('provider_group'):
+			provref['provider_groups'] = provref['provider_group']
+			provref.pop('provider_group')
+	return provrefs
+
+
+def normalize_innetwork(innetwork, provrefs, provref_id_map):
+	"""Optional (small size increase) but put all the 
+	provider references inside the innetwork tables.
+	"""
+	for i, neg_rate in enumerate(innetwork['negotiated_rates']):
+		if neg_rate.get('provider_references'):
+			if neg_rate.get('provider_references'):
+				provref_ids = neg_rate['provider_references']
+				provref_idxs = [provref_id_map[j] for j in provref_ids]
+				provref_info_arr = [provrefs[j] for j in provref_idxs]
+				new_provider_groups = []
+				for provref_info in provref_info_arr:
+					for provgroup in provref_info['provider_groups']:
+						new_provider_groups.append(provgroup)
+		innetwork['negotiated_rates'][i]['provider_groups'] = new_provider_groups
+		innetwork['negotiated_rates'][i].pop('provider_references')
+	return innetwork
 
 
 def parse_innetwork(init_row, parser, code_filter = []):
@@ -142,7 +185,8 @@ def parse_innetwork(init_row, parser, code_filter = []):
 	while (prefix, event) != ('in_network.item', 'start_map'):
 
 		if (prefix, event) == ('in_network', 'end_array'):
-			raise ValueError('Done parsing in-network items.', (prefix, event, value))
+			msg = 'Done parsing in-network items.'
+			raise ValueError(msg, (prefix, event, value))
 
 		prefix, event, value = next(parser)
 
@@ -156,8 +200,9 @@ def parse_innetwork(init_row, parser, code_filter = []):
 
 		elif (nprefix, event) == ('in_network.item.billing_code', 'string'):
 			if code_filter:
-				if value not in code_filter:	
-					raise ValueError(f'Code found ({value}) but not in code list.', (prefix, event, value))
+				if value not in code_filter:
+					msg = f'Code found ({value}) but not in code_filter.'
+					raise ValueError(msg, (prefix, event, value))
 
 		builder.event(event, value)
 
