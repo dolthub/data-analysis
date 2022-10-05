@@ -129,7 +129,8 @@ def stream_json_to_csv(input_url, output_dir, code_filter = []):
 
 			try:
 				innetwork, row = parse_innetwork(row, parser, code_filter)
-				innetwork = normalize_innetwork(innetwork, provrefs, provref_id_map)
+				if exist_provrefs:
+					innetwork = normalize_innetwork(innetwork, provrefs, provref_id_map)
 			except ValueError as err:
 				message, row = err.args
 				LOG.debug(message)
@@ -139,7 +140,6 @@ def stream_json_to_csv(input_url, output_dir, code_filter = []):
 				exist_codes = True
 				flatten_obj(innetwork, output_dir, 'in_network', **hash_ids)
 				continue
-
 
 			for neg_rate in innetwork['negotiated_rates']:
 				new_neg_rate = neg_rate.copy()
@@ -156,7 +156,6 @@ def stream_json_to_csv(input_url, output_dir, code_filter = []):
 			flatten_obj(innetwork, output_dir, 'in_network', **hash_ids)
 			LOG.info(f"Wrote billing code {innetwork['billing_code']} to file.")
 			exist_codes = True
-
 
 		if not exist_codes:
 			return

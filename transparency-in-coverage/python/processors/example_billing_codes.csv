@@ -1,4 +1,6 @@
 billing_code_type,billing_code
+ICD,81.54
+CPT,99499
 CPT,01925
 CPT,01969
 CPT,36415

@@ -5,7 +5,7 @@ from tqdm import tqdm
 from tqdm.contrib.logging import logging_redirect_tqdm
 
 logger = logging.getLogger('core')
-logger.setLevel(level=logging.DEBUG)
+logger.setLevel(level=logging.WARNING)
 
 OUTPUT_DIR = 'flatten'
 

@@ -1,6 +1,6 @@
 > If you're coming here from HN, this repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/)
 
-### If you were shocked to find
+## If you were shocked to find
 that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, well, so was I. Initially, I balked at the idea that these were processable on a normal machine, but with some trial and error (and some help from our Discord), we have a working flattener that will stream, filter, and flatten these files on a machine with < 2GB RAM (conservatively -- it's probably lower.)
 
 At the moment, because of the complexity of the files, only filtering by billing code is supported. But we'll slowly flesh out the parser to handle more cases.

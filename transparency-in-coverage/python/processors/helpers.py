@@ -37,6 +37,8 @@ def clean_url(url):
 def hashdict(data_dict):
 	"""Get the hash of a dict (sort, convert to bytes, then hash)
 	"""
+	if not data_dict:
+		raise ValueError
 	sorted_dict = dict(sorted(data_dict.items()))
 	dict_as_bytes = json.dumps(sorted_dict).encode('utf-8')
 	dict_hash = hashlib.md5(dict_as_bytes).hexdigest()
@@ -47,7 +49,8 @@ def dict_to_csv(data, output_dir, filename):
 	"""Write a dictionary to a CSV file as a row, 
 	where the schema is given by the filename.
 	"""
-	file_loc = f'{output_dir}/{filename}.csv'
+	reduced_filename = filename.split('.')[-1]
+	file_loc = f'{output_dir}/{reduced_filename}.csv'
 
 	fieldnames = SCHEMA[filename]
 
@@ -62,8 +65,89 @@ def dict_to_csv(data, output_dir, filename):
 		writer = csv.DictWriter(f, fieldnames = fieldnames)
 		writer.writerow(data)
 
-
 def flatten_obj(obj, output_dir, prefix = '', **hash_ids):
+	"""Takes an object, turns it into a dict, and 
+	writes it to file.
+
+	We have to track the hash_ids. This requires us to loop
+	through the dict once to take out the plain values,
+	then loop through it again to take care of the nested 
+	dicts, while passing the hash_ids down as a param.
+	"""
+
+	### STOP CONDITION
+
+	data = {}
+
+	coda = prefix.split('.')[-1]
+
+	if coda == 'provider_groups':
+		data['npi_numbers'] = obj['npi']
+		data['tin_type'] = obj['tin']['type']
+		data['tin_value'] = obj['tin']['value']
+		
+		for key, value in hash_ids.items():
+			data[key] = value
+
+		dict_to_csv(data, output_dir, prefix)
+		return
+
+	elif coda == 'negotiated_prices':
+		for key, value in obj.items():
+			data[key] = value if value else None
+
+		for key, value in hash_ids.items():
+			data[key] = value
+
+		dict_to_csv(data, output_dir, prefix)			
+		return
+
+	elif coda == 'negotiated_rates':
+		hash_ids[f'{prefix}_hash_id'] = hashdict(obj)
+
+		for key, value in obj.items():
+			key_id = f'{key}' if prefix else keys
+
+			for subvalue in value:
+				flatten_obj(subvalue, output_dir, key_id, **hash_ids)
+		return
+
+
+	for key, value in obj.items():
+
+		key_id = f'{key}' if prefix else key
+
+		if type(value) in [str, int, float]:
+			data[key_id] = value
+
+		elif type(value) == list and len(value) == 0:
+			# Can set to false to not keep empty lists
+			data[key_id] = None
+
+		elif type(value) == list:
+			if type(value[0]) in [str, int, float]:
+				data[key_id] = value
+
+	hash_ids[f'{prefix}_hash_id'] = hashdict(data)
+	
+	for key, value in hash_ids.items():
+		data[key] = value
+
+	for key, value in obj.items():
+		key_id = f'{key}' if prefix else key
+		
+		if type(value) == list and value:
+			if type(value[0])  == dict:
+				for subvalue in value:
+					flatten_obj(subvalue, output_dir, key_id, **hash_ids)
+		
+		elif type(value) == dict:            
+			flatten_obj(value, output_dir, key_id, **hash_ids)
+
+	dict_to_csv(data, output_dir, prefix)
+
+
+def flatten_obj_2(obj, output_dir, prefix = '', **hash_ids):
 	"""Takes an object, turns it into a dict, and 
 	writes it to file.
 
@@ -76,6 +160,7 @@ def flatten_obj(obj, output_dir, prefix = '', **hash_ids):
 	data = {}
 
 	for key, value in obj.items():
+
 		key_id = f'{prefix}.{key}' if prefix else key
 
 		if type(value) in [str, int, float]:
@@ -88,25 +173,48 @@ def flatten_obj(obj, output_dir, prefix = '', **hash_ids):
 		elif type(value) == list:
 			if type(value[0]) in [str, int, float]:
 				data[key_id] = value
+
+	if data:
+		hash_ids[f'{prefix}_hash_id'] = hashdict(data)
 		
-	hash_ids[f'{prefix}_hash_id'] = hashdict(data)
+		for key, value in hash_ids.items():
+			data[key] = value
 
-	for key, value in hash_ids.items():
-		data[key] = value
+		for key, value in obj.items():
+			key_id = f'{prefix}.{key}' if prefix else key
+			
+			if type(value) == list and value:
+				if type(value[0])  == dict:
+					for subvalue in value:
+						flatten_obj(subvalue, output_dir, key_id, **hash_ids)
+			
+			elif type(value) == dict:            
+				flatten_obj(value, output_dir, key_id, **hash_ids)
 
-	for key, value in obj.items():
-		key_id = f'{prefix}.{key}' if prefix else key
-		
-		if type(value) == list and value:
-			if type(value[0])  == dict:
-				for subvalue in value:
-					flatten_obj(subvalue, output_dir, key_id, **hash_ids)
-		
-		elif type(value) == dict:            
-			flatten_obj(value, output_dir, key_id, **hash_ids)
+		dict_to_csv(data, output_dir, prefix)
 
-	dict_to_csv(data, output_dir, prefix)
+	else:
+		print(obj)
+		print('\n')
+		hash_ids[f'{prefix}_hash_id'] = hashdict(obj)
+		# If there's no data, we need to just pass the previous hash_id down
+		for key, value in hash_ids.items():
+			data[key] = value
 
+		for idx, (key, value) in enumerate(obj.items()):
+			key_id = f'{prefix}.{key}' if prefix else key
+
+			hash_ids[f'{prefix}_hash_id'] = hashlib.md5(bytes(idx)).hexdigest()
+			
+			if type(value) == list and value:
+				if type(value[0])  == dict:
+					for subvalue in value:
+						flatten_obj(subvalue, output_dir, key_id, **hash_ids)
+			
+			elif type(value) == dict:            
+				flatten_obj(value, output_dir, key_id, **hash_ids)
+
+		dict_to_csv(data, output_dir, prefix)
 
 def parse_root(parser):
 
