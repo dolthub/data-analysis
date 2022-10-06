@@ -9,11 +9,10 @@ logger.setLevel(level=logging.DEBUG)
 
 OUTPUT_DIR = 'uhc_cesarean'
 
-BILLING_CODE_LIST = [
+C_SECTIONS = [
 	('CPT', '59510'),
 	('CPT', '59514'),
 	('CPT', '59515'),
-	('CPT', '59525'),
 ]
 
 # Try these other URLs:
@@ -22,8 +21,10 @@ BILLING_CODE_LIST = [
 # url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Ohio--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
 # url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Florida--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
 # url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Kentucky--Ltd-_Insurer_HML-75_ED_in-network-rates.json.gz'
-url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Louisiana--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
+# url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Louisiana--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
+# url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-10-01/2022-10-01_UnitedHealthcare-of-Utah--Inc-_Insurer_HML-15_S9_in-network-rates.json.gz'
+url = 'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-10-01/2022-10-01_UnitedHealthcare-of-Georgia--Inc-_Insurer_HML-15_S9_in-network-rates.json.gz'
 
 create_output_dir(OUTPUT_DIR, overwrite = False)
 
-stream_json_to_csv(url, output_dir = OUTPUT_DIR, code_filter = BILLING_CODE_LIST)
+stream_json_to_csv(url, output_dir = OUTPUT_DIR, code_filter = C_SECTIONS)
