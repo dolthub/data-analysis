@@ -10,347 +10,387 @@ from schema import SCHEMA
 
 
 def create_output_dir(output_dir, overwrite):
-	if os.path.exists(output_dir):
-		if overwrite:
-			for file in glob.glob(f'{output_dir}/*'):
-				os.remove(file)
-	else:
-		os.mkdir(output_dir)
+    if os.path.exists(output_dir):
+        if overwrite:
+            for file in glob.glob(f"{output_dir}/*"):
+                os.remove(file)
+    else:
+        os.mkdir(output_dir)
 
 
 def read_billing_codes_from_csv(filename):
+    with open(filename, "r") as f:
+        reader = csv.DictReader(f)
+        codes = []
+        for row in reader:
+            codes.append((row["billing_code_type"], row["billing_code"]))
+    return codes
 
-	with open(filename, 'r') as f:
-		reader = csv.DictReader(f)
-		codes = []
-		for row in reader:
-			codes.append((row['billing_code_type'], row['billing_code']))
-	return codes
+
+def read_npi_from_csv(filename):
+    with open(filename, "r") as f:
+        reader = csv.DictReader(f)
+        codes = []
+        for row in reader:
+            codes.append(row["npi"])
+    return codes
 
 
 def clean_url(url):
-	parsed_url = urlparse(input_url)
-	cleaned_url = (parsed_url[1] + parsed_url[2]).strip()
-	return cleaned_url
+    parsed_url = urlparse(input_url)
+    cleaned_url = (parsed_url[1] + parsed_url[2]).strip()
+    return cleaned_url
 
 
 def hashdict(data_dict):
-	"""Get the hash of a dict (sort, convert to bytes, then hash)
-	"""
-	if not data_dict:
-		raise ValueError
-	sorted_dict = dict(sorted(data_dict.items()))
-	dict_as_bytes = json.dumps(sorted_dict).encode('utf-8')
-	dict_hash = hashlib.md5(dict_as_bytes).hexdigest()
-	return dict_hash
-
-
-def dict_to_csv(data, output_dir, filename):
-	"""Write a dictionary to a CSV file as a row, 
-	where the schema is given by the filename.
-	"""
-	reduced_filename = filename.split('.')[-1]
-	file_loc = f'{output_dir}/{reduced_filename}.csv'
+    """Get the hash of a dict (sort, convert to bytes, then hash)"""
+    if not data_dict:
+        raise ValueError
+    sorted_dict = dict(sorted(data_dict.items()))
+    dict_as_bytes = json.dumps(sorted_dict).encode("utf-8")
+    dict_hash = hashlib.md5(dict_as_bytes).hexdigest()
+    return dict_hash
+
+
+def rows_to_file(rows, output_dir):
+    for row in rows:
+
+        filename = row[0]
+        row_data = row[1]
+        fieldnames = SCHEMA[filename]
+        file_loc = f"{output_dir}/{filename}.csv"
 
-	fieldnames = SCHEMA[filename]
-
-	if not os.path.exists(file_loc):
-		with open(file_loc, 'w') as f:
-			writer = csv.DictWriter(f, fieldnames = fieldnames)
-			writer.writeheader()
-			writer.writerow(data)
-			return
-	
-	with open(file_loc, 'a') as f:
-		writer = csv.DictWriter(f, fieldnames = fieldnames)
-		writer.writerow(data)
+        if not os.path.exists(file_loc):
+            with open(file_loc, "w") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerow(row_data)
 
-def flatten_obj(obj, output_dir, prefix = '', **hash_ids):
-	"""Takes an object, turns it into a dict, and 
-	writes it to file.
+        with open(file_loc, "a") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writerow(row_data)
 
-	We have to track the hash_ids. This requires us to loop
-	through the dict once to take out the plain values,
-	then loop through it again to take care of the nested 
-	dicts, while passing the hash_ids down as a param.
-	"""
 
-	### STOP CONDITION
+def innetwork_to_rows(obj, root_hash_id):
+    rows = []
 
-	data = {}
+    in_network_vals = {
+        "negotiation_arrangement": obj["negotiation_arrangement"],
+        "name": obj["name"],
+        "billing_code_type": obj["billing_code_type"],
+        "billing_code_type_version": obj["billing_code_type_version"],
+        "billing_code": obj["billing_code"],
+        "description": obj["description"],
+    }
 
-	coda = prefix.split('.')[-1]
+    in_network_hash_id = hashdict(in_network_vals)
+    in_network_vals["in_network_hash_id"] = in_network_hash_id
 
-	if coda == 'provider_groups':
-		data['npi_numbers'] = obj['npi']
-		data['tin_type'] = obj['tin']['type']
-		data['tin_value'] = obj['tin']['value']
-		
-		for key, value in hash_ids.items():
-			data[key] = value
-
-		dict_to_csv(data, output_dir, prefix)
-		return
-
-	elif coda == 'negotiated_prices':
-		for key, value in obj.items():
-			data[key] = value if value else None
-
-		for key, value in hash_ids.items():
-			data[key] = value
-
-		dict_to_csv(data, output_dir, prefix)			
-		return
-
-	elif coda == 'negotiated_rates':
-		hash_ids[f'{prefix}_hash_id'] = hashdict(obj)
-
-		for key, value in obj.items():
-			key_id = f'{key}' if prefix else keys
-
-			for subvalue in value:
-				flatten_obj(subvalue, output_dir, key_id, **hash_ids)
-		return
-
-
-	for key, value in obj.items():
-
-		key_id = f'{key}' if prefix else key
-
-		if type(value) in [str, int, float]:
-			data[key_id] = value
-
-		elif type(value) == list and len(value) == 0:
-			# Can set to false to not keep empty lists
-			data[key_id] = None
-
-		elif type(value) == list:
-			if type(value[0]) in [str, int, float]:
-				data[key_id] = value
-
-	hash_ids[f'{prefix}_hash_id'] = hashdict(data)
-	
-	for key, value in hash_ids.items():
-		data[key] = value
-
-	for key, value in obj.items():
-		key_id = f'{key}' if prefix else key
-		
-		if type(value) == list and value:
-			if type(value[0])  == dict:
-				for subvalue in value:
-					flatten_obj(subvalue, output_dir, key_id, **hash_ids)
-		
-		elif type(value) == dict:            
-			flatten_obj(value, output_dir, key_id, **hash_ids)
+    rows.append(("in_network", in_network_vals))
 
-	dict_to_csv(data, output_dir, prefix)
+    for neg_rate in obj.get("negotiated_rates", []):
+        neg_rates_hash_id = hashdict(neg_rate)
 
+        for provgroup in neg_rate["provider_groups"]:
+            provgroup_vals = {
+                "npi_numbers": provgroup["npi"],
+                "tin_type": provgroup["tin"]["type"],
+                "tin_value": provgroup["tin"]["value"],
+                "negotiated_rates_hash_id": neg_rates_hash_id,
+                "in_network_hash_id": in_network_hash_id,
+                "root_hash_id": root_hash_id,
+            }
+            rows.append(("provider_groups", provgroup_vals))
 
-def flatten_obj_2(obj, output_dir, prefix = '', **hash_ids):
-	"""Takes an object, turns it into a dict, and 
-	writes it to file.
+        for neg_price in neg_rate["negotiated_prices"]:
+            neg_price_vals = {
+                "billing_class": neg_price["billing_class"],
+                "negotiated_type": neg_price["negotiated_type"],
+                "service_code": neg_price.get("service_code", None),
+                "expiration_date": neg_price["expiration_date"],
+                "additional_information": neg_price.get("additional_information", None),
+                "billing_code_modifier": neg_price.get("billing_code_modifier", None),
+                "negotiated_rate": neg_price["negotiated_rate"],
+                "root_hash_id": root_hash_id,
+                "in_network_hash_id": in_network_hash_id,
+                "negotiated_rates_hash_id": neg_rates_hash_id,
+            }
+            rows.append(("negotiated_prices", neg_price_vals))
 
-	We have to track the hash_ids. This requires us to loop
-	through the dict once to take out the plain values,
-	then loop through it again to take care of the nested 
-	dicts, while passing the hash_ids down as a param.
-	"""
+    for bundle in obj.get("bundled_codes", []):
+        bundle_vals = {
+            "billing_code_type": bundle["billing_code_type"],
+            "billing_code_type_version": bundle["billing_code_type_version"],
+            "billing_code": bundle["billing_code"],
+            "description": bundle["description"],
+            "root_hash_id": root_hash_id,
+            "in_network_hash_id": in_network_hash_id,
+        }
+        rows.append(("bundled_codes", bundle_vals))
 
-	data = {}
+    return rows
 
-	for key, value in obj.items():
 
-		key_id = f'{prefix}.{key}' if prefix else key
+def build_root(parser):
+    builder = ijson.ObjectBuilder()
 
-		if type(value) in [str, int, float]:
-			data[key_id] = value
+    for prefix, event, value in parser:
 
-		elif type(value) == list and len(value) == 0:
-			# Can set to false to not keep empty lists
-			data[key_id] = None
+        if event == "start_array":
+            return builder.value, (prefix, event, value)
 
-		elif type(value) == list:
-			if type(value[0]) in [str, int, float]:
-				data[key_id] = value
+        builder.event(event, value)
 
-	if data:
-		hash_ids[f'{prefix}_hash_id'] = hashdict(data)
-		
-		for key, value in hash_ids.items():
-			data[key] = value
 
-		for key, value in obj.items():
-			key_id = f'{prefix}.{key}' if prefix else key
-			
-			if type(value) == list and value:
-				if type(value[0])  == dict:
-					for subvalue in value:
-						flatten_obj(subvalue, output_dir, key_id, **hash_ids)
-			
-			elif type(value) == dict:            
-				flatten_obj(value, output_dir, key_id, **hash_ids)
+def provrefs_to_idx(provrefs):
 
-		dict_to_csv(data, output_dir, prefix)
+    for provref in provrefs:
+        for provgroup in provref["provider_groups"]:
+            provgroup["npi"] = list(set(provgroup["npi"]) & set([1467915983]))
 
-	else:
-		print(obj)
-		print('\n')
-		hash_ids[f'{prefix}_hash_id'] = hashdict(obj)
-		# If there's no data, we need to just pass the previous hash_id down
-		for key, value in hash_ids.items():
-			data[key] = value
+    provref["provider_groups"] = [x for x in provref["provider_groups"] if x["npi"]]
 
-		for idx, (key, value) in enumerate(obj.items()):
-			key_id = f'{prefix}.{key}' if prefix else key
+    provref_idx = {x["provider_group_id"]: x["provider_groups"] for x in provrefs}
 
-			hash_ids[f'{prefix}_hash_id'] = hashlib.md5(bytes(idx)).hexdigest()
-			
-			if type(value) == list and value:
-				if type(value[0])  == dict:
-					for subvalue in value:
-						flatten_obj(subvalue, output_dir, key_id, **hash_ids)
-			
-			elif type(value) == dict:            
-				flatten_obj(value, output_dir, key_id, **hash_ids)
+    return provref_idx
 
-		dict_to_csv(data, output_dir, prefix)
 
-def parse_root(parser):
+def build_provrefs(init_row, parser, npi_list=None):
+    prefix, event, value = init_row
 
-	prefix, event, value = next(parser)
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
 
-	while event != 'start_array':
+    for nprefix, event, value in parser:
 
-		builder = ijson.ObjectBuilder()
-		builder.event(event, value)
+        if (nprefix, event) == (prefix, "end_array"):
+            provrefs = builder.value
+            return provrefs, (nprefix, event, value)
 
-		for nprefix, event, value in parser:
-			if event == 'start_array':	
-				return builder.value, (nprefix, event, value)
+        if (nprefix, event) == ("provider_references.item", "start_map"):
 
-			builder.event(event, value)
+            provref_builder = ijson.ObjectBuilder()
+            provref_builder.event(event, value)
 
-		prefix, event, value = next(parser)
+            for (nnprefix, event, value) in parser:
 
+                provgroups = []
 
-def parse_provrefs(init_row, parser):
+                if (nnprefix, event) == (nprefix, "end_map"):
+                    if provref_builder.value["provider_groups"]:
+                        builder.value.append(provref_builder.value)
+                    break
 
-	prefix, event, value = init_row
+                if (nnprefix, event, value) == (
+                    "provider_references.item",
+                    "map_key",
+                    "provider_groups",
+                ):
 
-	while event != 'start_array':
-		prefix, event, value = next(parser)
+                    for nnnprefix, event, value in parser:
 
-	builder = ijson.ObjectBuilder()
-	builder.event(event, value)
+                        if (nnnprefix, event) == (
+                            "provider_references.item",
+                            "map_key",
+                        ):
+                            provref_builder.value["provider_groups"] = provgroups
+                            break
 
-	for nprefix, event, value in parser:
+                        if (nnnprefix, event) == (
+                            "provider_references.item.provider_groups.item",
+                            "start_map",
+                        ):
 
-		if (nprefix, event) == (prefix, 'end_array'):
-			provrefs = builder.value
-			provrefs = normalize_provrefs(provrefs)
-			return provrefs, (nprefix, event, value)
-
-		builder.event(event, value)
-
-
-def normalize_provrefs(provrefs):
-	"""Some provider_references have the key 'provider_group'
-	instead of 'provider_groups' with an array. Normalize
-	them to that they all match.
-	"""
-	for i, provref in enumerate(provrefs):
-		if provref.get('provider_group'):
-			provref['provider_groups'] = provref['provider_group']
-			provref.pop('provider_group')
-	return provrefs
-
-
-def normalize_innetwork(innetwork, provrefs, provref_id_map):
-	"""Optional (small size increase) but put all the 
-	provider references inside the innetwork tables.
-	"""
-	for i, neg_rate in enumerate(innetwork['negotiated_rates']):
-		if neg_rate.get('provider_references'):
-			if neg_rate.get('provider_references'):
-				provref_ids = neg_rate['provider_references']
-				provref_idxs = [provref_id_map[j] for j in provref_ids]
-				provref_info_arr = [provrefs[j] for j in provref_idxs]
-				new_provider_groups = []
-				for provref_info in provref_info_arr:
-					for provgroup in provref_info['provider_groups']:
-						new_provider_groups.append(provgroup)
-		innetwork['negotiated_rates'][i]['provider_groups'] = new_provider_groups
-		innetwork['negotiated_rates'][i].pop('provider_references')
-	return innetwork
-
-
-def parse_innetwork(init_row, parser, code_filter = []):
-
-	prefix, event, value = init_row
-
-	while (prefix, event) != ('in_network.item', 'start_map'):
-
-		if (prefix, event) == ('in_network', 'end_array'):
-			msg = 'Done parsing in-network items.'
-			raise ValueError(msg, (prefix, event, value))
-
-		prefix, event, value = next(parser)
-
-	builder = ijson.ObjectBuilder()
-	builder.event(event, value)
-
-	for nprefix, event, value in parser:
-
-		if (nprefix, event) == (prefix, 'end_map'):
-			innetwork = builder.value
-			return innetwork, (nprefix, event, value)
-
-		elif (nprefix) == ('in_network.item.negotiated_rates'):
-			if code_filter:
-				billing_code_type = builder.value['billing_code_type']
-				billing_code = str(builder.value['billing_code'])
-				code_to_check = (billing_code_type, billing_code)
-
-				if code_to_check not in code_filter:
-
-					msg = f'Code found ({billing_code_type}: {billing_code}) but not in code_filter.'
-					raise ValueError(msg, (prefix, event, value))
-
-		builder.event(event, value)
-
-
-def fetch_remoteprovrefs(provrefs):
-	new_provrefs = []
-	for provref in provrefs:
-		new_provref = provref.copy()
-		if (loc := provref.get('location')):
-			r = requests.get(loc)			
-			new_provref['provider_groups'] = r.json()['provider_groups']
-			new_provref.pop('location')
-		new_provrefs.append(new_provref)
-	return new_provrefs
-
-
-def filter_provrefs(provref, npi_filter = [1111111111]):
-    new_provrefs = []
-    
-    for provref in provref:        
-        new_provref = provref.copy()
-        new_provref_groups = []
-        
-        provref_groups = provref['provider_groups']
-        
-        for group in provref_groups:
-            new_group = group.copy()
-            npis = group['npi']
-            new_npi = list(set(npis) & set(npi_filter))
-            if new_npi:
-                new_group['npi'] = new_npi
-                new_provref_groups.append(new_group)
-                
-        if new_provref_groups:
-            new_provref['provider_groups'] = new_provref_groups
-            new_provrefs.append(new_provref)
-            
-    return new_provrefs
+                            row = (nnnprefix, event, value)
+                            provgroup, row = build_prov_group(row, parser, npi_list)
+                            if provgroup:
+                                provgroups.append(provgroup)
+
+                provref_builder.event(event, value)
+
+        builder.event(event, value)
+
+
+def build_prov_group(init_row, parser, npi_list=None):
+    prefix, event, value = init_row
+
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
+
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_map"):
+            prov_group = builder.value
+            if not prov_group["npi"]:
+                return None, (nprefix, event, value)
+            return prov_group, (nprefix, event, value)
+
+        if nprefix.endswith("provider_groups.item.npi.item"):
+            if npi_list:
+                if value not in npi_list:
+                    continue
+
+        builder.event(event, value)
+
+
+def build_prov_group_arr(init_row, parser):
+    prefix, event, value = init_row
+
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
+
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_array"):
+            prov_group_arr = builder.value
+            if not prov_group_arr:
+                return None, (nprefix, event, value)
+            return prov_group_arr, (nprefix, event, value)
+
+        if (nprefix, event) == (
+            "in_network.item.negotiated_rates.item.provider_groups.item",
+            "start_map",
+        ):
+            row = (nprefix, event, value)
+            prov_group_item, row = build_prov_group(row, parser)
+            (nprefix, event, value) = row
+            if prov_group_item:
+                builder.value.append(prov_group_item)
+
+        builder.event(event, value)
+
+
+def build_neg_rate(init_row, parser, code_list, provref_idx=None):
+
+    prefix, event, value = init_row
+
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
+
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_map"):
+            builder.value.pop("provider_references")
+            neg_rate_item = builder.value
+            if not builder.value.get("provider_groups", None):
+                return None, (nprefix, event, value)
+            return neg_rate_item, (nprefix, event, value)
+
+        if (nprefix) == (
+            "in_network.item.negotiated_rates.item.provider_references.item"
+        ):
+            if builder.value.get("provicer_groups", None):
+                builder.value["provider_groups"].extend(provref_idx[value])
+            else:
+                builder.value["provider_groups"] = provref_idx[value]
+
+        if (nprefix, event) == (
+            "in_network.item.negotiated_rates.item.provider_groups",
+            "start_array",
+        ):
+            row = (nprefix, event, value)
+            builder.event(event, value)
+            prov_group_arr, row = build_prov_group_arr(
+                row, parser, code_list, provref_idx
+            )
+
+            if prov_group_arr:
+                builder.value.get("provider_groups", []).extend(prov_group_arr)
+            (nprefix, event, value) = row
+
+        builder.event(event, value)
+
+
+def build_neg_rate_arr(init_row, parser, code_list, provref_idx=None):
+    prefix, event, value = init_row
+
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
+
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_array"):
+            neg_rate_arr = builder.value
+            if not neg_rate_arr:
+                return None, (nprefix, event, value)
+            return neg_rate_arr, (nprefix, event, value)
+
+        if (nprefix, event) == (
+            "in_network.item.negotiated_rates.item",
+            "start_map",
+        ):
+            row = (nprefix, event, value)
+            neg_rate_item, row = build_neg_rate(row, parser, code_list, provref_idx)
+            (nprefix, event, value) = row
+            if neg_rate_item:
+                builder.value.append(neg_rate_item)
+
+        builder.event(event, value)
+
+
+def build_innetwork(init_row, parser, code_list=None, provref_idx=None):
+    prefix, event, value = init_row
+
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
+
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_map"):
+            innetwork_item = builder.value
+            return innetwork_item, (nprefix, event, value)
+
+        if (nprefix, event) == (
+            "in_network.item.negotiated_rates",
+            "start_array",
+        ) and code_list:
+            billing_code_type = builder.value["billing_code_type"]
+            billing_code = str(builder.value["billing_code"])
+
+            if (billing_code_type, billing_code) not in code_list:
+                return None, (nprefix, event, value)
+
+        if (nprefix, event) == ("in_network.item.negotiated_rates", "start_array"):
+            builder.event(event, value)
+            row = (nprefix, event, value)
+            neg_rate_arr, row = build_neg_rate_arr(row, parser, code_list, provref_idx)
+            builder.value["negotiated_rates"] = neg_rate_arr
+            (nprefix, event, value) = row
+
+            if not neg_rate_arr:
+                while (nprefix, event) != (prefix, "end_map"):
+                    nprefix, event, value = next(parser)
+                return None, (nprefix, event, value)
+
+        builder.event(event, value)
+
+
+def build_innetwork_arr(init_row, parser, code_list=None, provref_idx=None):
+    prefix, event, value = init_row
+
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
+
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_array"):
+            innetwork_arr = builder.value
+            return innetwork_arr, (nprefix, event, value)
+
+        if (nprefix, event) == ("in_network.item", "start_map"):
+            row = (nprefix, event, value)
+            innetwork_item, row = build_innetwork(row, parser, code_list, provref_idx)
+            if innetwork_item:
+                builder.value.append(innetwork_item)
+
+
+# def fetch_remoteprovrefs(provrefs):
+#     new_provrefs = []
+#     for provref in provrefs:
+#         new_provref = provref.copy()
+#         if loc := provref.get("location"):
+#             r = requests.get(loc)
+#             new_provref["provider_groups"] = r.json()["provider_groups"]
+#             new_provref.pop("location")
+#         new_provrefs.append(new_provref)
+#     return new_provrefs
