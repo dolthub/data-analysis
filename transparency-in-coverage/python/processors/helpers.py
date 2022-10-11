@@ -259,7 +259,9 @@ def build_neg_rate(init_row, parser, provref_idx=None):
     for nprefix, event, value in parser:
 
         if (nprefix, event) == (prefix, "end_map"):
+
             builder.value.pop("provider_references")
+
             neg_rate_item = builder.value
             if not builder.value.get("provider_groups", None):
                 return None, (nprefix, event, value)
@@ -289,6 +291,7 @@ def build_neg_rate(init_row, parser, provref_idx=None):
 
             if prov_group_arr:
                 builder.value.get("provider_groups", []).extend(prov_group_arr)
+
             (nprefix, event, value) = row
 
         builder.event(event, value)
@@ -317,6 +320,12 @@ def build_neg_rate_arr(init_row, parser, provref_idx=None):
             (nprefix, event, value) = row
             if neg_rate_item:
                 builder.value.append(neg_rate_item)
+
+        if (nprefix, event) == (
+            "in_network.item.negotiated_rates.item",
+            "end_map",
+        ):
+            continue
 
         builder.event(event, value)
 
