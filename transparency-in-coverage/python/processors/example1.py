@@ -19,7 +19,7 @@ urls = [
 create_output_dir(OUTPUT_DIR, overwrite=True)
 
 with logging_redirect_tqdm():
-    for url in tqdm(URLS):
+    for url in tqdm(urls):
         stream_json_to_csv(
-            url, output_dir=OUTPUT_DIR, code_list=BILLING_CODE_LIST, npi_list=NPI_LIST
+            url, output_dir=OUTPUT_DIR, code_list=code_list, npi_list=npi_list
         )

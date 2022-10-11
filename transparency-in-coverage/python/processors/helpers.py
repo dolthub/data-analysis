@@ -268,10 +268,16 @@ def build_neg_rate(init_row, parser, provref_idx=None):
         if (nprefix) == (
             "in_network.item.negotiated_rates.item.provider_references.item"
         ):
-            if builder.value.get("provicer_groups", None):
-                builder.value["provider_groups"].extend(provref_idx[value])
-            else:
-                builder.value["provider_groups"] = provref_idx[value]
+            try:
+                provgroups = provref_idx[value]
+
+                if builder.value.get("provider_groups", None):
+                    builder.value["provider_groups"].extend(provgroups)
+                else:
+                    builder.value["provider_groups"] = provgroups
+
+            except KeyError:
+                pass
 
         if (nprefix, event) == (
             "in_network.item.negotiated_rates.item.provider_groups",
