@@ -5,8 +5,12 @@ import glob
 import hashlib
 import ijson
 import requests
+import logging
 from urllib.parse import urlparse
 from schema import SCHEMA
+
+LOG = logging.getLogger(__name__)
+logging.basicConfig(level=logging.DEBUG)
 
 
 def create_output_dir(output_dir, overwrite):
@@ -18,7 +22,7 @@ def create_output_dir(output_dir, overwrite):
         os.mkdir(output_dir)
 
 
-def read_billing_codes_from_csv(filename):
+def import_billing_codes(filename):
     with open(filename, "r") as f:
         reader = csv.DictReader(f)
         codes = []
@@ -27,13 +31,17 @@ def read_billing_codes_from_csv(filename):
     return codes
 
 
-def read_npi_from_csv(filename):
+def import_set(filename, ints=True):
     with open(filename, "r") as f:
-        reader = csv.DictReader(f)
-        codes = []
+        reader = csv.reader(f)
+        items = set()
         for row in reader:
-            codes.append(int(row["npi"]))
-    return codes
+            item = row[0]
+            if ints:
+                items.add(int(item))
+            else:
+                items.add(str(item))
+    return items
 
 
 def clean_url(url):
@@ -150,60 +158,50 @@ def provrefs_to_idx(provrefs):
 def build_provrefs(init_row, parser, npi_list=None):
     prefix, event, value = init_row
 
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
+    provrefs = []
 
     for nprefix, event, value in parser:
 
         if (nprefix, event) == (prefix, "end_array"):
-            provrefs = builder.value
             return provrefs, (nprefix, event, value)
 
         if (nprefix, event) == ("provider_references.item", "start_map"):
 
-            provref_builder = ijson.ObjectBuilder()
-            provref_builder.event(event, value)
+            builder = ijson.ObjectBuilder()
+            builder.event(event, value)
 
             for (nnprefix, event, value) in parser:
 
-                provgroups = []
-
                 if (nnprefix, event) == (nprefix, "end_map"):
-                    if provref_builder.value["provider_groups"]:
-                        builder.value.append(provref_builder.value)
+                    provref = builder.value
+                    if provref["provider_groups"]:
+                        provrefs.append(provref)
+                        LOG.debug(
+                            f"Collected provider_group_id: {provref['provider_group_id']}"
+                        )
                     break
 
-                if (nnprefix, event, value) == (
-                    "provider_references.item",
-                    "map_key",
-                    "provider_groups",
+                elif (nnprefix, event) == (
+                    "provider_references.item.provider_groups.item",
+                    "start_map",
                 ):
 
-                    for nnnprefix, event, value in parser:
+                    row = nnprefix, event, value
+                    provgroup, row = build_provgroup(row, parser, npi_list)
+                    if provgroup:
+                        builder.value["provider_groups"].append(provgroup)
+                    nnprefix, event, value = row
 
-                        if (nnnprefix, event) == (
-                            "provider_references.item",
-                            "map_key",
-                        ):
-                            provref_builder.value["provider_groups"] = provgroups
-                            break
+                    if (nnprefix, event) == (
+                        "provider_references.item.provider_groups.item",
+                        "end_map",
+                    ):
+                        continue
 
-                        if (nnnprefix, event) == (
-                            "provider_references.item.provider_groups.item",
-                            "start_map",
-                        ):
-
-                            row = (nnnprefix, event, value)
-                            provgroup, row = build_prov_group(row, parser, npi_list)
-                            if provgroup:
-                                provgroups.append(provgroup)
-
-                provref_builder.event(event, value)
-
-        builder.event(event, value)
+                builder.event(event, value)
 
 
-def build_prov_group(init_row, parser, npi_list=None):
+def build_provgroup(init_row, parser, npi_list=None):
     prefix, event, value = init_row
 
     builder = ijson.ObjectBuilder()
@@ -219,13 +217,13 @@ def build_prov_group(init_row, parser, npi_list=None):
 
         if nprefix.endswith("provider_groups.item.npi.item"):
             if npi_list:
-                if value not in npi_list:
+                if int(value) not in npi_list:
                     continue
 
         builder.event(event, value)
 
 
-def build_prov_group_arr(init_row, parser):
+def build_provgroup_arr(init_row, parser):
     prefix, event, value = init_row
 
     builder = ijson.ObjectBuilder()
@@ -244,7 +242,7 @@ def build_prov_group_arr(init_row, parser):
             "start_map",
         ):
             row = (nprefix, event, value)
-            prov_group_item, row = build_prov_group(row, parser)
+            prov_group_item, row = build_provgroup(row, parser)
             (nprefix, event, value) = row
             if prov_group_item:
                 builder.value.append(prov_group_item)
@@ -281,7 +279,7 @@ def build_neg_rate(init_row, parser, provref_idx=None):
         ):
             row = (nprefix, event, value)
             builder.event(event, value)
-            prov_group_arr, row = build_prov_group_arr(row, parser, provref_idx)
+            prov_group_arr, row = build_provgroup_arr(row, parser, provref_idx)
 
             if prov_group_arr:
                 builder.value.get("provider_groups", []).extend(prov_group_arr)
@@ -327,6 +325,9 @@ def build_innetwork(init_row, parser, code_list=None, provref_idx=None):
 
         if (nprefix, event) == (prefix, "end_map"):
             innetwork_item = builder.value
+
+            LOG.info(f"Found billing code: {billing_code_type} {billing_code}")
+
             return innetwork_item, (nprefix, event, value)
 
         if (nprefix, event) == (
@@ -337,40 +338,26 @@ def build_innetwork(init_row, parser, code_list=None, provref_idx=None):
             billing_code = str(builder.value["billing_code"])
 
             if (billing_code_type, billing_code) not in code_list:
+
+                LOG.info(f"Skipping billing code: {billing_code_type} {billing_code}")
+
                 return None, (nprefix, event, value)
 
         if (nprefix, event) == ("in_network.item.negotiated_rates", "start_array"):
             builder.event(event, value)
             row = (nprefix, event, value)
             neg_rate_arr, row = build_neg_rate_arr(row, parser, provref_idx)
-            builder.value["negotiated_rates"] = neg_rate_arr
             (nprefix, event, value) = row
 
-            if not neg_rate_arr:
+            if neg_rate_arr:
+                builder.value["negotiated_rates"] = neg_rate_arr
+
+            else:
                 while (nprefix, event) != (prefix, "end_map"):
                     nprefix, event, value = next(parser)
                 return None, (nprefix, event, value)
 
         builder.event(event, value)
-
-
-def build_innetwork_arr(init_row, parser, code_list=None, provref_idx=None):
-    prefix, event, value = init_row
-
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
-
-    for nprefix, event, value in parser:
-
-        if (nprefix, event) == (prefix, "end_array"):
-            innetwork_arr = builder.value
-            return innetwork_arr, (nprefix, event, value)
-
-        if (nprefix, event) == ("in_network.item", "start_map"):
-            row = (nprefix, event, value)
-            innetwork_item, row = build_innetwork(row, parser, code_list, provref_idx)
-            if innetwork_item:
-                builder.value.append(innetwork_item)
 
 
 # def fetch_remoteprovrefs(provrefs):

@@ -9,7 +9,7 @@ from helpers import (
     hashdict,
     build_root,
     build_provrefs,
-    build_innetwork_arr,
+    build_innetwork,
     innetwork_to_rows,
     rows_to_file,
     provrefs_to_idx,
@@ -66,9 +66,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
     MRFs are structured, schematically like
     {
-                                                                                                                                    file_metadata (top matter),
-                                                                                                                                    provider_references (always one line, if exists)
-                                                                                                                                    [in_network_items] (multiple lines),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    file_metadata (top matter),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    provider_references (always one line, if exists)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    [in_network_items] (multiple lines),
     }
 
     But the in_network_items are linked to provider references. The
@@ -101,8 +101,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
         root_vals, row = build_root(parser)
         root_hash_id = hashdict(root_vals)
         root_vals["root_hash_id"] = root_hash_id
-
         prefix, event, value = row
+
+        LOG.info("Getting provider references")
 
         if (prefix, event) == ("provider_references", "start_array"):
             provrefs, row = build_provrefs(row, parser, npi_list)
@@ -112,17 +113,16 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
             provref_idx = provrefs_to_idx(provrefs)
 
-        while (prefix, event) != ("in_network", "start_array"):
-            prefix, event, value = next(parser)
-            row = (prefix, event, value)
+        LOG.info("Building in-network array")
 
-        innetwork_arr, row = build_innetwork_arr(
-            row, parser, code_list=code_list, provref_idx=provref_idx
-        )
+        for prefix, event, value in parser:
+            if (prefix, event) == ("in_network.item", "start_map"):
+                row = prefix, event, value
+                innetwork, row = build_innetwork(row, parser, code_list, provref_idx)
 
-        for innetwork in innetwork_arr:
-            innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
-            rows_to_file(innetwork_rows, "flatten")
+                if innetwork:
+                    innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
+                    rows_to_file(innetwork_rows, "flatten")
 
         rows_to_file([("root", root_vals)], "flatten")
 

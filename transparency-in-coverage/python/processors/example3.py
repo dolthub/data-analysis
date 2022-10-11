@@ -1,34 +1,28 @@
-from core import stream_json_to_csv, get_mrfs_from_index
-from helpers import create_output_dir
+from core import stream_json_to_csv
+from helpers import create_output_dir, import_set
 import logging
-from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
+import argparse
 
-from multiprocessing import Process
+parser = argparse.ArgumentParser()
+parser.add_argument("url")
+args = parser.parse_args()
 
-logger = logging.getLogger('core')
+logger = logging.getLogger("core")
 logger.setLevel(level=logging.DEBUG)
 
-OUTPUT_DIR = 'uhc_cesarean'
+output_dir = "uhc_cesarean"
 
-C_SECTIONS = [
-	('CPT', '59510'),
-	('CPT', '59514'),
-	('CPT', '59515'),
+obgyn_npi_set = import_set("data/obgyn_npi.csv")
+hospital_npi_set = import_set("data/hospital_npi.csv")
+npi_set = obgyn_npi_set.union(hospital_npi_set)
+
+c_sections = [
+    ("CPT", "59510"),
+    ("CPT", "59514"),
+    ("CPT", "59515"),
 ]
 
-urls = [
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Mississippi--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Texas--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Ohio--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Florida--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Kentucky--Ltd-_Insurer_HML-75_ED_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Louisiana--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-10-01/2022-10-01_UnitedHealthcare-of-Utah--Inc-_Insurer_HML-15_S9_in-network-rates.json.gz'
-'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-10-01/2022-10-01_UnitedHealthcare-of-Georgia--Inc-_Insurer_HML-15_S9_in-network-rates.json.gz'
-]
-
-create_output_dir(OUTPUT_DIR, overwrite = False)
-
-for url in urls[:
-	stream_json_to_csv(url, output_dir = OUTPUT_DIR, code_filter = C_SECTIONS)
+create_output_dir(output_dir, overwrite=False)
+stream_json_to_csv(
+    args.url, output_dir=output_dir, code_list=c_sections, npi_list=npi_set
+)
