@@ -4,8 +4,8 @@ import logging
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-u", "url")
-parser.add_argument("-o", "out")
+parser.add_argument("-u", "--url")
+parser.add_argument("-o", "--out")
 args = parser.parse_args()
 
 logger = logging.getLogger("core")
