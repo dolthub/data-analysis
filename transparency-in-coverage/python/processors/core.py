@@ -6,18 +6,10 @@ import gzip
 import sys
 from urllib.parse import urlparse, urljoin
 from helpers import (
-    # parse_innetwork,
-    # parse_provrefs,
-    # parse_root,
-    # flatten_obj,
     hashdict,
     build_root,
     build_provrefs,
-    # build_innetwork_item,
     build_innetwork_arr,
-    # dict_to_csv,
-    # fetch_remoteprovrefs,
-    # normalize_innetwork,
     innetwork_to_rows,
     rows_to_file,
     provrefs_to_idx,
@@ -68,7 +60,7 @@ def get_mrfs_from_index(index_file_url):
     return in_network_file_urls
 
 
-def stream_json_to_csv(input_url, output_dir, code_filter=[]):
+def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
     """This streams through a JSON, flattens it, and writes it to
     file. It streams the zipped files, avoiding saving them to disk.
 
@@ -110,10 +102,8 @@ def stream_json_to_csv(input_url, output_dir, code_filter=[]):
         root_hash_id = hashdict(root_vals)
         root_vals["root_hash_id"] = root_hash_id
 
-        npi_list = [1467915983]
-        code_list = [("CPT", "01925")]
-
         prefix, event, value = row
+
         if (prefix, event) == ("provider_references", "start_array"):
             provrefs, row = build_provrefs(row, parser, npi_list)
 
@@ -130,58 +120,11 @@ def stream_json_to_csv(input_url, output_dir, code_filter=[]):
             row, parser, code_list=code_list, provref_idx=provref_idx
         )
 
-        print(innetwork_arr)
+        for innetwork in innetwork_arr:
+            innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
+            rows_to_file(innetwork_rows, "flatten")
 
-        # handle bundled codes
-
-        # print(innetwork_arr)
-
-        # exist_codes = False
-        # provref_id_set = set()
-
-        # while row != ("in_network", "end_array", None):
-
-        #     try:
-        #         innetwork, row = parse_innetwork(row, parser, code_filter)
-        #         if exist_provrefs:
-        #             innetwork = normalize_innetwork(innetwork, provrefs, provref_id_map)
-        #     except ValueError as err:
-        #         message, row = err.args
-        #         LOG.debug(message)
-        #         continue
-
-        #     if not exist_provrefs:
-        #         exist_codes = True
-        #         # flatten_obj(innetwork, output_dir, "in_network", **hash_ids)
-        #         rows = innetwork_to_rows(innetwork, root_hash_id)
-        #         rows_to_file(rows, output_dir)
-        #         continue
-
-        #     # for neg_rate in innetwork["negotiated_rates"]:
-        #     #     new_neg_rate = neg_rate.copy()
-        #     #     for provref_id in neg_rate.get("provider_references", []):
-        #     #         if provref_id in provref_id_set:
-        #     #             continue
-
-        #     #         provref_index = provref_id_map[provref_id]
-        #     #         provref = provrefs[provref_index]
-        #     #         provref_id_set.add(provref_id)
-
-        #     #         flatten_obj(provref, output_dir, "provider_references", **hash_ids)
-        #     #         LOG.info(f"Wrote provider reference {provref_id} to file.")
-
-        #     rows = innetwork_to_rows(innetwork, root_hash_id)
-        #     rows_to_file(rows, output_dir)
-        #     # flatten_obj(innetwork, output_dir, "in_network", **hash_ids)
-        #     # LOG.info(f"Wrote billing code {innetwork['billing_code']} to file.")
-        #     exist_codes = True
-
-        # if not exist_codes:
-        #     return
-
-        rows_to_file([("root", root_vals)], output_dir)
-        # dict_to_csv(root_data, output_dir, "root")
-        LOG.info(f"Wrote root to file.")
+        rows_to_file([("root", root_vals)], "flatten")
 
         td = time.time() - s
         LOG.info(f"Total time taken: {round(td/60, 3)} min.")

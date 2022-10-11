@@ -32,7 +32,7 @@ def read_npi_from_csv(filename):
         reader = csv.DictReader(f)
         codes = []
         for row in reader:
-            codes.append(row["npi"])
+            codes.append(int(row["npi"]))
     return codes
 
 
@@ -64,7 +64,6 @@ def rows_to_file(rows, output_dir):
             with open(file_loc, "w") as f:
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
-                writer.writerow(row_data)
 
         with open(file_loc, "a") as f:
             writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -81,6 +80,7 @@ def innetwork_to_rows(obj, root_hash_id):
         "billing_code_type_version": obj["billing_code_type_version"],
         "billing_code": obj["billing_code"],
         "description": obj["description"],
+        "root_hash_id": root_hash_id,
     }
 
     in_network_hash_id = hashdict(in_network_vals)
@@ -143,15 +143,7 @@ def build_root(parser):
 
 
 def provrefs_to_idx(provrefs):
-
-    for provref in provrefs:
-        for provgroup in provref["provider_groups"]:
-            provgroup["npi"] = list(set(provgroup["npi"]) & set([1467915983]))
-
-    provref["provider_groups"] = [x for x in provref["provider_groups"] if x["npi"]]
-
     provref_idx = {x["provider_group_id"]: x["provider_groups"] for x in provrefs}
-
     return provref_idx
 
 
@@ -260,8 +252,7 @@ def build_prov_group_arr(init_row, parser):
         builder.event(event, value)
 
 
-def build_neg_rate(init_row, parser, code_list, provref_idx=None):
-
+def build_neg_rate(init_row, parser, provref_idx=None):
     prefix, event, value = init_row
 
     builder = ijson.ObjectBuilder()
@@ -290,9 +281,7 @@ def build_neg_rate(init_row, parser, code_list, provref_idx=None):
         ):
             row = (nprefix, event, value)
             builder.event(event, value)
-            prov_group_arr, row = build_prov_group_arr(
-                row, parser, code_list, provref_idx
-            )
+            prov_group_arr, row = build_prov_group_arr(row, parser, provref_idx)
 
             if prov_group_arr:
                 builder.value.get("provider_groups", []).extend(prov_group_arr)
@@ -301,7 +290,7 @@ def build_neg_rate(init_row, parser, code_list, provref_idx=None):
         builder.event(event, value)
 
 
-def build_neg_rate_arr(init_row, parser, code_list, provref_idx=None):
+def build_neg_rate_arr(init_row, parser, provref_idx=None):
     prefix, event, value = init_row
 
     builder = ijson.ObjectBuilder()
@@ -320,7 +309,7 @@ def build_neg_rate_arr(init_row, parser, code_list, provref_idx=None):
             "start_map",
         ):
             row = (nprefix, event, value)
-            neg_rate_item, row = build_neg_rate(row, parser, code_list, provref_idx)
+            neg_rate_item, row = build_neg_rate(row, parser, provref_idx)
             (nprefix, event, value) = row
             if neg_rate_item:
                 builder.value.append(neg_rate_item)
@@ -353,7 +342,7 @@ def build_innetwork(init_row, parser, code_list=None, provref_idx=None):
         if (nprefix, event) == ("in_network.item.negotiated_rates", "start_array"):
             builder.event(event, value)
             row = (nprefix, event, value)
-            neg_rate_arr, row = build_neg_rate_arr(row, parser, code_list, provref_idx)
+            neg_rate_arr, row = build_neg_rate_arr(row, parser, provref_idx)
             builder.value["negotiated_rates"] = neg_rate_arr
             (nprefix, event, value) = row
 
