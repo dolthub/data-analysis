@@ -122,9 +122,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
                 if innetwork:
                     innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
-                    rows_to_file(innetwork_rows, "flatten")
+                    rows_to_file(innetwork_rows, output_dir)
 
-        rows_to_file([("root", root_vals)], "flatten")
+        rows_to_file([("root", root_vals)], output_idr)
 
         td = time.time() - s
         LOG.info(f"Total time taken: {round(td/60, 3)} min.")
