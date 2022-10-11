@@ -11,7 +11,7 @@ args = parser.parse_args()
 logger = logging.getLogger("core")
 logger.setLevel(level=logging.DEBUG)
 
-output_dir = args["out"]
+output_dir = args.out
 
 obgyn_npi_set = import_set("data/obgyn_npi.csv")
 hospital_npi_set = import_set("data/hospital_npi.csv")
@@ -25,5 +25,5 @@ c_sections = [
 
 create_output_dir(output_dir, overwrite=False)
 stream_json_to_csv(
-    args["url"], output_dir=output_dir, code_list=c_sections, npi_list=npi_set
+    args.url, output_dir=output_dir, code_list=c_sections, npi_list=npi_set
 )
