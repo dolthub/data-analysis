@@ -17,10 +17,14 @@ obgyn_npi_set = import_set("data/obgyn_npi.csv")
 hospital_npi_set = import_set("data/hospital_npi.csv")
 npi_set = obgyn_npi_set.union(hospital_npi_set)
 
+# souce: https://www.bcbsok.com/pdf/obstetrical_billing_multiple_birth.pdf
 c_sections = [
     ("CPT", "59510"),
     ("CPT", "59514"),
     ("CPT", "59515"),
+    ("CPT", "59618"),
+    ("CPT", "59620"),
+    ("CPT", "59622"),
 ]
 
 create_output_dir(output_dir, overwrite=False)

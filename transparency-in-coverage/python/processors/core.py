@@ -115,6 +115,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
         LOG.info("Building in-network array")
 
+        root_written = False
         for prefix, event, value in parser:
             if (prefix, event) == ("in_network.item", "start_map"):
                 row = prefix, event, value
@@ -123,8 +124,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
                 if innetwork:
                     innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
                     rows_to_file(innetwork_rows, output_dir)
-
-        rows_to_file([("root", root_vals)], output_idr)
+                if not root_written:
+                    rows_to_file([("root", root_vals)], output_idr)
+                    root_written = True
 
         td = time.time() - s
         LOG.info(f"Total time taken: {round(td/60, 3)} min.")
