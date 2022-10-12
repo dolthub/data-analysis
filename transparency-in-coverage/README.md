@@ -33,7 +33,7 @@ You can run the shell script `c_section.sh` to spawn several of these processes 
 ./c_section.sh
 ```
 
-will output a folder with C-section rates from thousands of different providers.
+will output a folder with C-section rates from thousands of different providers. (Write me at alec@dolthub.com if you know of a better way.)
 
 ## How it works
 
