@@ -10,7 +10,7 @@ This is that solution. With some trial and error (and some help from our Discord
 
 ## Getting started
 
-Try going to the `processors` folder and running
+Try going to the `python/processors` folder and running
 
 ```
 python example1.py
