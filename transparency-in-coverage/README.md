@@ -8,6 +8,8 @@ This is that solution. With some trial and error (and some help from our Discord
 
 > This is not robust software, but it works acceptably well for some use-cases. 
 
+In my limited testing RAM and CPU are not the bottlenecks -- bandwidth and disk space are. If you only need some CPT codes, parsing will go as fast as you can download the files. If you also filter down the NPI numbers you collect from you won't have space concerns either.
+
 ## Getting started
 
 Try going to the `python/processors` folder and running
