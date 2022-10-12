@@ -66,9 +66,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
     MRFs are structured, schematically like
     {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    file_metadata (top matter),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    provider_references (always one line, if exists)
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    [in_network_items] (multiple lines),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    file_metadata (top matter),
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    provider_references (always one line, if exists)
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    [in_network_items] (multiple lines),
     }
 
     But the in_network_items are linked to provider references. The
@@ -84,8 +84,6 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
     2. Write the top matter to file
     3. Write the provider references to file
     """
-    s = time.time()
-
     with requests.get(input_url, stream=True) as r:
 
         urlpath = urlparse(input_url).path
@@ -101,6 +99,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
         root_vals, row = build_root(parser)
         root_hash_id = hashdict(root_vals)
         root_vals["root_hash_id"] = root_hash_id
+
         prefix, event, value = row
 
         LOG.info("Getting provider references")
@@ -108,10 +107,10 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
         if (prefix, event) == ("provider_references", "start_array"):
             provrefs, row = build_provrefs(row, parser, npi_list)
 
-            if not provrefs:
-                return
-
-            provref_idx = provrefs_to_idx(provrefs)
+            if provrefs:
+                provref_idx = provrefs_to_idx(provrefs)
+            else:
+                provref_idx = None
 
         LOG.info("Building in-network array")
 
@@ -124,9 +123,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
                 if innetwork:
                     innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
                     rows_to_file(innetwork_rows, output_dir)
-                if not root_written:
-                    rows_to_file([("root", root_vals)], output_dir)
-                    root_written = True
 
-        td = time.time() - s
-        LOG.info(f"Total time taken: {round(td/60, 3)} min.")
+                    if not root_written:
+                        rows_to_file([("root", root_vals)], output_dir)
+                        root_written = True

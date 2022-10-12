@@ -2,9 +2,9 @@
 
 ## If you were shocked to find
 
-that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, well, so was I. Initially, I balked at the idea that these were processable on a normal machine, but with some trial and error (and some help from our Discord), we have a working flattener that will stream, filter, and flatten these files on a machine with < 2GB RAM (conservatively -- it's probably lower.)
+that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, so was I. My initial reaction is that these were unprocessable, but some discussion with friends online hinted that there might be a way to stream them.
 
-At the moment, because of the complexity of the files, only filtering by billing code is supported. But we'll slowly flesh out the parser to handle more cases.
+This is that solution. With some trial and error (and some help from our Discord), we have a tool that will stream, filter, and flatten these files on a machine with 100MB of RAM, with some caveats.
 
 ## Getting started
 Try going to the `processors` folder and running
