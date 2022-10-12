@@ -1,6 +1,7 @@
 > If you're coming here from HN, this repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/)
 
 ## If you were shocked to find
+
 that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, well, so was I. Initially, I balked at the idea that these were processable on a normal machine, but with some trial and error (and some help from our Discord), we have a working flattener that will stream, filter, and flatten these files on a machine with < 2GB RAM (conservatively -- it's probably lower.)
 
 At the moment, because of the complexity of the files, only filtering by billing code is supported. But we'll slowly flesh out the parser to handle more cases.
@@ -63,6 +64,21 @@ The reasons for this are two-fold. Because we expect to build this database with
 2. Two machines should be able to process different files and get different keys. This rules out simple integers.
 
 Write me at alec@dolthub.com if you know of a better way.
+
+## Getting the NPI numbers for your use-case
+
+If you need to get a list of NPI numbers, I recommend checking out the [CMS's database](https://www.cms.gov/Regulations-and-Guidance/Administrative-Simplification/NationalProvIdentStand/DataDissemination
+) of them. You can easily get a list and filter down to taxonomy by doing (for example)
+
+```py
+import polars as pl
+(pl
+.scan_csv('npidata_pfile_20050523-20220911.csv')
+.filter(pl.col('Healthcare Provider Taxonomy Code_1') == '207V00000X')
+.select(['NPI'])
+.collect()).to_csv('obgyn_npi.csv')
+```
+
 
 ## How you can help
 
