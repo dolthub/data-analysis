@@ -125,7 +125,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
                     innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
                     rows_to_file(innetwork_rows, output_dir)
                 if not root_written:
-                    rows_to_file([("root", root_vals)], output_idr)
+                    rows_to_file([("root", root_vals)], output_dir)
                     root_written = True
 
         td = time.time() - s

@@ -61,8 +61,8 @@ def hashdict(data_dict):
 
 
 def rows_to_file(rows, output_dir):
-    for row in rows:
 
+    for row in rows:
         filename = row[0]
         row_data = row[1]
         fieldnames = SCHEMA[filename]
