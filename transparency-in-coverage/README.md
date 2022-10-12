@@ -20,7 +20,7 @@ To get a feel for what the data output looks like.
 
 The file `example2.py` loops through a large index file, pulls out the in-network files, and scrapes them one by one. I don't recommend letting it run forever, but you can monitor resource use and see if it will work for your use-case.
 
-The file `example3.py` will get the rates for C-sections from OB-GYNs and hospital NPIs. You can run the shell script `c_section.sh` to spawn a few processes in screens that will run automatically. If not, try:
+The file `example3.py` will get the rates for C-sections from OB-GYNs and hospital NPIs. You can run the shell script `c_section.sh` to spawn a few processes in screens that will run automatically. To run the script on a single file, do:
 
 ```sh
 python example3.py -u https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Mississippi--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz -o uhc_cesarean
@@ -95,15 +95,5 @@ import polars as pl
 
 ## How you can help
 
-1. Make a pull request to this repo to make this scraper better written and more robust
-2. Help us design a good schema for these flattened files
-3. Write a parser for Humana's CSV files
-4. Add features (like filtering by NPI number -- how do we handle provider references in this case?)
-
-## Plans to build the database on DoltHub
-
-While we already know that the database is big -- and orders of magnitude too big for a DoltHub. But we're experimenting with this tool as we gear up for a possible data bounty to collect a subset of the data.
-
-## Building this database with Charity Engine
-
-[Charity Engine](https://charityengine.net/) has 100k machines that can process, store, and query this data. They're working with us at DoltHub to make the full database available for public use. We're looking for sponsors, so please reach out to me if you think this database could serve your business.
+1. Find bugs -- test this parser on a lot of different files and see where it breaks
+2. Write a similar parser for Humana's CSVs that results in the same schema
