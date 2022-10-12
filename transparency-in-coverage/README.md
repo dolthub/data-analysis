@@ -4,21 +4,32 @@
 
 that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, so was I. My initial reaction is that these were unprocessable, but some discussion with friends online hinted that there might be a way to stream them.
 
-This is that solution. With some trial and error (and some help from our Discord), we have a tool that will stream, filter, and flatten these files on a machine with 100MB of RAM, with some caveats.
+This is that solution. With some trial and error (and some help from our Discord), we have a tool that will stream, filter, and flatten these files on a machine with <1GB of RAM, with a small caveat: the fewer NPI numbers you need, the faster this runs and the smaller the files it produces are. 
+
+> This is not robust software, but it works acceptably well for some use-cases. 
 
 ## Getting started
+
 Try going to the `processors` folder and running
 
 ```
 python example1.py
 ```
 
-To get a feel for what the data output looks like. The file `example2.py` loops through a large index file, pulls out the in-network files, and scrapes them one by one. I don't recommend letting it run forever, but you can monitor resource use and see if it will work for your use-case.
+To get a feel for what the data output looks like. 
+
+The file `example2.py` loops through a large index file, pulls out the in-network files, and scrapes them one by one. I don't recommend letting it run forever, but you can monitor resource use and see if it will work for your use-case.
+
+The file `example3.py` will get the rates for C-sections from OB-GYNs and hospital NPIs. You can run the shell script `c_section.sh` to spawn a few processes in screens that will run automatically. If not, try:
+
+```sh
+python example3.py -u https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Mississippi--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz -o uhc_cesarean
+
+```
 
 ## How it works
-A few magical snippets and the package `ijson` do all of the work.
 
-Streaming the GZipped files is done with:
+A few magical snippets and the package `ijson` do all of the work. Streaming the GZipped files is done with:
 
 ```py
 with requests.get(url, stream = True) as r:
@@ -31,17 +42,20 @@ Once you're streaming, you create a parser with `ijson`:
 parser = ijson.parse(f, use_float = True)
 ```
 
-Then, you simply go through each row of the JSON line by line and parse it. (I had no idea this was possible.)
+The parser streams tuples that represent each value in the JSON. 
 
-Streaming the file means you only get a chance to read each line once. This creates a problem since, occasionally, some of the later lines of the file (the negotiated rates) only make sense when given the providers that they reference, which are in the beginning of the file. Or, similarly, you may want to filter the billing codes, then only keep the provider references which are needed.
-
-One way around this is to cache the provider references object and use it later.
+Streaming sometimes creates a problem since often the the negotiated rates, which come at the end, only make sense when given the providers that they reference, which are at the beginning. So we cache the provider references in a `dict` and use them later.
 
 ```py
-if row == ('provider_references', 'start_array', None):
-	exist_provrefs = True
-	provrefs, row = parse_provrefs(row, parser)
-	provref_id_map = {r['provider_group_id']:i for i, r in enumerate(provrefs)}
+if (prefix, event) == ("provider_references", "start_array"):
+    provrefs, row = build_provrefs(row, parser, npi_list)
+
+    if provrefs:
+    	# returns a dictionary that links provider_group_id
+    	# to the provider_groups it contains
+        provref_idx = provrefs_to_idx(provrefs)
+    else:
+        provref_idx = None
 ```
 
 ### Hashes as keys
@@ -58,7 +72,7 @@ def hashdict(data_dict):
 	return dict_hash
 ```
 
-The reasons for this are two-fold. Because we expect to build this database with distributed processing (and possibly even a DoltHub data bounty):
+The reasons for this are two-fold:
 
 1. Two machines should be able to process the same files and get the same keys. This rules out UUIDs.
 2. Two machines should be able to process different files and get different keys. This rules out simple integers.
@@ -78,7 +92,6 @@ import polars as pl
 .select(['NPI'])
 .collect()).to_csv('obgyn_npi.csv')
 ```
-
 
 ## How you can help
 

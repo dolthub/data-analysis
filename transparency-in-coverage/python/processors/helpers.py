@@ -355,7 +355,7 @@ def build_innetwork(init_row, parser, code_list=None, provref_idx=None):
 
             if (billing_code_type, billing_code) not in code_list:
 
-                LOG.info(f"Skipping billing code: {billing_code_type} {billing_code}")
+                LOG.debug(f"Skipping billing code: {billing_code_type} {billing_code}")
 
                 return None, (nprefix, event, value)
 
