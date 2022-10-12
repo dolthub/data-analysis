@@ -20,12 +20,20 @@ To get a feel for what the data output looks like.
 
 The file `example2.py` loops through a large index file, pulls out the in-network files, and scrapes them one by one. I don't recommend letting it run forever, but you can monitor resource use and see if it will work for your use-case.
 
-The file `example3.py` will get the rates for C-sections from OB-GYNs and hospital NPIs. You can run the shell script `c_section.sh` to spawn a few processes in screens that will run automatically. To run the script on a single file, do:
+The file `example3.py` will get the rates for C-sections from OB-GYNs and hospital NPIs. To run the script on a single file, do:
 
 ```sh
 python example3.py -u https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_UnitedHealthcare-of-Mississippi--Inc-_Insurer_HML-75_ED_in-network-rates.json.gz -o uhc_cesarean
 
 ```
+
+You can run the shell script `c_section.sh` to spawn several of these processes in screens.
+
+```sh
+./c_section.sh
+```
+
+will output a folder with C-section rates from thousands of different providers.
 
 ## How it works
 
