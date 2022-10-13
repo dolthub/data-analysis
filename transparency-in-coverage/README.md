@@ -1,5 +1,10 @@
 > If you're coming here from HN, this repo contains the scripts needed to reproduce the plot in the [Trillion Prices blog post](https://www.dolthub.com/blog/2022-09-02-a-trillion-prices/)
 
+## For the context of this repo, see
+
+1. https://www.dolthub.com/blog/2022-10-03-c-sections/
+1. https://www.dolthub.com/blog/2022-09-02-a-trillion-prices
+
 ## If you were shocked to find
 
 that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, so was I. My initial reaction is that these were unprocessable, but some discussion with friends online hinted that there might be a way to stream them.
