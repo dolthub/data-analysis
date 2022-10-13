@@ -113,3 +113,4 @@ import polars as pl
 
 1. Find bugs -- test this parser on a lot of different files and see where it breaks
 2. Write a similar parser for Humana's CSVs that results in the same schema
+3. Come talk to us on our Discord! https://discord.gg/GZXfE4jym3
