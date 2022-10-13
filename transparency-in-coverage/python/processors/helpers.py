@@ -176,9 +176,11 @@ def build_provrefs(init_row, parser, npi_list=None):
                     provref = builder.value
                     if provref["provider_groups"]:
                         provrefs.append(provref)
+
                         LOG.debug(
                             f"Collected provider_group_id: {provref['provider_group_id']}"
                         )
+
                     break
 
                 elif (nnprefix, event) == (
@@ -187,10 +189,12 @@ def build_provrefs(init_row, parser, npi_list=None):
                 ):
 
                     row = nnprefix, event, value
-                    provgroup, row = build_provgroup(row, parser, npi_list)
+                    provgroup, (nnprefix, event, value) = build_provgroup(
+                        row, parser, npi_list
+                    )
+
                     if provgroup:
                         builder.value["provider_groups"].append(provgroup)
-                    nnprefix, event, value = row
 
                     if (nnprefix, event) == (
                         "provider_references.item.provider_groups.item",

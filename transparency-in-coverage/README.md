@@ -98,7 +98,8 @@ If you need to get a list of NPI numbers, I recommend checking out the [CMS's da
 import polars as pl
 (pl
 .scan_csv('npidata_pfile_20050523-20220911.csv')
-.filter(pl.col('Healthcare Provider Taxonomy Code_1') == '207V00000X')
+.filter(pl.col('Healthcare Provider Taxonomy Code_1') == '207V00000X') # OB/GYNs
+.filter(pl.col('Entity Type Code') == '2') # only organizations, not individuals
 .select(['NPI'])
 .collect()).to_csv('obgyn_npi.csv')
 ```

@@ -21,9 +21,9 @@ logging.basicConfig(level=logging.INFO)
 
 
 def get_mrfs_from_index(index_file_url):
-    """The in-network files are references from index.json files
-    on the payor websites. This will stream one of those files
-    """
+	'''
+    Gets in-network files from index.json files
+	'''    
     s = time.time()
     in_network_file_urls = []
 
@@ -61,28 +61,9 @@ def get_mrfs_from_index(index_file_url):
 
 
 def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
-    """This streams through a JSON, flattens it, and writes it to
-    file. It streams the zipped files, avoiding saving them to disk.
-
-    MRFs are structured, schematically like
-    {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    file_metadata (top matter),
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    provider_references (always one line, if exists)
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    [in_network_items] (multiple lines),
-    }
-
-    But the in_network_items are linked to provider references. The
-    problem we have to solve is: how do we collect only the codes
-    and provider references we want, while reading the file once?
-
-    The answer is: cache the provider references during streaming,
-    then filter the in_network_items. Once you know which provider
-    references to keep, you can filter the cached object.
-
-    The steps we take are:
-    1. Check to see if there are matching codes. If so, write them
-    2. Write the top matter to file
-    3. Write the provider references to file
+    """
+    This streams through JSON, flattens it, and writes it to
+    file
     """
     with requests.get(input_url, stream=True) as r:
 
