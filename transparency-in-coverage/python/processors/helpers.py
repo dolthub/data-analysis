@@ -158,224 +158,92 @@ def provrefs_to_idx(provrefs):
 def build_provrefs(init_row, parser, npi_list=None):
     prefix, event, value = init_row
 
-    provrefs = []
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
 
     for nprefix, event, value in parser:
 
         if (nprefix, event) == (prefix, "end_array"):
-            return provrefs, (nprefix, event, value)
+            return builder.value, (nprefix, event, value)
 
-        if (nprefix, event) == ("provider_references.item", "start_map"):
+        if nprefix.endswith("npi.item"):
+            if value not in npi_list:
+                continue
 
-            builder = ijson.ObjectBuilder()
-            builder.event(event, value)
+        if nprefix.endswith("provider_groups.item") and event == "end_map":
+            if not builder.value[-1]["provider_groups"][-1]["npi"]:
+                builder.value[-1]["provider_groups"].pop()
 
-            for (nnprefix, event, value) in parser:
+        if nprefix.endswith("provider_references.item") and event == "end_map":
+            if not builder.value[-1]["provider_groups"]:
+                builder.value.pop()
 
-                if (nnprefix, event) == (nprefix, "end_map"):
-                    provref = builder.value
-                    if provref["provider_groups"]:
-                        provrefs.append(provref)
+        builder.event(event, value)
 
-                        LOG.debug(
-                            f"Collected provider_group_id: {provref['provider_group_id']}"
-                        )
 
-                    break
+def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx=None):
+    prefix, event, value = init_row
 
-                elif (nnprefix, event) == (
-                    "provider_references.item.provider_groups.item",
-                    "start_map",
-                ):
+    builder = ijson.ObjectBuilder()
+    builder.event(event, value)
 
-                    row = nnprefix, event, value
-                    provgroup, (nnprefix, event, value) = build_provgroup(
-                        row, parser, npi_list
+    for nprefix, event, value in parser:
+
+        if (nprefix, event) == (prefix, "end_map"):
+            return builder.value, (nprefix, event, value)
+
+        elif nprefix.endswith("negotiated_rates") and event == "start_array":
+            if code_list:
+                billing_code_type = builder.value["billing_code_type"]
+                billing_code = str(builder.value["billing_code"])
+                if (billing_code_type, billing_code) not in code_list:
+                    LOG.debug(
+                        f"Skipping billing code: {billing_code_type} {billing_code}"
                     )
+                    return None, (nprefix, event, value)
 
-                    if provgroup:
-                        builder.value["provider_groups"].append(provgroup)
-
-                    if (nnprefix, event) == (
-                        "provider_references.item.provider_groups.item",
-                        "end_map",
-                    ):
-                        continue
-
-                builder.event(event, value)
-
-
-def build_provgroup(init_row, parser, npi_list=None):
-    prefix, event, value = init_row
-
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
-
-    for nprefix, event, value in parser:
-
-        if (nprefix, event) == (prefix, "end_map"):
-            prov_group = builder.value
-            if not prov_group["npi"]:
+        # If no negotiated rates that match the criteria, return nothing
+        elif nprefix.endswith("negotiated_rates") and event == "end_array":
+            if not builder.value["negotiated_rates"]:
                 return None, (nprefix, event, value)
-            return prov_group, (nprefix, event, value)
 
-        if nprefix.endswith("provider_groups.item.npi.item"):
-            if npi_list:
-                if int(value) not in npi_list:
-                    continue
+        elif nprefix.endswith("negotiated_rates.item") and event == "start_map":
+            provgroups = []
 
-        builder.event(event, value)
+        elif nprefix.endswith("provider_references.item"):
+            try:
+                provgroups.extend(provref_idx[value])
+            except KeyError:
+                pass
 
+        # Merge the provgroups array if the existing provider_groups
+        # if either exist
+        elif nprefix.endswith("negotiated_rates.item") and event == "end_map":
 
-def build_provgroup_arr(init_row, parser):
-    prefix, event, value = init_row
+            if builder.value["negotiated_rates"][-1].get("provider_references"):
+                builder.value["negotiated_rates"][-1].pop("provider_references")
 
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
+            if builder.value["negotiated_rates"][-1].get("provider_groups"):
+                builder.value["negotiated_rates"][-1]["provider_groups"].extend(
+                    provgroups
+                )
 
-    for nprefix, event, value in parser:
+            if not builder.value["negotiated_rates"][-1].get("provider_groups"):
+                builder.value["negotiated_rates"].pop()
 
-        if (nprefix, event) == (prefix, "end_array"):
-            prov_group_arr = builder.value
-            if not prov_group_arr:
-                return None, (nprefix, event, value)
-            return prov_group_arr, (nprefix, event, value)
+        elif nprefix.endswith("provider_groups.item") and event == "end_map":
+            if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:
+                builder.value["negotiated_rates"][-1]["provider_groups"].pop()
 
-        if (nprefix, event) == (
-            "in_network.item.negotiated_rates.item.provider_groups.item",
-            "start_map",
-        ):
-            row = (nprefix, event, value)
-            prov_group_item, row = build_provgroup(row, parser)
-            (nprefix, event, value) = row
-            if prov_group_item:
-                builder.value.append(prov_group_item)
+        # skip NPI numbers not in the list
+        elif nprefix.endswith("npi.item"):
+            if npi_list and value not in npi_list:
+                continue
 
-        builder.event(event, value)
-
-
-def build_neg_rate(init_row, parser, provref_idx=None):
-    prefix, event, value = init_row
-
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
-
-    for nprefix, event, value in parser:
-
-        if (nprefix, event) == (prefix, "end_map"):
-
-            builder.value.pop("provider_references")
-
-            neg_rate_item = builder.value
-            if not builder.value.get("provider_groups", None):
-                return None, (nprefix, event, value)
-            return neg_rate_item, (nprefix, event, value)
-
-        if (nprefix) == (
-            "in_network.item.negotiated_rates.item.provider_references.item"
-        ):
-            if provref_idx is not None:
-
-                try:
-                    provgroups = provref_idx[value]
-                    if builder.value.get("provider_groups", None):
-                        builder.value["provider_groups"].extend(provgroups)
-                    else:
-                        builder.value["provider_groups"] = provgroups
-
-                except KeyError:
-                    pass
-
-        if (nprefix, event) == (
-            "in_network.item.negotiated_rates.item.provider_groups",
-            "start_array",
-        ):
-            row = (nprefix, event, value)
-            builder.event(event, value)
-            prov_group_arr, row = build_provgroup_arr(row, parser, provref_idx)
-
-            if prov_group_arr:
-                builder.value.get("provider_groups", []).extend(prov_group_arr)
-
-            (nprefix, event, value) = row
-
-        builder.event(event, value)
-
-
-def build_neg_rate_arr(init_row, parser, provref_idx=None):
-    prefix, event, value = init_row
-
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
-
-    for nprefix, event, value in parser:
-
-        if (nprefix, event) == (prefix, "end_array"):
-            neg_rate_arr = builder.value
-            if not neg_rate_arr:
-                return None, (nprefix, event, value)
-            return neg_rate_arr, (nprefix, event, value)
-
-        if (nprefix, event) == (
-            "in_network.item.negotiated_rates.item",
-            "start_map",
-        ):
-            row = (nprefix, event, value)
-            neg_rate_item, row = build_neg_rate(row, parser, provref_idx)
-            (nprefix, event, value) = row
-            if neg_rate_item:
-                builder.value.append(neg_rate_item)
-
-        if (nprefix, event) == (
-            "in_network.item.negotiated_rates.item",
-            "end_map",
-        ):
+        # make sure service codes are integers
+        elif nprefix.endswith("service_code.item"):
+            builder.event(event, int(value))
             continue
-
-        builder.event(event, value)
-
-
-def build_innetwork(init_row, parser, code_list=None, provref_idx=None):
-    prefix, event, value = init_row
-
-    builder = ijson.ObjectBuilder()
-    builder.event(event, value)
-
-    for nprefix, event, value in parser:
-
-        if (nprefix, event) == (prefix, "end_map"):
-            innetwork_item = builder.value
-
-            LOG.info(f"Found billing code: {billing_code_type} {billing_code}")
-
-            return innetwork_item, (nprefix, event, value)
-
-        if (nprefix, event) == (
-            "in_network.item.negotiated_rates",
-            "start_array",
-        ) and code_list:
-            billing_code_type = builder.value["billing_code_type"]
-            billing_code = str(builder.value["billing_code"])
-
-            if (billing_code_type, billing_code) not in code_list:
-
-                LOG.debug(f"Skipping billing code: {billing_code_type} {billing_code}")
-
-                return None, (nprefix, event, value)
-
-        if (nprefix, event) == ("in_network.item.negotiated_rates", "start_array"):
-            builder.event(event, value)
-            row = (nprefix, event, value)
-            neg_rate_arr, row = build_neg_rate_arr(row, parser, provref_idx)
-            (nprefix, event, value) = row
-
-            if neg_rate_arr:
-                builder.value["negotiated_rates"] = neg_rate_arr
-
-            else:
-                while (nprefix, event) != (prefix, "end_map"):
-                    nprefix, event, value = next(parser)
-                return None, (nprefix, event, value)
 
         builder.event(event, value)
 
