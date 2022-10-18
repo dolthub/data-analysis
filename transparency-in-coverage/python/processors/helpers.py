@@ -56,7 +56,7 @@ def hashdict(data_dict):
         raise ValueError
     sorted_dict = dict(sorted(data_dict.items()))
     dict_as_bytes = json.dumps(sorted_dict).encode("utf-8")
-    dict_hash = hashlib.md5(dict_as_bytes).hexdigest()
+    dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
     return dict_hash
 
 
@@ -187,7 +187,12 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
     builder = ijson.ObjectBuilder()
     builder.event(event, value)
 
+    skip = False
+
     for nprefix, event, value in parser:
+
+        if not skip:
+            ...
 
         if (nprefix, event) == (prefix, "end_map"):
             return builder.value, (nprefix, event, value)
@@ -203,6 +208,8 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
         # If no negotiated rates that match the criteria, return nothing
         elif nprefix.endswith("negotiated_rates") and event == "end_array":
             if not builder.value["negotiated_rates"]:
+                skip = True
+                LOG.debug(f"No rates for: {billing_code_type} {billing_code}")
                 return None, (nprefix, event, value)
 
         elif nprefix.endswith("negotiated_rates.item") and event == "start_map":
@@ -210,22 +217,30 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
 
         # Add the groups in the provider_reference to the existing provgroups
         elif nprefix.endswith("provider_references.item"):
-            provgroups.extend(provref_idx.get(value, []))
+            if provref_idx:
+                provgroups.extend(provref_idx.get(value, []))
 
         # Merge the provgroups array if the existing provider_groups
         # if either exist
         elif nprefix.endswith("negotiated_rates.item") and event == "end_map":
-
             if builder.value["negotiated_rates"][-1].get("provider_references"):
                 builder.value["negotiated_rates"][-1].pop("provider_references")
 
-            if builder.value["negotiated_rates"][-1].get("provider_groups"):
-                builder.value["negotiated_rates"][-1]["provider_groups"].extend(
-                    provgroups
-                )
-
-            if not builder.value["negotiated_rates"][-1].get("provider_groups"):
+            if (
+                not builder.value["negotiated_rates"][-1].get("provider_groups")
+                and not provgroups
+            ):
                 builder.value["negotiated_rates"].pop()
+
+            else:
+                if builder.value["negotiated_rates"][-1].get("provider_groups"):
+                    builder.value["negotiated_rates"][-1]["provider_groups"].extend(
+                        provgroups
+                    )
+                else:
+                    builder.value["negotiated_rates"][-1][
+                        "provider_groups"
+                    ] = provgroups
 
         elif nprefix.endswith("provider_groups.item") and event == "end_map":
             if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:

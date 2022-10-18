@@ -106,6 +106,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
                 )
 
                 if innetwork:
+                    print(innetwork)
                     innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
                     rows_to_file(innetwork_rows, output_dir)
 
