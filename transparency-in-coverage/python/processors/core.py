@@ -88,6 +88,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
         if (prefix, event) == ("provider_references", "start_array"):
             provrefs, row = build_provrefs(row, parser, npi_list)
+            LOG.info("Getting remote references")
             provrefs = build_remote_refs(provrefs)
 
             if provrefs:
@@ -101,12 +102,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
         for prefix, event, value in parser:
             if (prefix, event) == ("in_network.item", "start_map"):
                 row = prefix, event, value
-                innetwork, row = build_innetwork(
-                    row, parser, code_list, npi_list, provref_idx
-                )
+                innetwork, row = build_innetwork(row, parser, code_list, npi_list, provref_idx)
 
                 if innetwork:
-                    print(innetwork)
                     innetwork_rows = innetwork_to_rows(innetwork, root_hash_id)
                     rows_to_file(innetwork_rows, output_dir)
 

@@ -114,10 +114,10 @@ def innetwork_to_rows(obj, root_hash_id):
             neg_price_vals = {
                 "billing_class": neg_price["billing_class"],
                 "negotiated_type": neg_price["negotiated_type"],
-                "service_code": neg_price.get("service_code", None),
+                "service_code": sc if (sc := neg_price.get("service_code", None)) else None,
                 "expiration_date": neg_price["expiration_date"],
                 "additional_information": neg_price.get("additional_information", None),
-                "billing_code_modifier": neg_price.get("billing_code_modifier", None),
+                "billing_code_modifier": bcm if (bcm := neg_price.get("billing_code_modifier", None)) else None,
                 "negotiated_rate": neg_price["negotiated_rate"],
                 "root_hash_id": root_hash_id,
                 "in_network_hash_id": in_network_hash_id,
@@ -187,14 +187,10 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
     builder = ijson.ObjectBuilder()
     builder.event(event, value)
 
-    skip = False
-
     for nprefix, event, value in parser:
 
-        if not skip:
-            ...
-
         if (nprefix, event) == (prefix, "end_map"):
+            LOG.info(f"Writing data for code: {billing_code_type} {billing_code}")
             return builder.value, (nprefix, event, value)
 
         elif nprefix.endswith("negotiated_rates") and event == "start_array":
@@ -208,7 +204,6 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
         # If no negotiated rates that match the criteria, return nothing
         elif nprefix.endswith("negotiated_rates") and event == "end_array":
             if not builder.value["negotiated_rates"]:
-                skip = True
                 LOG.debug(f"No rates for: {billing_code_type} {billing_code}")
                 return None, (nprefix, event, value)
 
@@ -226,21 +221,14 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
             if builder.value["negotiated_rates"][-1].get("provider_references"):
                 builder.value["negotiated_rates"][-1].pop("provider_references")
 
-            if (
-                not builder.value["negotiated_rates"][-1].get("provider_groups")
-                and not provgroups
-            ):
+            if not builder.value["negotiated_rates"][-1].get("provider_groups") and not provgroups:
                 builder.value["negotiated_rates"].pop()
 
             else:
                 if builder.value["negotiated_rates"][-1].get("provider_groups"):
-                    builder.value["negotiated_rates"][-1]["provider_groups"].extend(
-                        provgroups
-                    )
+                    builder.value["negotiated_rates"][-1]["provider_groups"].extend(provgroups)
                 else:
-                    builder.value["negotiated_rates"][-1][
-                        "provider_groups"
-                    ] = provgroups
+                    builder.value["negotiated_rates"][-1]["provider_groups"] = provgroups
 
         elif nprefix.endswith("provider_groups.item") and event == "end_map":
             if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:
