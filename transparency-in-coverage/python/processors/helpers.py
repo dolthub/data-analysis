@@ -202,6 +202,7 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
                     )
                     return None, (nprefix, event, value)
 
+        # If no negotiated rates that match the criteria, return nothing
         elif nprefix.endswith("negotiated_rates") and event == "end_array":
             if not builder.value["negotiated_rates"]:
                 return None, (nprefix, event, value)
@@ -215,27 +216,20 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
             except KeyError:
                 pass
 
+        # Merge the provgroups array if the existing provider_groups
+        # if either exist
         elif nprefix.endswith("negotiated_rates.item") and event == "end_map":
-            if provgroups:
-                try:
-                    builder.value["negotiated_rates"][-1]["provider_groups"].extend(
-                        provgroups
-                    )
-                except KeyError:
-                    builder.value["negotiated_rates"][-1][
-                        "provider_groups"
-                    ] = provgroups
-            else:
-                if not builder.value["negotiated_rates"][-1].get(
-                    "provider_groups", None
-                ):
-                    builder.value["negotiated_rates"].pop()
-            try:
+
+            if builder.value["negotiated_rates"][-1].get("provider_references"):
                 builder.value["negotiated_rates"][-1].pop("provider_references")
-            except KeyError:
-                pass
-            except IndexError:
-                pass
+
+            if builder.value["negotiated_rates"][-1].get("provider_groups"):
+                builder.value["negotiated_rates"][-1]["provider_groups"].extend(
+                    provgroups
+                )
+
+            if not builder.value["negotiated_rates"][-1].get("provider_groups"):
+                builder.value["negotiated_rates"].pop()
 
         elif nprefix.endswith("provider_groups.item") and event == "end_map":
             if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:
