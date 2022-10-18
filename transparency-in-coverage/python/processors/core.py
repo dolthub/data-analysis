@@ -9,6 +9,7 @@ from helpers import (
     hashdict,
     build_root,
     build_provrefs,
+    build_remote_refs,
     build_innetwork,
     innetwork_to_rows,
     rows_to_file,
@@ -87,6 +88,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
 
         if (prefix, event) == ("provider_references", "start_array"):
             provrefs, row = build_provrefs(row, parser, npi_list)
+            provrefs = build_remote_refs(provrefs)
 
             if provrefs:
                 provref_idx = provrefs_to_idx(provrefs)

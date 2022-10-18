@@ -171,11 +171,11 @@ def build_provrefs(init_row, parser, npi_list=None):
                 continue
 
         if nprefix.endswith("provider_groups.item") and event == "end_map":
-            if not builder.value[-1]["provider_groups"][-1]["npi"]:
+            if not builder.value[-1].get("provider_groups")[-1]["npi"]:
                 builder.value[-1]["provider_groups"].pop()
 
         if nprefix.endswith("provider_references.item") and event == "end_map":
-            if not builder.value[-1]["provider_groups"]:
+            if not builder.value[-1].get("provider_groups"):
                 builder.value.pop()
 
         builder.event(event, value)
@@ -197,9 +197,7 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
                 billing_code_type = builder.value["billing_code_type"]
                 billing_code = str(builder.value["billing_code"])
                 if (billing_code_type, billing_code) not in code_list:
-                    LOG.debug(
-                        f"Skipping billing code: {billing_code_type} {billing_code}"
-                    )
+                    LOG.debug(f"Skipping code: {billing_code_type} {billing_code}")
                     return None, (nprefix, event, value)
 
         # If no negotiated rates that match the criteria, return nothing
@@ -210,11 +208,9 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
         elif nprefix.endswith("negotiated_rates.item") and event == "start_map":
             provgroups = []
 
+        # Add the groups in the provider_reference to the existing provgroups
         elif nprefix.endswith("provider_references.item"):
-            try:
-                provgroups.extend(provref_idx[value])
-            except KeyError:
-                pass
+            provgroups.extend(provref_idx.get(value, []))
 
         # Merge the provgroups array if the existing provider_groups
         # if either exist
@@ -235,12 +231,12 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
             if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:
                 builder.value["negotiated_rates"][-1]["provider_groups"].pop()
 
-        # skip NPI numbers not in the list
+        # Skip NPI numbers not in the list
         elif nprefix.endswith("npi.item"):
             if npi_list and value not in npi_list:
                 continue
 
-        # make sure service codes are integers
+        # Make sure service codes are integers
         elif nprefix.endswith("service_code.item"):
             builder.event(event, int(value))
             continue
@@ -248,13 +244,41 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
         builder.event(event, value)
 
 
-# def fetch_remoteprovrefs(provrefs):
-#     new_provrefs = []
-#     for provref in provrefs:
-#         new_provref = provref.copy()
-#         if loc := provref.get("location"):
-#             r = requests.get(loc)
-#             new_provref["provider_groups"] = r.json()["provider_groups"]
-#             new_provref.pop("location")
-#         new_provrefs.append(new_provref)
-#     return new_provrefs
+# This should become an async function eventually
+def build_remote_refs(provrefs):
+
+    new_provrefs = []
+
+    for provref in provrefs:
+        if not provref.get("location"):
+            new_provrefs.append(provref)
+        else:
+            loc = provref.get("location")
+            r = requests.get(loc)
+            f = r.content
+
+            parser = ijson.parse(f, use_float=True)
+
+            prefix, event, value = next(parser)
+
+            builder = ijson.ObjectBuilder()
+            builder.event(event, value)
+
+            for prefix, event, value in parser:
+
+                if prefix.endswith("npi.item"):
+                    if value not in npi_list:
+                        continue
+
+                elif prefix.endswith("provider_groups.item") and event == "end_map":
+                    if not builder.value["provider_groups"][-1]["npi"]:
+                        builder.value["provider_groups"].pop()
+
+                builder.event(event, value)
+
+            if builder.value.get("provider_groups"):
+                provref["provider_groups"] = builder.value["provider_groups"]
+                provref.pop("location")
+                new_provrefs.append(provref)
+
+    return new_provrefs
