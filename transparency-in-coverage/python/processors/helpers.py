@@ -241,9 +241,15 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
             if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:
                 builder.value["negotiated_rates"][-1]["provider_groups"].pop()
 
+        # skip NPI numbers not in the list
         elif nprefix.endswith("npi.item"):
             if npi_list and value not in npi_list:
                 continue
+
+        # make sure service codes are integers
+        elif nprefix.endswith("service_code.item"):
+            builder.event(event, int(value))
+            continue
 
         builder.event(event, value)
 
