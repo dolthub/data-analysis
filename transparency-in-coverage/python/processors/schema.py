@@ -59,8 +59,8 @@ SCHEMA = {
         "root_hash_id",
         "in_network_hash_id",
         "negotiated_rates_hash_id",
-        "tin_type",
-        "tin_value",
+        # "tin_type",
+        # "tin_value",
         "npi_numbers",
     ],
 }

@@ -7,10 +7,11 @@ import ijson
 import requests
 import logging
 from urllib.parse import urlparse
+
 from schema import SCHEMA
 
 LOG = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 def create_output_dir(output_dir, overwrite):
@@ -102,8 +103,8 @@ def innetwork_to_rows(obj, root_hash_id):
         for provgroup in neg_rate["provider_groups"]:
             provgroup_vals = {
                 "npi_numbers": provgroup["npi"],
-                "tin_type": provgroup["tin"]["type"],
-                "tin_value": provgroup["tin"]["value"],
+                # "tin_type": provgroup["tin"]["type"],
+                # "tin_value": provgroup["tin"]["value"],
                 "negotiated_rates_hash_id": neg_rates_hash_id,
                 "in_network_hash_id": in_network_hash_id,
                 "root_hash_id": root_hash_id,
@@ -212,23 +213,21 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
 
         # Add the groups in the provider_reference to the existing provgroups
         elif nprefix.endswith("provider_references.item"):
-            if provref_idx:
-                provgroups.extend(provref_idx.get(value, []))
+            if provref_idx and (more_provgroups := provref_idx.get(value)):
+                provgroups.extend(more_provgroups)
 
         # Merge the provgroups array if the existing provider_groups
         # if either exist
         elif nprefix.endswith("negotiated_rates.item") and event == "end_map":
+
             if builder.value["negotiated_rates"][-1].get("provider_references"):
                 builder.value["negotiated_rates"][-1].pop("provider_references")
 
-            if not builder.value["negotiated_rates"][-1].get("provider_groups") and not provgroups:
-                builder.value["negotiated_rates"].pop()
+            builder.value["negotiated_rates"][-1].setdefault("provider_groups", [])
+            builder.value["negotiated_rates"][-1]["provider_groups"].extend(provgroups)
 
-            else:
-                if builder.value["negotiated_rates"][-1].get("provider_groups"):
-                    builder.value["negotiated_rates"][-1]["provider_groups"].extend(provgroups)
-                else:
-                    builder.value["negotiated_rates"][-1]["provider_groups"] = provgroups
+            if not builder.value["negotiated_rates"][-1].get("provider_groups"):
+                builder.value["negotiated_rates"].pop()
 
         elif nprefix.endswith("provider_groups.item") and event == "end_map":
             if not builder.value["negotiated_rates"][-1]["provider_groups"][-1]["npi"]:
