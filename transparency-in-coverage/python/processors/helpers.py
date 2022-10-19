@@ -45,7 +45,7 @@ def import_set(filename, ints=True):
     return items
 
 
-def clean_url(url):
+def clean_url(input_url):
     parsed_url = urlparse(input_url)
     cleaned_url = (parsed_url[1] + parsed_url[2]).strip()
     return cleaned_url
@@ -62,10 +62,8 @@ def hashdict(data_dict):
 
 
 def rows_to_file(rows, output_dir):
-
     for row in rows:
-        filename = row[0]
-        row_data = row[1]
+        filename, row_data = row
         fieldnames = SCHEMA[filename]
         file_loc = f"{output_dir}/{filename}.csv"
 
@@ -213,8 +211,8 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
 
         # Add the groups in the provider_reference to the existing provgroups
         elif nprefix.endswith("provider_references.item"):
-            if provref_idx and (more_provgroups := provref_idx.get(value)):
-                provgroups.extend(more_provgroups)
+            if provref_idx and (new_provgroups := provref_idx.get(value)):
+                provgroups.extend(new_provgroups)
 
         # Merge the provgroups array if the existing provider_groups
         # if either exist
@@ -247,7 +245,7 @@ def build_innetwork(init_row, parser, code_list=None, npi_list=None, provref_idx
 
 
 # This should become an async function eventually
-def build_remote_refs(provrefs):
+def build_remote_refs(provrefs, npi_list=None):
 
     new_provrefs = []
 

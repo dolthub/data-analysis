@@ -89,7 +89,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
         if (prefix, event) == ("provider_references", "start_array"):
             provrefs, row = build_provrefs(row, parser, npi_list)
             LOG.info("Getting remote references")
-            provrefs = build_remote_refs(provrefs)
+            provrefs = build_remote_refs(provrefs, npi_list)
 
             if provrefs:
                 provref_idx = provrefs_to_idx(provrefs)
