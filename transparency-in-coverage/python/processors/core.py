@@ -3,8 +3,7 @@ import requests
 import logging
 import ijson
 import gzip
-import sys
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 from helpers import (
     hashdict,
     build_root,
@@ -69,7 +68,6 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
     with requests.get(input_url, stream=True) as r:
 
         urlpath = urlparse(input_url).path
-        url = urljoin(input_url, urlpath)
 
         if urlpath.endswith(".json.gz"):
             f = gzip.GzipFile(fileobj=r.raw)
