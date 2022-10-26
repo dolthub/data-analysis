@@ -7,8 +7,8 @@ import ijson
 import requests
 import logging
 from urllib.parse import urlparse
-
 from schema import SCHEMA
+
 
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
