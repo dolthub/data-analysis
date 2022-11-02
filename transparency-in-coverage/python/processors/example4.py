@@ -29,4 +29,5 @@ try:
         args.url, output_dir=output_dir, code_list=dialysis, npi_list=npi_set
     )
 except Exception as e:
+    logger.warn(f'Failed for {args.url}')
     logger.warn(e)
