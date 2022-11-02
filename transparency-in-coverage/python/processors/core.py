@@ -19,6 +19,10 @@ from helpers import (
 LOG = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+file_handler = logging.FileHandler('log.txt', 'a')
+file_handler.setLevel(logging.WARNING)
+
+LOG.addHandler(file_handler)
 
 def get_mrfs_from_index(index_file_url):
     """
@@ -65,6 +69,7 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
     This streams through JSON, flattens it, and writes it to
     file
     """
+
     with requests.get(input_url, stream=True) as r:
 
         urlpath = urlparse(input_url).path

@@ -50,16 +50,14 @@ def clean_url(input_url):
     cleaned_url = (parsed_url[1] + parsed_url[2]).strip()
     return cleaned_url
 
-
 def hashdict(data_dict):
-    """Get the hash of a dict (sort, convert to bytes, then hash)"""
     if not data_dict:
         raise ValueError
-    sorted_dict = dict(sorted(data_dict.items()))
-    dict_as_bytes = json.dumps(sorted_dict).encode("utf-8")
+
+    sorted_tups = sorted(data_dict.items())
+    dict_as_bytes = json.dumps(sorted_tups).encode("utf-8")
     dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
     return dict_hash
-
 
 def rows_to_file(rows, output_dir):
     for row in rows:
