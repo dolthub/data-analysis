@@ -78,6 +78,9 @@ def stream_json_to_csv(input_url, output_dir, code_list=None, npi_list=None):
             f = gzip.GzipFile(fileobj=r.raw)
         elif urlpath.endswith(".json"):
             f = r.content
+        else:
+            LOG.warn(f"{input_url} isn't a JSON file")
+            return
 
         parser = ijson.parse(f, use_float=True)
 
