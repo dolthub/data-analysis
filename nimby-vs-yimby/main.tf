@@ -24,7 +24,7 @@ resource "digitalocean_droplet" "server" {
   region    = "sfo3"
   size      = "s-8vcpu-16gb"
   ssh_keys  = [ for key in data.digitalocean_ssh_keys.keys.ssh_keys: key.fingerprint ]
-  #user_data = file("provision.sh")
+  user_data = file("provision.sh")
 }
 
 output "server_ip" {
