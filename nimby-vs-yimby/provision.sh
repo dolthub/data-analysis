@@ -28,6 +28,6 @@ swapon /swapfile
 echo "/swapfile swap swap sw 0 0" >> /etc/fstab
 
 jupyter notebook --generate-config 
-tmux new-session -d -s jupyter "jupyter notebook --allow-root --ip=0.0.0.0"
+sudo tmux new-session -d -s jupyter "jupyter notebook --allow-root --ip=0.0.0.0"
 
-cd /root/data && tmux new-session -d -s dolt 'dolt sql-server -H 127.0.0.1 --user=rl --password=trustno1 --loglevel=trace'
+cd /root/data && sudo tmux new-session -d -s dolt 'dolt sql-server -H 127.0.0.1 --user=rl --password=trustno1 --loglevel=trace'
