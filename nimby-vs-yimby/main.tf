@@ -31,3 +31,7 @@ output "server_ip" {
   value = resource.digitalocean_droplet.server.ipv4_address
 }
 
+output "server_hourly_price" {
+  value = resource.digitalocean_droplet.server.price_hourly
+}
+
