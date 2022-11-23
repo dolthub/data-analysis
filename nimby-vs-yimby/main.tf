@@ -21,8 +21,8 @@ data "digitalocean_ssh_keys" "keys" {
 resource "digitalocean_droplet" "server" {
   image     = "debian-11-x64"
   name      = "dolt-jupyter-housingprices"
-  region    = "sfo3"
-  size      = "s-8vcpu-16gb"
+  region    = "syd1"
+  size      = "m-8vcpu-64gb"
   ssh_keys  = [ for key in data.digitalocean_ssh_keys.keys.ssh_keys: key.fingerprint ]
   user_data = file("provision.sh")
 }
