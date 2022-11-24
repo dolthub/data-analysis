@@ -75,7 +75,7 @@ def rows_to_file(rows, output_dir):
             writer.writerow(row_data)
 
 
-def innetwork_to_rows(obj, root_hash_id):
+def innetwork_to_rows(obj, root_hash_key):
     rows = []
 
     in_network_vals = {
@@ -85,25 +85,25 @@ def innetwork_to_rows(obj, root_hash_id):
         "billing_code_type_version": obj["billing_code_type_version"],
         "billing_code": obj["billing_code"],
         "description": obj["description"],
-        "root_hash_id": root_hash_id,
+        "root_hash_key": root_hash_key,
     }
 
-    in_network_hash_id = hashdict(in_network_vals)
-    in_network_vals["in_network_hash_id"] = in_network_hash_id
+    in_network_hash_key = hashdict(in_network_vals)
+    in_network_vals["in_network_hash_key"] = in_network_hash_key
 
     rows.append(("in_network", in_network_vals))
 
     for neg_rate in obj.get("negotiated_rates", []):
-        neg_rates_hash_id = hashdict(neg_rate)
+        neg_rates_hash_key = hashdict(neg_rate)
 
         for provgroup in neg_rate["provider_groups"]:
             provgroup_vals = {
                 "npi_numbers": provgroup["npi"],
                 # "tin_type": provgroup["tin"]["type"],
                 # "tin_value": provgroup["tin"]["value"],
-                "negotiated_rates_hash_id": neg_rates_hash_id,
-                "in_network_hash_id": in_network_hash_id,
-                "root_hash_id": root_hash_id,
+                "negotiated_rates_hash_key": neg_rates_hash_key,
+                "in_network_hash_key": in_network_hash_key,
+                "root_hash_key": root_hash_key,
             }
             rows.append(("provider_groups", provgroup_vals))
 
@@ -116,9 +116,9 @@ def innetwork_to_rows(obj, root_hash_id):
                 "additional_information": neg_price.get("additional_information", None),
                 "billing_code_modifier": bcm if (bcm := neg_price.get("billing_code_modifier", None)) else None,
                 "negotiated_rate": neg_price["negotiated_rate"],
-                "root_hash_id": root_hash_id,
-                "in_network_hash_id": in_network_hash_id,
-                "negotiated_rates_hash_id": neg_rates_hash_id,
+                "root_hash_key": root_hash_key,
+                "in_network_hash_key": in_network_hash_key,
+                "negotiated_rates_hash_key": neg_rates_hash_key,
             }
             rows.append(("negotiated_prices", neg_price_vals))
 
@@ -128,8 +128,8 @@ def innetwork_to_rows(obj, root_hash_id):
             "billing_code_type_version": bundle["billing_code_type_version"],
             "billing_code": bundle["billing_code"],
             "description": bundle["description"],
-            "root_hash_id": root_hash_id,
-            "in_network_hash_id": in_network_hash_id,
+            "root_hash_key": root_hash_key,
+            "in_network_hash_key": in_network_hash_key,
         }
         rows.append(("bundled_codes", bundle_vals))
 
