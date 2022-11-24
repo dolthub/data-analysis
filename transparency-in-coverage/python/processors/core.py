@@ -11,7 +11,7 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         flattener.ffwd(('', 'map_key', 'provider_references'))
         flattener.build_provider_references()
-        flattener.build_remote_provider_references()
+        flattener.gather_remote_provider_references()
 
         try:
             flattener.ffwd(('in_network', 'start_array', None))

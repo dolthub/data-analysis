@@ -191,7 +191,7 @@ class BlockFlattener:
             builder.event(event, value)
 
 
-    def build_remote_provider_references(self):
+    def gather_remote_provider_references(self):
         new_provider_references = []
 
         for pref in new_provider_references:
