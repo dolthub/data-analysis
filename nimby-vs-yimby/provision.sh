@@ -21,7 +21,7 @@ dolt clone dolthub/us-housing-prices-v2
 popd /root/data || exit
 
 swapoff -a
-dd if=/dev/zero of=/swapfile bs=1G count=16
+dd if=/dev/zero of=/swapfile bs=1G count=80
 chmod 0600 /swapfile
 mkswap /swapfile
 swapon /swapfile
