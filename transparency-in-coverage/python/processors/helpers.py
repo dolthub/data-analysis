@@ -42,75 +42,6 @@ def import_set(filename, ints=True):
     return items
 
 
-def hashdict(data_dict):
-    if not data_dict:
-        raise ValueError
-
-    sorted_tups = sorted(data_dict.items())
-    dict_as_bytes = json.dumps(sorted_tups).encode('utf-8')
-    dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
-    return dict_hash
-
-
-def innetwork_to_rows(obj, root_hash_key):
-    rows = []
-
-    in_network_vals = {
-        'negotiation_arrangement': obj['negotiation_arrangement'],
-        'name': obj['name'],
-        'billing_code_type': obj['billing_code_type'],
-        'billing_code_type_version': obj['billing_code_type_version'],
-        'billing_code': obj['billing_code'],
-        'description': obj['description'],
-        'root_hash_key': root_hash_key,
-    }
-
-    in_network_hash_key = hashdict(in_network_vals)
-    in_network_vals['in_network_hash_key'] = in_network_hash_key
-
-    rows.append(('in_network', in_network_vals))
-
-    for neg_rate in obj.get('negotiated_rates', []):
-        neg_rates_hash_key = hashdict(neg_rate)
-
-        for provgroup in neg_rate['provider_groups']:
-            provgroup_vals = {
-                'npi_numbers': provgroup['npi'],
-                'negotiated_rates_hash_key': neg_rates_hash_key,
-                'in_network_hash_key': in_network_hash_key,
-                'root_hash_key': root_hash_key,
-            }
-            rows.append(('provider_groups', provgroup_vals))
-
-        for neg_price in neg_rate['negotiated_prices']:
-            neg_price_vals = {
-                'billing_class': neg_price['billing_class'],
-                'negotiated_type': neg_price['negotiated_type'],
-                'service_code': sc if (sc := neg_price.get('service_code', None)) else None,
-                'expiration_date': neg_price['expiration_date'],
-                'additional_information': neg_price.get('additional_information', None),
-                'billing_code_modifier': bcm if (bcm := neg_price.get('billing_code_modifier', None)) else None,
-                'negotiated_rate': neg_price['negotiated_rate'],
-                'root_hash_key': root_hash_key,
-                'in_network_hash_key': in_network_hash_key,
-                'negotiated_rates_hash_key': neg_rates_hash_key,
-            }
-            rows.append(('negotiated_prices', neg_price_vals))
-
-    for bundle in obj.get('bundled_codes', []):
-        bundle_vals = {
-            'billing_code_type': bundle['billing_code_type'],
-            'billing_code_type_version': bundle['billing_code_type_version'],
-            'billing_code': bundle['billing_code'],
-            'description': bundle['description'],
-            'root_hash_key': root_hash_key,
-            'in_network_hash_key': in_network_hash_key,
-        }
-        rows.append(('bundled_codes', bundle_vals))
-
-    return rows
-
-
 class MRFOpen:
 
     def __init__(self, loc):
@@ -203,7 +134,7 @@ class BlockFlattener:
 
                 root_dict = builder.value
 
-                self.root_hash_key = hashdict(root_dict)
+                self.root_hash_key = self.hashdict(root_dict)
 
                 root_dict['root_hash_key'] = self.root_hash_key
                 self.root_dict = root_dict
@@ -385,6 +316,74 @@ class BlockFlattener:
             builder.event(event, value)
             # print(builder.value)
 
+    def hashdict(self, data_dict):
+        if not data_dict:
+            raise ValueError
+
+        sorted_tups = sorted(data_dict.items())
+        dict_as_bytes = json.dumps(sorted_tups).encode('utf-8')
+        dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
+        return dict_hash
+
+
+    def in_network_item_to_rows(self):
+        rows = []
+
+        in_network_vals = {
+            'negotiation_arrangement': self.in_network_item['negotiation_arrangement'],
+            'name': self.in_network_item['name'],
+            'billing_code_type': self.in_network_item['billing_code_type'],
+            'billing_code_type_version': self.in_network_item['billing_code_type_version'],
+            'billing_code': self.in_network_item['billing_code'],
+            'description': self.in_network_item['description'],
+            'root_hash_key': self.root_hash_key,
+        }
+
+        in_network_hash_key = self.hashdict(in_network_vals)
+        in_network_vals['in_network_hash_key'] = in_network_hash_key
+
+        rows.append(('in_network', in_network_vals))
+
+        for neg_rate in self.in_network_item.get('negotiated_rates', []):
+            neg_rates_hash_key = self.hashdict(neg_rate)
+
+            for provgroup in neg_rate['provider_groups']:
+                provgroup_vals = {
+                    'npi_numbers': provgroup['npi'],
+                    'negotiated_rates_hash_key': neg_rates_hash_key,
+                    'in_network_hash_key': in_network_hash_key,
+                    'root_hash_key': self.root_hash_key,
+                }
+                rows.append(('provider_groups', provgroup_vals))
+
+            for neg_price in neg_rate['negotiated_prices']:
+                neg_price_vals = {
+                    'billing_class': neg_price['billing_class'],
+                    'negotiated_type': neg_price['negotiated_type'],
+                    'service_code': sc if (sc := neg_price.get('service_code', None)) else None,
+                    'expiration_date': neg_price['expiration_date'],
+                    'additional_information': neg_price.get('additional_information', None),
+                    'billing_code_modifier': bcm if (bcm := neg_price.get('billing_code_modifier', None)) else None,
+                    'negotiated_rate': neg_price['negotiated_rate'],
+                    'root_hash_key': self.root_hash_key,
+                    'in_network_hash_key': in_network_hash_key,
+                    'negotiated_rates_hash_key': neg_rates_hash_key,
+                }
+                rows.append(('negotiated_prices', neg_price_vals))
+
+        for bundle in self.in_network_item.get('bundled_codes', []):
+            bundle_vals = {
+                'billing_code_type': bundle['billing_code_type'],
+                'billing_code_type_version': bundle['billing_code_type_version'],
+                'billing_code': bundle['billing_code'],
+                'description': bundle['description'],
+                'root_hash_key': self.root_hash_key,
+                'in_network_hash_key': in_network_hash_key,
+            }
+            rows.append(('bundled_codes', bundle_vals))
+
+        return rows
+
 
     def rows_to_file(self, rows, out_dir):
 
@@ -416,8 +415,7 @@ class BlockFlattener:
             self.root_written = True
 
         if self.in_network_item:
-            rows = innetwork_to_rows(self.in_network_item, self.root_hash_key)
-            self.rows_to_file(rows, out_dir)
+            self.rows_to_file(self.in_network_item_to_rows(), out_dir)
             log.info(f'Writing to file...')
             self.in_network_item = None
 
