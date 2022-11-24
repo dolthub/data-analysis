@@ -43,6 +43,10 @@ def import_set(filename, ints=True):
 
 
 class MRFOpen:
+    """
+    Context for cleanly opening and handling JSON MRFs.
+    Will open remote and local files alike.
+    """
 
     def __init__(self, loc):
 
@@ -402,7 +406,8 @@ class BlockFlattener:
                 fieldnames = SCHEMA[filename]
                 file_loc = f'{out_dir}/{filename}.csv'
                 file_exists = os.path.exists(file_loc)
-                
+
+                # TODO: this opens a file for each row
                 with open(file_loc, 'a') as f:
 
                     writer = csv.DictWriter(f, fieldnames = fieldnames)
