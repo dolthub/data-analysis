@@ -316,6 +316,7 @@ class BlockFlattener:
             builder.event(event, value)
             # print(builder.value)
 
+
     def hashdict(self, data_dict):
         if not data_dict:
             raise ValueError
@@ -385,37 +386,34 @@ class BlockFlattener:
         return rows
 
 
-    def rows_to_file(self, rows, out_dir):
-
-        if type(rows) != list:
-            rows = [rows]
-
-        for row in rows:
-            filename, row_data = row
-            fieldnames = SCHEMA[filename]
-            file_loc = f'{out_dir}/{filename}.csv'
-
-            if not os.path.exists(file_loc):
-                with open(file_loc, 'w') as f:
-                    writer = csv.DictWriter(f, fieldnames=fieldnames)
-                    writer.writeheader()
-
-            with open(file_loc, 'a') as f:
-                writer = csv.DictWriter(f, fieldnames=fieldnames)
-                writer.writerow(row_data)
-
-                
-    def write_item(self, out_dir):
+    def write_in_network_item(self, out_dir):
 
         if not os.path.exists(out_dir):
             os.mkdir(self.out_dir)
 
-        if not self.root_written:
-            self.rows_to_file(('root', self.root_dict), out_dir)
+        if self.in_network_item:
+            rows = self.in_network_item_to_rows()
+
+            if not self.root_written:
+                rows.append(('root', self.root_dict))
+
+            for row in rows:
+                filename, row_data = row
+                fieldnames = SCHEMA[filename]
+                file_loc = f'{out_dir}/{filename}.csv'
+                file_exists = os.path.exists(file_loc)
+                
+                with open(file_loc, 'a') as f:
+
+                    writer = csv.DictWriter(f, fieldnames = fieldnames)
+
+                    if not file_exists:
+                        writer.writeheader()
+
+                    writer.writerow(row_data)
+
+            self.in_network_item = None
             self.root_written = True
 
-        if self.in_network_item:
-            self.rows_to_file(self.in_network_item_to_rows(), out_dir)
-            log.info(f'Writing to file...')
-            self.in_network_item = None
+
 

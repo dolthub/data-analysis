@@ -31,7 +31,6 @@ def mrfs_from_idx(idx_url):
 
     return in_network_file_urls
 
-
 idx_url = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
 
 mrfs_from_idx(idx_url)
