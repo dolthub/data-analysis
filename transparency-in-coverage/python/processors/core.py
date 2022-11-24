@@ -20,8 +20,10 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         In this case, re-open the file (start a new parser in a
         new context) and then FFWD to the in-network items,
-        while holding onto the previously computed provider references.
+        while holding onto the previously computed provider references
+        and root data.
         """
+
         try:
             flattener.ffwd(('in_network', 'start_array', None))
             while flattener.current_row != ('in_network', 'end_array', None):
