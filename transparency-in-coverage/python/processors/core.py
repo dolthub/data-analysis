@@ -1,19 +1,17 @@
-import logging
 from helpers import BlockFlattener, MRFOpen
 
 def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
     with MRFOpen(loc) as f:
 
-        flattener = BlockFlattener(code_set, npi_set)
-        flattener.create_dir(out_dir, overwrite = True)
+        flattener = BlockFlattener(out_dir, code_set, npi_set)
         flattener.init_parser(f)
 
         flattener.build_root()
 
         flattener.ffwd(('', 'map_key', 'provider_references'))
         flattener.build_provider_references()
-        print(flattener.provider_references)
+        flattener.build_remote_provider_references()
 
         try:
             flattener.ffwd(('in_network', 'start_array', None))
