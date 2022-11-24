@@ -15,7 +15,7 @@ log = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
 
 file_handler = logging.FileHandler('log.txt', 'a')
-file_handler.setLevel(logging.WARN)
+file_handler.setLevel(logging.DEBUG)
 
 log.addHandler(file_handler)
 
@@ -152,7 +152,7 @@ class MRFOpen:
 
         elif self.suffix == '.json':
             if self.is_remote:
-                self.f = self.r.content
+                self.f = self.r.raw
             else:
                 self.f = open(self.loc, 'r')
 
@@ -169,7 +169,7 @@ class MRFOpen:
 
 class BlockFlattener:
 
-    def __init__(self, out_dir, code_set = None, npi_set = None):
+    def __init__(self, code_set = None, npi_set = None):
 
         self.npi_set = npi_set
         self.code_set = code_set
@@ -178,9 +178,7 @@ class BlockFlattener:
         self.provider_reference_map = None
 
         self.root_written = False
-
-        if not os.path.exists(out_dir):
-            os.mkdir(out_dir)
+        self.in_network_item = None
 
 
     def init_parser(self, f):
@@ -198,15 +196,18 @@ class BlockFlattener:
         for prefix, event, value in self.parser:
             self.current_row = (prefix, event, value)
 
-            if (prefix, event, value) == ('', 'map_key', 'provider_references') or \
-               (prefix, event, value) == ('', 'map_key', 'in_network'):
+            if (
+                (prefix, event, value) == ('', 'map_key', 'provider_references')
+                or (prefix, event, value) == ('', 'map_key', 'in_network')
+            ):
 
                 root_dict = builder.value
 
                 self.root_hash_key = hashdict(root_dict)
-                root_dict['root_hash_key'] = self.root_hash_key
 
+                root_dict['root_hash_key'] = self.root_hash_key
                 self.root_dict = root_dict
+
                 return
 
             builder.event(event, value)
@@ -230,6 +231,7 @@ class BlockFlattener:
 
                 return
 
+            # Filter out unwanted NPI numbers
             if prefix.endswith('npi.item'):
                 if (
                     self.npi_set 
@@ -276,7 +278,10 @@ class BlockFlattener:
                         if value not in npi_set:
                             continue
 
-                    elif prefix.endswith('provider_groups.item') and event == 'end_map':
+                    elif (
+                        prefix.endswith('provider_groups.item') 
+                        and event == 'end_map'
+                    ):
                         if not builder.value['provider_groups'][-1]['npi']:
                             builder.value['provider_groups'].pop()
 
@@ -301,11 +306,9 @@ class BlockFlattener:
 
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 self.in_network_item = builder.value
-                log.info(f'Found in file: {billing_code_type} {billing_code}')
+                log.info(f'Found: {billing_code_type} {billing_code}')
                 return
 
-            # At the start of the negotiated rates array,
-            # if the code doesn't match input codes -- return none
             elif (
                 prefix.endswith('negotiated_rates') 
                 and event == 'start_array'
@@ -316,6 +319,7 @@ class BlockFlattener:
                     if (billing_code_type, billing_code) not in self.code_set:
                         log.debug(f'Skipping code: {billing_code_type} {billing_code}')
                         self.ffwd(('in_network.item', 'end_map', None))
+                        return
 
             # If no negotiated rates that match the criteria, return nothing
             elif (
@@ -323,8 +327,9 @@ class BlockFlattener:
                 and event == 'end_array'
             ):
                 if not builder.value['negotiated_rates']:
-                    log.debug(f'No rates for: {billing_code_type} {billing_code}')
+                    log.info(f'Found but no rates for: {billing_code_type} {billing_code}')
                     self.ffwd(('in_network.item', 'end_map', None))
+                    return
 
             elif (
                 prefix.endswith('negotiated_rates.item') 
@@ -376,7 +381,9 @@ class BlockFlattener:
                 builder.event(event, int(value))
                 continue
 
+
             builder.event(event, value)
+            # print(builder.value)
 
 
     def rows_to_file(self, rows, out_dir):
@@ -401,6 +408,9 @@ class BlockFlattener:
                 
     def write_item(self, out_dir):
 
+        if not os.path.exists(out_dir):
+            os.mkdir(self.out_dir)
+
         if not self.root_written:
             self.rows_to_file(('root', self.root_dict), out_dir)
             self.root_written = True
@@ -408,4 +418,6 @@ class BlockFlattener:
         if self.in_network_item:
             rows = innetwork_to_rows(self.in_network_item, self.root_hash_key)
             self.rows_to_file(rows, out_dir)
+            log.info(f'Writing to file...')
             self.in_network_item = None
+

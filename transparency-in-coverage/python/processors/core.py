@@ -4,7 +4,8 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
     with MRFOpen(loc) as f:
 
-        flattener = BlockFlattener(out_dir, code_set, npi_set)
+        flattener = BlockFlattener(code_set, npi_set)
+
         flattener.init_parser(f)
 
         flattener.build_root()

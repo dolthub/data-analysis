@@ -1,19 +1,37 @@
-from core import stream_json_to_csv, get_mrfs_from_index
-from helpers import create_output_dir
-import logging
-from tqdm import tqdm
-from tqdm.contrib.logging import logging_redirect_tqdm
+import requests
+import time
+import ijson
+from urllib.parse import urlparse
+from helpers import MRFOpen
 
-logger = logging.getLogger("core")
-logger.setLevel(level=logging.DEBUG)
+def mrfs_from_idx(idx_url):
+    '''
+    Gets in-network files from index.json files
+    '''
+    s = time.time()
+    in_network_file_urls = []
 
-output_dir = "flatten"
+    with MRFOpen(idx_url) as f:
 
-code_list = import_billing_codes("data/example_billing_codes.csv")
-index_file_url = "https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_CLEVELAND-CLINIC-FLORIDA-GROUP-BENEFIT-PLAN_index.json"
+        parser = ijson.parse(f, use_float=True)
 
-urls = get_mrfs_from_index(index_file_url)
+        for prefix, event, value in parser:
 
-with logging_redirect_tqdm():
-    for url in tqdm(urls):
-        stream_json_to_csv(url, output_dir=output_dir, code_list=code_list)
+            if (
+                prefix.endswith('location')
+                and event == 'string'
+            ):
+                print(f'Found in-network file: {value}')
+                in_network_file_urls.append(value)
+
+    td = time.time() - s
+
+    print(f'Found: {len(in_network_file_urls)} in-network files.')
+    print(f'Time taken: {round(td/60, 3)} min.')
+
+    return in_network_file_urls
+
+
+idx_url = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
+
+mrfs_from_idx(idx_url)
