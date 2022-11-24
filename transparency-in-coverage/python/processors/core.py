@@ -13,6 +13,15 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
         flattener.build_provider_references()
         flattener.gather_remote_provider_references()
 
+        """
+        Sometimes it happens that the MRF is out of order: 
+        the provider references are at the bottom. Fast-forwarding
+        to the in-network items will result in a StopIteration.
+
+        In this case, re-open the file (start a new parser in a
+        new context) and then FFWD to the in-network items,
+        while holding onto the previously computed provider references.
+        """
         try:
             flattener.ffwd(('in_network', 'start_array', None))
             while flattener.current_row != ('in_network', 'end_array', None):
