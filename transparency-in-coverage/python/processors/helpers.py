@@ -8,17 +8,19 @@ import requests
 import gzip
 import urllib
 import pathlib
-
-from schema import SCHEMA
-
 import logging
+from schema import SCHEMA
+from collections import namedtuple
+
+
 log = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
+
 file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.DEBUG)
+
 log.addHandler(file_handler)
 
-from collections import namedtuple
 Row = namedtuple('Row', ['filename', 'data'])
 
 
@@ -38,6 +40,10 @@ def data_import(filename):
         return objs
 
 
+# TODO
+# build remote and local provider references separately
+# TEST against all CMS files
+
 class MRFOpen:
     """
     Context for cleanly opening and handling JSON MRFs.
@@ -46,10 +52,12 @@ class MRFOpen:
 
     def __init__(self, loc):
 
+        self.r = None
+        self.f = None
         self.loc = loc
+
         self.parsed_url = urllib.parse.urlparse(self.loc)
 
-        # Figure out if the file is local or a URL
         if self.parsed_url.scheme in ('http', 'https'):
             self.is_remote = True
         else:
@@ -60,9 +68,6 @@ class MRFOpen:
         if self.suffix not in ('.json.gz', '.json'):
             log.critical(f'Not JSON: {self.loc}')
             raise Exception
-
-        self.r = None
-        self.f = None
 
     def __enter__(self):
 
@@ -83,6 +88,7 @@ class MRFOpen:
 
         elif self.suffix == '.json':
             if self.is_remote:
+                self.r.raw.decode_content = True
                 self.f = self.r.raw
             else:
                 self.f = open(self.loc, 'r')
@@ -103,14 +109,22 @@ class Flattener:
     Bundled methods for handling the flattening
     of streamed JSON.
     """
-    
-    def __init__(self, code_set = None, npi_set = None):
-        self.npi_set = npi_set
-        self.code_set = code_set
 
-        self.provider_references = None
+    def __init__(
+        self, 
+        code_set = None, 
+        npi_set = None
+    ):
+        """
+
+        """
+        self.npi_set = {} if npi_set is None else npi_set
+        self.code_set = {} if code_set is None else code_set
+
+        self.local_provider_references = None
+        self.remote_provider_references = []
+
         self.provider_reference_map = None
-
         self.root_written = False
         self.in_network_item = None
 
@@ -120,6 +134,7 @@ class Flattener:
 
 
     def ffwd(self, to_row):
+        """Jump to later in the parsing stream"""
         while self.current_row != to_row:
             self.current_row = next(self.parser)
 
@@ -131,8 +146,9 @@ class Flattener:
             self.current_row = (prefix, event, value)
 
             if (
-                (prefix, event, value) == ('', 'map_key', 'provider_references')
-                or (prefix, event, value) == ('', 'map_key', 'in_network')
+                (prefix, event, value) in (
+                    ('', 'map_key', 'provider_references'),
+                    ('', 'map_key', 'in_network'))
             ):
 
                 root_dict = builder.value
@@ -153,64 +169,59 @@ class Flattener:
         for prefix, event, value in self.parser:
             self.current_row = (prefix, event, value)
 
-            if (prefix, event, value) == ('provider_references', 'end_array', None):
-
-                provider_references = builder.value
-                provider_reference_map = {
-                    pref['provider_group_id']: pref['provider_groups'] for pref in provider_references
-                }
-
-                self.provider_references = provider_references
-                self.provider_reference_map = provider_reference_map
+            if (
+                (prefix, event, value) == ('provider_references', 'end_array', None)
+            ):
+                self.local_provider_references = builder.value
 
                 return
 
-            # Filter out unwanted NPI numbers
-            if prefix.endswith('npi.item'):
-                if (
-                    self.npi_set 
-                    and value not in self.npi_set
-                ):
-                    continue
+            elif (
+                prefix.endswith('npi.item')
+                and self.npi_set
+                and value not in self.npi_set
+            ):
+                continue
 
-            if (
-                prefix.endswith('provider_groups.item') 
+            elif (
+                prefix.endswith('provider_groups.item')
                 and event == 'end_map'
             ):
                 if not builder.value[-1].get('provider_groups')[-1]['npi']:
                     builder.value[-1]['provider_groups'].pop()
 
-            if (
+            elif (
                 prefix.endswith('provider_references.item') 
                 and event == 'end_map'
             ):
-                if not builder.value[-1].get('provider_groups'):
+                if builder.value and builder.value[-1].get('location'):
+                    self.remote_provider_references.append(builder.value.pop())
+
+                elif not builder.value[-1].get('provider_groups'):
                     builder.value.pop()
 
             builder.event(event, value)
 
 
-    def gather_remote_provider_references(self):
-        new_provider_references = []
+    def build_remote_provider_references(self):
 
-        for pref in new_provider_references:
+        for pref in self.remote_provider_references:
 
             loc = pref.get('location')
-
-            if not loc:
-                new_provider_references.append(pref)
-                continue
+            provider_group_id = pref.get('provider_group_id')
 
             with MRFOpen(loc) as f:
-
                 builder = ijson.ObjectBuilder()
 
                 parser = ijson.parse(f, use_float = True)
                 for prefix, event, value in parser:
 
-                    if prefix.endswith('npi.item'):
-                        if value not in npi_set:
-                            continue
+                    if (
+                        prefix.endswith('npi.item') 
+                        and self.npi_set
+                        and value not in self.npi_set
+                    ):
+                        continue
 
                     elif (
                         prefix.endswith('provider_groups.item') 
@@ -221,12 +232,16 @@ class Flattener:
 
                     builder.event(event, value)
 
-                if builder.value.get('provider_groups'):
-                    pref['provider_groups'] = builder.value['provider_groups']
-                    pref.pop('location')
-                    new_provider_references.append(pref)
+                builder.value['provider_group_id'] = pref['provider_group_id']
+                self.local_provider_references.append(builder.value)
 
-        return new_provider_references
+        self.remote_provider_references == None
+
+
+    def make_provider_ref_map(self):
+        self.provider_reference_map = {
+            pref['provider_group_id']: pref['provider_groups'] for pref in self.local_provider_references
+        }
 
 
     def build_next_in_network_item(self):
@@ -239,33 +254,34 @@ class Flattener:
                 return
 
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
+                log.info(f"Found: {billing_code_tup}")
                 self.in_network_item = builder.value
-                log.info(f'Found: {billing_code_type} {billing_code}')
                 return
 
             elif (
                 prefix.endswith('negotiated_rates') 
                 and event == 'start_array'
             ):
-                if self.code_set:
-                    billing_code_type = builder.value['billing_code_type']
-                    billing_code = str(builder.value['billing_code'])
-                    if (billing_code_type, billing_code) not in self.code_set:
-                        log.debug(f'Skipping code: {billing_code_type} {billing_code}')
-                        self.ffwd(('in_network.item', 'end_map', None))
+                billing_code_type = builder.value['billing_code_type']
+                billing_code = str(builder.value['billing_code'])
+                billing_code_tup = billing_code_type, billing_code
 
-                        return
+                if (
+                    self.code_set
+                    and billing_code_tup not in self.code_set
+                ):
+                    log.debug(f'Skipping: {billing_code_tup}')
+                    self.ffwd(('in_network.item', 'end_map', None))
 
-            # If no negotiated rates that match the criteria, return nothing
             elif (
                 prefix.endswith('negotiated_rates') 
                 and event == 'end_array'
+                and self.code_set
+                and not builder.value['negotiated_rates']
             ):
-                if not builder.value['negotiated_rates']:
-                    log.info(f'Found but no rates for: {billing_code_type} {billing_code}')
-                    self.ffwd(('in_network.item', 'end_map', None))
-
-                    return
+                log.info(f"No rates for {billing_code_tup}")
+                self.ffwd(('in_network.item', 'end_map', None))
+                return
 
             elif (
                 prefix.endswith('negotiated_rates.item') 
@@ -273,21 +289,17 @@ class Flattener:
             ):
                 provider_groups = []
 
-            # Add the groups in the provider_reference to the existing provgroups
-            elif prefix.endswith('provider_references.item'):
-                if (
-                    self.provider_reference_map 
-                    and (grps := self.provider_reference_map.get(value))
-                ):
-                    provider_groups.extend(grps)
+            elif (
+                self.provider_reference_map 
+                and prefix.endswith('provider_references.item')
+                and (grps := self.provider_reference_map.get(value))
+            ):
+                provider_groups.extend(grps)
 
-            # Merge the provgroups array if the existing provider_groups
-            # if either exist
             elif (
                 prefix.endswith('negotiated_rates.item') 
                 and event == 'end_map'
             ):
-
                 if builder.value['negotiated_rates'][-1].get('provider_references'):
                     builder.value['negotiated_rates'][-1].pop('provider_references')
 
@@ -300,26 +312,24 @@ class Flattener:
             elif (
                 prefix.endswith('provider_groups.item') 
                 and event == 'end_map'
+                and not builder.value['negotiated_rates'][-1]['provider_groups'][-1]['npi']
             ):
-                if not builder.value['negotiated_rates'][-1]['provider_groups'][-1]['npi']:
-                    builder.value['negotiated_rates'][-1]['provider_groups'].pop()
+                builder.value['negotiated_rates'][-1]['provider_groups'].pop()
 
-            # Skip NPI numbers not in the list
             elif prefix.endswith('npi.item'):
                 if (
-                    npi_list 
-                    and value not in npi_list
+                    self.npi_set 
+                    and value not in self.npi_set
                 ):
                     continue
 
-            # Make sure service codes are integers
             elif prefix.endswith('service_code.item'):
-                builder.event(event, int(value))
-                continue
-
+                try:
+                    value = int(value)
+                except ValueError:
+                    pass
 
             builder.event(event, value)
-            # print(builder.value)
 
 
     def hashdict(self, data_dict):
@@ -359,6 +369,8 @@ class Flattener:
             for provider_group in neg_rate['provider_groups']:
                 provider_group_vals = {
                     'npi_numbers':               provider_group['npi'],
+                    'tin_type':                  provider_group['tin']['type'],
+                    'tin_value':                 provider_group['tin']['value'],
                     'negotiated_rates_hash_key': neg_rates_hash_key,
                     'in_network_hash_key':       in_network_hash_key,
                     'root_hash_key':             self.root_hash_key,
@@ -375,9 +387,9 @@ class Flattener:
                     'negotiated_rate':           neg_price['negotiated_rate'],
                     'in_network_hash_key':       in_network_hash_key,
                     'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'service_code':              neg_price.get('service_code'),
+                    'service_code':              None if not (v := neg_price.get('service_code')) else v,
                     'additional_information':    neg_price.get('additional_information'),
-                    'billing_code_modifier':     neg_price.get('billing_code_modifier'),
+                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
                     'root_hash_key':             self.root_hash_key,
                 }
 
@@ -433,3 +445,8 @@ class Flattener:
 
 
 
+# Basic template
+# Make a builder
+# Loop through and update current row
+# Skip some rows
+# Break at a certain point
