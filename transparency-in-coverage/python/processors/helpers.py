@@ -1,45 +1,41 @@
-import json
 import os
 import csv
 import glob
 import hashlib
+import json
 import ijson
 import requests
-import logging
 import gzip
-from urllib.parse import urlparse
-from pathlib import Path
+import urllib
+import pathlib
+
 from schema import SCHEMA
 
+import logging
 log = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
-
 file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.DEBUG)
-
 log.addHandler(file_handler)
 
+from collections import namedtuple
+Row = namedtuple('Row', ['filename', 'data'])
 
-def import_billing_codes(filename):
+
+def data_import(filename):
+    """
+    Convenience function for importing codes and NPIs
+    """
+
     with open(filename, 'r') as f:
         reader = csv.DictReader(f)
-        codes = []
-        for row in reader:
-            codes.append((row['billing_code_type'], row['billing_code']))
-    return codes
+        fieldnames = reader.fieldnames
+        objs = set()
 
-
-def import_set(filename, ints=True):
-    with open(filename, 'r') as f:
-        reader = csv.reader(f)
-        items = set()
         for row in reader:
-            item = row[0]
-            if ints:
-                items.add(int(item))
-            else:
-                items.add(str(item))
-    return items
+            objs.add(tuple(row[f] for f in fieldnames))
+
+        return objs
 
 
 class MRFOpen:
@@ -51,7 +47,7 @@ class MRFOpen:
     def __init__(self, loc):
 
         self.loc = loc
-        self.parsed_url = urlparse(self.loc)
+        self.parsed_url = urllib.parse.urlparse(self.loc)
 
         # Figure out if the file is local or a URL
         if self.parsed_url.scheme in ('http', 'https'):
@@ -59,7 +55,7 @@ class MRFOpen:
         else:
             self.is_remote = False
 
-        self.suffix = ''.join(Path(self.parsed_url.path).suffixes)
+        self.suffix = ''.join(pathlib.Path(self.parsed_url.path).suffixes)
 
         if self.suffix not in ('.json.gz', '.json'):
             log.critical(f'Not JSON: {self.loc}')
@@ -102,10 +98,13 @@ class MRFOpen:
             self.f.close()
 
 
-class BlockFlattener:
-
+class Flattener:
+    """
+    Bundled methods for handling the flattening
+    of streamed JSON.
+    """
+    
     def __init__(self, code_set = None, npi_set = None):
-
         self.npi_set = npi_set
         self.code_set = code_set
 
@@ -139,8 +138,8 @@ class BlockFlattener:
                 root_dict = builder.value
 
                 self.root_hash_key = self.hashdict(root_dict)
-
                 root_dict['root_hash_key'] = self.root_hash_key
+
                 self.root_dict = root_dict
 
                 return
@@ -254,6 +253,7 @@ class BlockFlattener:
                     if (billing_code_type, billing_code) not in self.code_set:
                         log.debug(f'Skipping code: {billing_code_type} {billing_code}')
                         self.ffwd(('in_network.item', 'end_map', None))
+
                         return
 
             # If no negotiated rates that match the criteria, return nothing
@@ -264,6 +264,7 @@ class BlockFlattener:
                 if not builder.value['negotiated_rates']:
                     log.info(f'Found but no rates for: {billing_code_type} {billing_code}')
                     self.ffwd(('in_network.item', 'end_map', None))
+
                     return
 
             elif (
@@ -322,70 +323,78 @@ class BlockFlattener:
 
 
     def hashdict(self, data_dict):
+
         if not data_dict:
             raise ValueError
 
         sorted_tups = sorted(data_dict.items())
         dict_as_bytes = json.dumps(sorted_tups).encode('utf-8')
         dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
+
         return dict_hash
 
 
     def in_network_item_to_rows(self):
+
         rows = []
 
         in_network_vals = {
-            'negotiation_arrangement': self.in_network_item['negotiation_arrangement'],
-            'name': self.in_network_item['name'],
-            'billing_code_type': self.in_network_item['billing_code_type'],
+            'negotiation_arrangement':   self.in_network_item['negotiation_arrangement'],
+            'name':                      self.in_network_item['name'],
+            'billing_code_type':         self.in_network_item['billing_code_type'],
             'billing_code_type_version': self.in_network_item['billing_code_type_version'],
-            'billing_code': self.in_network_item['billing_code'],
-            'description': self.in_network_item['description'],
-            'root_hash_key': self.root_hash_key,
+            'billing_code':              self.in_network_item['billing_code'],
+            'description':               self.in_network_item['description'],
+            'root_hash_key':             self.root_hash_key,
         }
 
         in_network_hash_key = self.hashdict(in_network_vals)
         in_network_vals['in_network_hash_key'] = in_network_hash_key
 
-        rows.append(('in_network', in_network_vals))
+        rows.append(Row('in_network', in_network_vals))
 
         for neg_rate in self.in_network_item.get('negotiated_rates', []):
             neg_rates_hash_key = self.hashdict(neg_rate)
 
-            for provgroup in neg_rate['provider_groups']:
-                provgroup_vals = {
-                    'npi_numbers': provgroup['npi'],
+            for provider_group in neg_rate['provider_groups']:
+                provider_group_vals = {
+                    'npi_numbers':               provider_group['npi'],
                     'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'in_network_hash_key': in_network_hash_key,
-                    'root_hash_key': self.root_hash_key,
+                    'in_network_hash_key':       in_network_hash_key,
+                    'root_hash_key':             self.root_hash_key,
                 }
-                rows.append(('provider_groups', provgroup_vals))
+
+                rows.append(Row('provider_groups', provider_group_vals))
 
             for neg_price in neg_rate['negotiated_prices']:
+
                 neg_price_vals = {
-                    'billing_class': neg_price['billing_class'],
-                    'negotiated_type': neg_price['negotiated_type'],
-                    'service_code': sc if (sc := neg_price.get('service_code', None)) else None,
-                    'expiration_date': neg_price['expiration_date'],
-                    'additional_information': neg_price.get('additional_information', None),
-                    'billing_code_modifier': bcm if (bcm := neg_price.get('billing_code_modifier', None)) else None,
-                    'negotiated_rate': neg_price['negotiated_rate'],
-                    'root_hash_key': self.root_hash_key,
-                    'in_network_hash_key': in_network_hash_key,
+                    'billing_class':             neg_price['billing_class'],
+                    'negotiated_type':           neg_price['negotiated_type'],
+                    'expiration_date':           neg_price['expiration_date'],
+                    'negotiated_rate':           neg_price['negotiated_rate'],
+                    'in_network_hash_key':       in_network_hash_key,
                     'negotiated_rates_hash_key': neg_rates_hash_key,
+                    'service_code':              neg_price.get('service_code'),
+                    'additional_information':    neg_price.get('additional_information'),
+                    'billing_code_modifier':     neg_price.get('billing_code_modifier'),
+                    'root_hash_key':             self.root_hash_key,
                 }
-                rows.append(('negotiated_prices', neg_price_vals))
+
+                rows.append(Row('negotiated_prices', neg_price_vals))
 
         for bundle in self.in_network_item.get('bundled_codes', []):
+
             bundle_vals = {
-                'billing_code_type': bundle['billing_code_type'],
+                'billing_code_type':         bundle['billing_code_type'],
                 'billing_code_type_version': bundle['billing_code_type_version'],
-                'billing_code': bundle['billing_code'],
-                'description': bundle['description'],
-                'root_hash_key': self.root_hash_key,
-                'in_network_hash_key': in_network_hash_key,
+                'billing_code':              bundle['billing_code'],
+                'description':               bundle['description'],
+                'in_network_hash_key':       in_network_hash_key,
+                'root_hash_key':             self.root_hash_key,
             }
-            rows.append(('bundled_codes', bundle_vals))
+
+            rows.append(Row('bundled_codes', bundle_vals))
 
         return rows
 
@@ -399,10 +408,12 @@ class BlockFlattener:
             rows = self.in_network_item_to_rows()
 
             if not self.root_written:
-                rows.append(('root', self.root_dict))
+                rows.append(Row('root', self.root_dict))
 
             for row in rows:
-                filename, row_data = row
+                filename = row.filename
+                data = row.data
+
                 fieldnames = SCHEMA[filename]
                 file_loc = f'{out_dir}/{filename}.csv'
                 file_exists = os.path.exists(file_loc)
@@ -415,7 +426,7 @@ class BlockFlattener:
                     if not file_exists:
                         writer.writeheader()
 
-                    writer.writerow(row_data)
+                    writer.writerow(data)
 
             self.in_network_item = None
             self.root_written = True

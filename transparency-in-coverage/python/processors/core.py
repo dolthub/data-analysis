@@ -1,10 +1,10 @@
-from helpers import BlockFlattener, MRFOpen
+from helpers import Flattener, MRFOpen
 
 def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
     with MRFOpen(loc) as f:
 
-        flattener = BlockFlattener(code_set, npi_set)
+        flattener = Flattener(code_set, npi_set)
         flattener.init_parser(f)
 
         flattener.build_root()
@@ -29,7 +29,6 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
             while flattener.current_row != ('in_network', 'end_array', None):
                 flattener.build_next_in_network_item()
                 flattener.write_in_network_item(out_dir)
-
             return
         except StopIteration:
             pass
@@ -41,5 +40,4 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
         while flattener.current_row != ('in_network', 'end_array', None):
             flattener.build_next_in_network_item()
             flattener.write_in_network_item(out_dir)
-
         return
