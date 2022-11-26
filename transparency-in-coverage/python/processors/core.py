@@ -34,20 +34,17 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         try:
             flattener.ffwd(('in_network', 'start_array', None))
-            while flattener.current_row != ('in_network', 'end_array', None):
-                # Build and write the in-network items and 
-                # all related data
-                flattener.build_next_in_network_item()
-                flattener.write_in_network_item(out_dir)
+            for item in flattener.in_network_items():
+                flattener.write_in_network_item(item, out_dir)
             return
         except StopIteration:
             pass
 
     with MRFOpen(loc) as f:
+
         flattener.init_parser(f)
 
         flattener.ffwd(('in_network', 'start_array', None))
-        while flattener.current_row != ('in_network', 'end_array', None):
-            flattener.build_next_in_network_item()
-            flattener.write_in_network_item(out_dir)
-        return
+        for item in flatter.in_network_items():
+            flattener.write_in_network_item(item, out_dir)
+
