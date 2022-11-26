@@ -4,6 +4,7 @@ import glob
 import hashlib
 import json
 
+
 import ijson
 import requests
 import gzip
@@ -11,7 +12,10 @@ import urllib
 import pathlib
 import logging
 
-from schema import SCHEMA
+
+from .schema import SCHEMA
+from collections import namedtuple
+
 
 log = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
@@ -21,7 +25,6 @@ file_handler.setLevel(logging.DEBUG)
 
 log.addHandler(file_handler)
 
-from collections import namedtuple
 Row = namedtuple('Row', ['filename', 'data'])
 
 
@@ -41,6 +44,8 @@ def data_import(filename):
         return objs
 
 
+
+# Here brevity is perhaps not a virtue. What does MRF stand for?
 class MRFOpen:
     """
     Machine Readable File opener.
@@ -103,9 +108,17 @@ class MRFFlattener:
     of streamed JSON.
     """
 
+    # Type hints can go a long way towards making something easier to understand,
+    # and less error-prone.
+    # Ex.:
+    # >>> def __init__(
+    # >>>     self,
+    # >>>     code_set: list[tuple[str, str]] = None,
+    # >>>     npi_set: set[int] = None
+    # >>> ):
     def __init__(
-        self, 
-        code_set = None, 
+        self,
+        code_set = None,
         npi_set = None
     ):
 
@@ -143,6 +156,8 @@ class MRFFlattener:
 
             builder.event(event, value)
 
+    def is_at_end_of_in_network_array(self) -> bool:
+        return self.current_row == ('in_network', 'end_array', None)
 
     def build_local_provider_references(self):
         builder = ijson.ObjectBuilder()
@@ -171,7 +186,7 @@ class MRFFlattener:
                     builder.value[-1]['provider_groups'].pop()
 
             elif (
-                prefix.endswith('provider_references.item') 
+                prefix.endswith('provider_references.item')
                 and event == 'end_map'
             ):
                 if builder.value and builder.value[-1].get('location'):
@@ -200,14 +215,14 @@ class MRFFlattener:
                     for prefix, event, value in parser:
 
                         if (
-                            prefix.endswith('npi.item') 
+                            prefix.endswith('npi.item')
                             and self.npi_set
                             and not value in self.npi_set
                         ):
                             continue
 
                         elif (
-                            prefix.endswith('provider_groups.item') 
+                            prefix.endswith('provider_groups.item')
                             and event == 'end_map'
                         ):
                             if not builder.value['provider_groups'][-1]['npi']:
@@ -216,11 +231,11 @@ class MRFFlattener:
                         builder.event(event, value)
 
                     builder.value['provider_group_id'] = pref['provider_group_id']
-                    
+
                 self.local_provider_references.append(builder.value)
             except:
                 pass
-                
+
 
         self.remote_provider_references = None
 
@@ -251,7 +266,7 @@ class MRFFlattener:
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Found: {billing_code_tup}")
                 yield builder.value.pop()
-                
+
             elif (
                 (prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
             ):
@@ -263,7 +278,7 @@ class MRFFlattener:
                     self.code_set
                     and billing_code_tup not in self.code_set
                 ):
-                    log.debug(f'Skipping: {billing_code_tup}')                    
+                    log.debug(f'Skipping: {billing_code_tup}')
                     self.ffwd(('in_network.item', 'end_map', None))
                     builder.value.pop()
                     builder.containers.pop()
@@ -281,20 +296,20 @@ class MRFFlattener:
                 continue
 
             elif (
-                prefix.endswith('negotiated_rates.item') 
+                prefix.endswith('negotiated_rates.item')
                 and event == 'start_map'
             ):
                 provider_groups = []
 
             elif (
-                self.provider_references_map 
+                self.provider_references_map
                 and prefix.endswith('provider_references.item')
                 and (grps := self.provider_references_map.get(value))
             ):
                 provider_groups.extend(grps)
 
             elif (
-                prefix.endswith('negotiated_rates.item') 
+                prefix.endswith('negotiated_rates.item')
                 and event == 'end_map'
             ):
 
@@ -308,7 +323,7 @@ class MRFFlattener:
                     builder.value[-1]['negotiated_rates'].pop()
 
             elif (
-                prefix.endswith('provider_groups.item') 
+                prefix.endswith('provider_groups.item')
                 and event == 'end_map'
                 # and builder.value
                 and not builder.value[-1]['negotiated_rates'][-1]['provider_groups'][-1]['npi']
@@ -317,7 +332,7 @@ class MRFFlattener:
 
             elif prefix.endswith('npi.item'):
                 if (
-                    self.npi_set 
+                    self.npi_set
                     and value not in self.npi_set
                 ):
                     continue
@@ -328,7 +343,7 @@ class MRFFlattener:
                 except ValueError:
                     pass
 
-            
+
             builder.event(event, value)
 
 
@@ -423,6 +438,9 @@ class MRFWriter:
         return rows
 
 
+    # Can often be simpler when input is separate from output.
+    # So flatter just flattens and returns the structure it created.
+    # Some other class or function can handle output
     def write_in_network_item(self, item, out_dir):
 
         if not os.path.exists(out_dir):

@@ -9,6 +9,14 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
     with MRFOpen(loc) as f:
 
         flattener = MRFFlattener(code_set, npi_set)
+        # Lines 20-30 below involve this external module, core,
+        # having to know a lot about the internal workings of Flattener.
+        # How do I know that after constructing, I also have to init parser,
+        # then build root, then build provider references, etc.
+        # Ideally everything in this class could be "private", only exposing
+        # the functions that an external user would want to use, in a way
+        # that ideally could be understood without knowing the internal
+        # workings of the class.
         flattener.init_parser(f)
 
         # Build (but don't write) the root data
@@ -45,6 +53,6 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
         flattener.init_parser(f)
 
         flattener.ffwd(('', 'map_key', 'in_network'))
-        for item in flatter.in_network_items():
+        for item in flattener.in_network_items():
             writer.write_in_network_item(item, out_dir)
 

@@ -10,6 +10,6 @@ Install requirements with `pip install -r requirements.txt`
 
 Run unit tests with the following command:
 
-```python
+```shell
 python -m unittest
 ```
