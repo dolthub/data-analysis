@@ -198,11 +198,9 @@ class Flattener:
 
 
     def build_remote_provider_references(self):
-
         for pref in self.remote_provider_references:
 
             loc = pref.get('location')
-            provider_group_id = pref.get('provider_group_id')
 
             with MRFOpen(loc) as f:
                 builder = ijson.ObjectBuilder()
@@ -229,7 +227,7 @@ class Flattener:
                 builder.value['provider_group_id'] = pref['provider_group_id']
                 self.local_provider_references.append(builder.value)
 
-        self.remote_provider_references == None
+        self.remote_provider_references = None
 
 
     def make_provider_ref_map(self):
