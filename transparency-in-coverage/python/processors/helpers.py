@@ -3,12 +3,17 @@ import csv
 import glob
 import hashlib
 import json
+from io import FileIO
+
 import ijson
 import requests
 import gzip
 import urllib
 import pathlib
 import logging
+
+from requests import Response
+
 from .schema import SCHEMA
 from collections import namedtuple
 
@@ -39,24 +44,21 @@ def data_import(filename):
 
         return objs
 
+
+# Here brevity is perhaps not a virtue. What does MRF stand for?
 class MRFOpen:
     """
     Context for cleanly opening and handling JSON MRFs.
     Will open remote and local files alike.
     """
 
-    def __init__(self, loc):
-
-        self.r = None
-        self.f = None
+    def __init__(self, loc: str):
+        # full word better than single-letter abbreviation
+        self.r: Response | None = None
+        self.f: FileIO | None = None
         self.loc = loc
 
         self.parsed_url = urllib.parse.urlparse(self.loc)
-
-        if self.parsed_url.scheme in ('http', 'https'):
-            self.is_remote = True
-        else:
-            self.is_remote = False
 
         self.suffix = ''.join(pathlib.Path(self.parsed_url.path).suffixes)
 
@@ -65,13 +67,13 @@ class MRFOpen:
             raise Exception
 
     def __enter__(self):
-
-        if self.is_remote:
+        is_remote = self.parsed_url.scheme in ('http', 'https')
+        if is_remote:
             self.r = requests.get(self.loc, stream = True)
 
         if self.suffix == '.json.gz':
 
-            if self.is_remote:
+            if self.r:
                 self.f = gzip.GzipFile(fileobj = self.r.raw)
             else:
                 self.f = gzip.open(self.loc, 'r')
@@ -82,7 +84,7 @@ class MRFOpen:
                 log.critical(e)
 
         elif self.suffix == '.json':
-            if self.is_remote:
+            if self.r:
                 self.r.raw.decode_content = True
                 self.f = self.r.raw
             else:
@@ -99,6 +101,11 @@ class MRFOpen:
             self.f.close()
 
 
+# The main issue with this class is that it has a lot of
+# internal state. It then has a lot of methods which change
+# that state, and it's not obvious in what order those methods
+# should be called. A cleaner pattern is to write it in a way
+# where code outside never has to be aware of that state.
 class Flattener:
     """
     Bundled methods for handling the flattening
