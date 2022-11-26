@@ -223,6 +223,7 @@ class MRFFlattener:
         self.build_local_provider_references()
         self.build_remote_provider_references()
 
+
         self.provider_references_map = {
             pref['provider_group_id']: pref['provider_groups'] for pref in self.local_provider_references
         }
@@ -241,32 +242,39 @@ class MRFFlattener:
 
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Found: {billing_code_tup}")
-                yield builder.value
-
+                yield builder.value.pop()
+                
             elif (
                 prefix.endswith('negotiated_rates') 
                 and event == 'start_array'
+                and builder.value
             ):
-                billing_code_type = builder.value['billing_code_type']
-                billing_code = str(builder.value['billing_code'])
+                billing_code_type = builder.value[-1]['billing_code_type']
+                billing_code = str(builder.value[-1]['billing_code'])
                 billing_code_tup = billing_code_type, billing_code
 
                 if (
                     self.code_set
                     and billing_code_tup not in self.code_set
                 ):
-                    log.debug(f'Skipping: {billing_code_tup}')
+                    log.info(f'Skipping: {billing_code_tup}')                    
                     self.ffwd(('in_network.item', 'end_map', None))
+                    builder.value.pop()
+                    builder.containers.pop()
+                    continue
 
             elif (
                 prefix.endswith('negotiated_rates') 
                 and event == 'end_array'
                 and self.code_set
-                and not builder.value['negotiated_rates']
+                and builder.value
+                and not builder.value[-1]['negotiated_rates']
             ):
                 log.info(f"No rates for {billing_code_tup}")
                 self.ffwd(('in_network.item', 'end_map', None))
-                return
+                builder.value.pop()
+                builder.containers.pop()
+                continue
 
             elif (
                 prefix.endswith('negotiated_rates.item') 
@@ -285,21 +293,23 @@ class MRFFlattener:
                 prefix.endswith('negotiated_rates.item') 
                 and event == 'end_map'
             ):
-                if builder.value['negotiated_rates'][-1].get('provider_references'):
-                    builder.value['negotiated_rates'][-1].pop('provider_references')
 
-                builder.value['negotiated_rates'][-1].setdefault('provider_groups', [])
-                builder.value['negotiated_rates'][-1]['provider_groups'].extend(provider_groups)
+                if builder.value[-1]['negotiated_rates'][-1].get('provider_references'):
+                    builder.value[-1]['negotiated_rates'][-1].pop('provider_references')
 
-                if not builder.value['negotiated_rates'][-1].get('provider_groups'):
-                    builder.value['negotiated_rates'].pop()
+                builder.value[-1]['negotiated_rates'][-1].setdefault('provider_groups', [])
+                builder.value[-1]['negotiated_rates'][-1]['provider_groups'].extend(provider_groups)
+
+                if not builder.value[-1]['negotiated_rates'][-1].get('provider_groups'):
+                    builder.value[-1]['negotiated_rates'].pop()
 
             elif (
                 prefix.endswith('provider_groups.item') 
                 and event == 'end_map'
-                and not builder.value['negotiated_rates'][-1]['provider_groups'][-1]['npi']
+                and builder.value
+                and not builder.value[-1]['negotiated_rates'][-1]['provider_groups'][-1]['npi']
             ):
-                builder.value['negotiated_rates'][-1]['provider_groups'].pop()
+                builder.value[-1]['negotiated_rates'][-1]['provider_groups'].pop()
 
             elif prefix.endswith('npi.item'):
                 if (
@@ -314,6 +324,7 @@ class MRFFlattener:
                 except ValueError:
                     pass
 
+            
             builder.event(event, value)
 
 

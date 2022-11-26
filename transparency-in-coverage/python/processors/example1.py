@@ -7,9 +7,9 @@ code_set = None
 npi_set = None
 
 # code_set = data_import("data/example_billing_codes.csv")
-npi_set = set(int(n[0]) for n in data_import("data/example_npi.csv"))
-npi_set.add(1043450828)
-# code_set = {('MS-DRG', '0964'),('CPT', '27447')}
+# npi_set = set(int(n[0]) for n in data_import("data/example_npi.csv"))
+npi_set = set({1780763284, 1356891600})
+code_set = {('MS-DRG', '0001'), ('MS-DRG', '0687')}
 
 urls = [
     "https://uhc-tic-mrf.azureedge.net/public-mrf/2022-10-01/2022-10-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Saint-Louis-University_GSP-901-MD47_in-network-rates.json.gz",
