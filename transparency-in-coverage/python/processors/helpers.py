@@ -9,7 +9,7 @@ import gzip
 import urllib
 import pathlib
 import logging
-from schema import SCHEMA
+from .schema import SCHEMA
 from collections import namedtuple
 
 
