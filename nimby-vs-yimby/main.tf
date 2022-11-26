@@ -22,7 +22,7 @@ resource "digitalocean_droplet" "server" {
   image     = "debian-11-x64"
   name      = "dolt-jupyter-housingprices"
   region    = "syd1"
-  size      = "m-8vcpu-64gb"
+  size      = "m-32vcpu-256gb"
   ssh_keys  = [ for key in data.digitalocean_ssh_keys.keys.ssh_keys: key.fingerprint ]
   user_data = file("provision.sh")
 }
