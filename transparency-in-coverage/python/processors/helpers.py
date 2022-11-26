@@ -109,13 +109,14 @@ class MRFFlattener:
         npi_set = None
     ):
 
-        self.npi_set = {} if npi_set is None else npi_set
-        self.code_set = {} if code_set is None else code_set
+        self.npi_set = npi_set
+        self.code_set = code_set
 
         self.local_provider_references = None
         self.remote_provider_references = []
 
         self.provider_references_map = None
+
 
     def init_parser(self, f):
         self.parser = ijson.parse(f, use_float = True)
@@ -158,7 +159,7 @@ class MRFFlattener:
             elif (
                 prefix.endswith('npi.item')
                 and self.npi_set
-                and value not in self.npi_set
+                and not value in self.npi_set
             ):
                 continue
 
@@ -179,6 +180,7 @@ class MRFFlattener:
                 elif not builder.value[-1].get('provider_groups'):
                     builder.value.pop()
 
+
             builder.event(event, value)
 
 
@@ -190,30 +192,35 @@ class MRFFlattener:
 
             loc = pref.get('location')
 
-            with MRFOpen(loc) as f:
-                builder = ijson.ObjectBuilder()
+            try:
+                with MRFOpen(loc) as f:
+                    builder = ijson.ObjectBuilder()
 
-                parser = ijson.parse(f, use_float = True)
-                for prefix, event, value in parser:
+                    parser = ijson.parse(f, use_float = True)
+                    for prefix, event, value in parser:
 
-                    if (
-                        prefix.endswith('npi.item') 
-                        and self.npi_set
-                        and value not in self.npi_set
-                    ):
-                        continue
+                        if (
+                            prefix.endswith('npi.item') 
+                            and self.npi_set
+                            and not value in self.npi_set
+                        ):
+                            continue
 
-                    elif (
-                        prefix.endswith('provider_groups.item') 
-                        and event == 'end_map'
-                    ):
-                        if not builder.value['provider_groups'][-1]['npi']:
-                            builder.value['provider_groups'].pop()
+                        elif (
+                            prefix.endswith('provider_groups.item') 
+                            and event == 'end_map'
+                        ):
+                            if not builder.value['provider_groups'][-1]['npi']:
+                                builder.value['provider_groups'].pop()
 
-                    builder.event(event, value)
+                        builder.event(event, value)
 
-                builder.value['provider_group_id'] = pref['provider_group_id']
+                    builder.value['provider_group_id'] = pref['provider_group_id']
+                    
                 self.local_provider_references.append(builder.value)
+            except:
+                pass
+                
 
         self.remote_provider_references = None
 
@@ -223,19 +230,20 @@ class MRFFlattener:
         self.build_local_provider_references()
         self.build_remote_provider_references()
 
-
         self.provider_references_map = {
             pref['provider_group_id']: pref['provider_groups'] for pref in self.local_provider_references
         }
 
 
     def in_network_items(self):
-        """Generator that yields in-network items one at a time
+        """
+        Generator that yields in-network items one at a time
         """
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
             self.current_row = (prefix, event, value)
+            # print(self.current_row)
 
             if (prefix, event, value) == ('in_network', 'end_array', None):
                 return
@@ -245,9 +253,7 @@ class MRFFlattener:
                 yield builder.value.pop()
                 
             elif (
-                prefix.endswith('negotiated_rates') 
-                and event == 'start_array'
-                and builder.value
+                (prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
             ):
                 billing_code_type = builder.value[-1]['billing_code_type']
                 billing_code = str(builder.value[-1]['billing_code'])
@@ -257,17 +263,14 @@ class MRFFlattener:
                     self.code_set
                     and billing_code_tup not in self.code_set
                 ):
-                    log.info(f'Skipping: {billing_code_tup}')                    
+                    log.debug(f'Skipping: {billing_code_tup}')                    
                     self.ffwd(('in_network.item', 'end_map', None))
                     builder.value.pop()
                     builder.containers.pop()
                     continue
 
             elif (
-                prefix.endswith('negotiated_rates') 
-                and event == 'end_array'
-                and self.code_set
-                and builder.value
+                (prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
                 and not builder.value[-1]['negotiated_rates']
             ):
                 log.info(f"No rates for {billing_code_tup}")
@@ -307,7 +310,7 @@ class MRFFlattener:
             elif (
                 prefix.endswith('provider_groups.item') 
                 and event == 'end_map'
-                and builder.value
+                # and builder.value
                 and not builder.value[-1]['negotiated_rates'][-1]['provider_groups'][-1]['npi']
             ):
                 builder.value[-1]['negotiated_rates'][-1]['provider_groups'].pop()
