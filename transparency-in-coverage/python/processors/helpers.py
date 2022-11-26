@@ -3,7 +3,6 @@ import csv
 import glob
 import hashlib
 import json
-from io import FileIO
 
 import ijson
 import requests
@@ -12,11 +11,7 @@ import urllib
 import pathlib
 import logging
 
-from requests import Response
-
-from .schema import SCHEMA
-from collections import namedtuple
-
+from schema import SCHEMA
 
 log = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
@@ -26,6 +21,7 @@ file_handler.setLevel(logging.DEBUG)
 
 log.addHandler(file_handler)
 
+from collections import namedtuple
 Row = namedtuple('Row', ['filename', 'data'])
 
 
@@ -45,17 +41,17 @@ def data_import(filename):
         return objs
 
 
-# Here brevity is perhaps not a virtue. What does MRF stand for?
 class MRFOpen:
     """
+    Machine Readable File opener.
+
     Context for cleanly opening and handling JSON MRFs.
     Will open remote and local files alike.
     """
 
     def __init__(self, loc: str):
-        # full word better than single-letter abbreviation
-        self.r: Response | None = None
-        self.f: FileIO | None = None
+        self.response = None
+        self.fileobj = None
         self.loc = loc
 
         self.parsed_url = urllib.parse.urlparse(self.loc)
@@ -69,44 +65,39 @@ class MRFOpen:
     def __enter__(self):
         is_remote = self.parsed_url.scheme in ('http', 'https')
         if is_remote:
-            self.r = requests.get(self.loc, stream = True)
+            self.response = requests.get(self.loc, stream = True)
 
         if self.suffix == '.json.gz':
 
-            if self.r:
-                self.f = gzip.GzipFile(fileobj = self.r.raw)
+            if self.response:
+                self.fileobj = gzip.GzipFile(fileobj = self.response.raw)
             else:
-                self.f = gzip.open(self.loc, 'r')
+                self.fileobj = gzip.open(self.loc, 'r')
 
             try:
-                self.f.read(1)
+                self.fileobj.read(1)
             except Exception as e:
                 log.critical(e)
 
         elif self.suffix == '.json':
-            if self.r:
-                self.r.raw.decode_content = True
-                self.f = self.r.raw
+            if self.response:
+                self.response.raw.decode_content = True
+                self.fileobj = self.response.raw
             else:
-                self.f = open(self.loc, 'r')
+                self.fileobj = open(self.loc, 'r')
 
-        return self.f
+        return self.fileobj
 
     def __exit__(self, exc_type, exc_val, exc_tb):
 
-        if self.r:
-            self.r.close()
+        if self.response:
+            self.response.close()
 
-        if self.f:
-            self.f.close()
+        if self.fileobj:
+            self.fileobj.close()
 
 
-# The main issue with this class is that it has a lot of
-# internal state. It then has a lot of methods which change
-# that state, and it's not obvious in what order those methods
-# should be called. A cleaner pattern is to write it in a way
-# where code outside never has to be aware of that state.
-class Flattener:
+class MRFFlattener:
     """
     Bundled methods for handling the flattening
     of streamed JSON.
@@ -117,19 +108,14 @@ class Flattener:
         code_set = None, 
         npi_set = None
     ):
-        """
 
-        """
         self.npi_set = {} if npi_set is None else npi_set
         self.code_set = {} if code_set is None else code_set
 
         self.local_provider_references = None
         self.remote_provider_references = []
 
-        self.provider_reference_map = None
-        self.root_written = False
-        self.in_network_item = None
-
+        self.provider_references_map = None
 
     def init_parser(self, f):
         self.parser = ijson.parse(f, use_float = True)
@@ -152,20 +138,12 @@ class Flattener:
                     ('', 'map_key', 'provider_references'),
                     ('', 'map_key', 'in_network'))
             ):
-
-                root_dict = builder.value
-
-                self.root_hash_key = self.hashdict(root_dict)
-                root_dict['root_hash_key'] = self.root_hash_key
-
-                self.root_dict = root_dict
-
-                return
+                return builder.value
 
             builder.event(event, value)
 
 
-    def build_provider_references(self):
+    def build_local_provider_references(self):
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
@@ -205,6 +183,9 @@ class Flattener:
 
 
     def build_remote_provider_references(self):
+        """TODO: should be async function
+        """
+
         for pref in self.remote_provider_references:
 
             loc = pref.get('location')
@@ -237,13 +218,19 @@ class Flattener:
         self.remote_provider_references = None
 
 
-    def make_provider_ref_map(self):
-        self.provider_reference_map = {
+    def build_provider_references_map(self):
+
+        self.build_local_provider_references()
+        self.build_remote_provider_references()
+
+        self.provider_references_map = {
             pref['provider_group_id']: pref['provider_groups'] for pref in self.local_provider_references
         }
 
 
-    def build_next_in_network_item(self):
+    def in_network_items(self):
+        """Generator that yields in-network items one at a time
+        """
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
@@ -254,8 +241,7 @@ class Flattener:
 
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Found: {billing_code_tup}")
-                self.in_network_item = builder.value
-                return
+                yield builder.value
 
             elif (
                 prefix.endswith('negotiated_rates') 
@@ -289,9 +275,9 @@ class Flattener:
                 provider_groups = []
 
             elif (
-                self.provider_reference_map 
+                self.provider_references_map 
                 and prefix.endswith('provider_references.item')
-                and (grps := self.provider_reference_map.get(value))
+                and (grps := self.provider_references_map.get(value))
             ):
                 provider_groups.extend(grps)
 
@@ -331,6 +317,18 @@ class Flattener:
             builder.event(event, value)
 
 
+class MRFWriter:
+
+    def __init__(self, root_data):
+
+        self.root_hash_key = self.hashdict(root_data)
+        self.root_data = root_data
+        self.root_data['root_hash_key'] = self.root_hash_key
+
+
+        self.root_data_written = False
+
+
     def hashdict(self, data_dict):
 
         if not data_dict:
@@ -343,17 +341,17 @@ class Flattener:
         return dict_hash
 
 
-    def in_network_item_to_rows(self):
+    def in_network_item_to_rows(self, item):
 
         rows = []
 
         in_network_vals = {
-            'negotiation_arrangement':   self.in_network_item['negotiation_arrangement'],
-            'name':                      self.in_network_item['name'],
-            'billing_code_type':         self.in_network_item['billing_code_type'],
-            'billing_code_type_version': self.in_network_item['billing_code_type_version'],
-            'billing_code':              self.in_network_item['billing_code'],
-            'description':               self.in_network_item['description'],
+            'negotiation_arrangement':   item['negotiation_arrangement'],
+            'name':                      item['name'],
+            'billing_code_type':         item['billing_code_type'],
+            'billing_code_type_version': item['billing_code_type_version'],
+            'billing_code':              item['billing_code'],
+            'description':               item['description'],
             'root_hash_key':             self.root_hash_key,
         }
 
@@ -362,7 +360,7 @@ class Flattener:
 
         rows.append(Row('in_network', in_network_vals))
 
-        for neg_rate in self.in_network_item.get('negotiated_rates', []):
+        for neg_rate in item.get('negotiated_rates', []):
             neg_rates_hash_key = self.hashdict(neg_rate)
 
             for provider_group in neg_rate['provider_groups']:
@@ -394,7 +392,7 @@ class Flattener:
 
                 rows.append(Row('negotiated_prices', neg_price_vals))
 
-        for bundle in self.in_network_item.get('bundled_codes', []):
+        for bundle in item.get('bundled_codes', []):
 
             bundle_vals = {
                 'billing_code_type':         bundle['billing_code_type'],
@@ -410,34 +408,32 @@ class Flattener:
         return rows
 
 
-    def write_in_network_item(self, out_dir):
+    def write_in_network_item(self, item, out_dir):
 
         if not os.path.exists(out_dir):
             os.mkdir(self.out_dir)
 
-        if self.in_network_item:
-            rows = self.in_network_item_to_rows()
+        rows = self.in_network_item_to_rows(item)
 
-            if not self.root_written:
-                rows.append(Row('root', self.root_dict))
+        if not self.root_data_written:
+            rows.append(Row('root', self.root_data))
 
-            for row in rows:
-                filename = row.filename
-                data = row.data
+        for row in rows:
+            filename = row.filename
+            data = row.data
 
-                fieldnames = SCHEMA[filename]
-                file_loc = f'{out_dir}/{filename}.csv'
-                file_exists = os.path.exists(file_loc)
+            fieldnames = SCHEMA[filename]
+            file_loc = f'{out_dir}/{filename}.csv'
+            file_exists = os.path.exists(file_loc)
 
-                # TODO: this opens a file for each row
-                with open(file_loc, 'a') as f:
+            # TODO: this opens a file for each row
+            with open(file_loc, 'a') as f:
 
-                    writer = csv.DictWriter(f, fieldnames = fieldnames)
+                writer = csv.DictWriter(f, fieldnames = fieldnames)
 
-                    if not file_exists:
-                        writer.writeheader()
+                if not file_exists:
+                    writer.writeheader()
 
-                    writer.writerow(data)
+                writer.writerow(data)
 
-            self.in_network_item = None
-            self.root_written = True
+        self.root_data_written = True
