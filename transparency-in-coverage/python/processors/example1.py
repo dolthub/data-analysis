@@ -17,11 +17,9 @@ npi_set.add(6666666666)
 # code_set = {('MS-DRG', '0964'),('CPT', '27447')}
 
 urls = [
-    '/Users/alecstein/Desktop/in-network-rates-fee-for-service-single-plan-sample.json',
     "https://uhc-tic-mrf.azureedge.net/public-mrf/2022-10-01/2022-10-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Saint-Louis-University_GSP-901-MD47_in-network-rates.json.gz",
-    # "https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_United-HealthCare-Services--Inc-_Third-Party-Administrator_Racine-Unified-School-District_CSP-976-T103_in-network-rates.json.gz",
-    # "https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_Optimum-Choice--Inc-_Insurer_UHC---Embedded-Vision_UHC-Vision_in-network-rates.json.gz",
-    # "https://www.google.com/"
+    "https://uhc-tic-mrf.azureedge.net/public-mrf/2022-09-01/2022-09-01_Optimum-Choice--Inc-_Insurer_UHC---Embedded-Vision_UHC-Vision_in-network-rates.json.gz",
+    "https://www.google.com/"
 ]
 
 for url in tqdm(urls):

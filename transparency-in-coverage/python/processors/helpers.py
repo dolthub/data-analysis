@@ -39,11 +39,6 @@ def data_import(filename):
 
         return objs
 
-
-# TODO
-# build remote and local provider references separately
-# TEST against all CMS files
-
 class MRFOpen:
     """
     Context for cleanly opening and handling JSON MRFs.
@@ -173,7 +168,6 @@ class Flattener:
                 (prefix, event, value) == ('provider_references', 'end_array', None)
             ):
                 self.local_provider_references = builder.value
-
                 return
 
             elif (
@@ -442,11 +436,3 @@ class Flattener:
 
             self.in_network_item = None
             self.root_written = True
-
-
-
-# Basic template
-# Make a builder
-# Loop through and update current row
-# Skip some rows
-# Break at a certain point
