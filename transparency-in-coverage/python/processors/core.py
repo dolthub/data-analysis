@@ -44,7 +44,7 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         flattener.init_parser(f)
 
-        flattener.ffwd(('in_network', 'start_array', None))
+        flattener.ffwd(('', 'map_key', 'in_network'))
         for item in flatter.in_network_items():
             writer.write_in_network_item(item, out_dir)
 

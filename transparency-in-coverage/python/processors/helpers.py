@@ -257,7 +257,7 @@ class MRFFlattener:
                     self.code_set
                     and billing_code_tup not in self.code_set
                 ):
-                    log.debug(f'Skipping: {billing_code_tup}')                    
+                    log.info(f'Skipping: {billing_code_tup}')                    
                     self.ffwd(('in_network.item', 'end_map', None))
                     builder.value.pop()
                     builder.containers.pop()
@@ -273,6 +273,7 @@ class MRFFlattener:
                 log.info(f"No rates for {billing_code_tup}")
                 self.ffwd(('in_network.item', 'end_map', None))
                 builder.value.pop()
+                builder.containers.pop()
                 builder.containers.pop()
                 continue
 

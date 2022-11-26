@@ -2,12 +2,6 @@ from core import flatten_json
 from helpers import data_import
 from tqdm import tqdm
 
-
-code_set = None
-npi_set = None
-
-# code_set = data_import("data/example_billing_codes.csv")
-# npi_set = set(int(n[0]) for n in data_import("data/example_npi.csv"))
 npi_set = set({1780763284, 1356891600})
 code_set = {('MS-DRG', '0001'), ('MS-DRG', '0687')}
 
