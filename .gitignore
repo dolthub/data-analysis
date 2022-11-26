@@ -1,3 +1,5 @@
 flatten/
 __pycache__/
 .idea/
+
+.python-version
