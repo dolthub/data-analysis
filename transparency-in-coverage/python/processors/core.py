@@ -1,4 +1,4 @@
-from helpers import Flattener, MRFOpen
+from helpers import MRFFlattener, MRFOpen, MRFWriter
 
 def flatten_json(loc, out_dir, code_set = None, npi_set = None):
     """
@@ -8,18 +8,16 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
     with MRFOpen(loc) as f:
 
-        flattener = Flattener(code_set, npi_set)
+        flattener = MRFFlattener(code_set, npi_set)
         flattener.init_parser(f)
 
         # Build (but don't write) the root data
-        flattener.build_root()
+        root_data = flattener.build_root()
 
         # Jump (fast-forward) to provider references
         # Build (but don't write) the provider references
         flattener.ffwd(('', 'map_key', 'provider_references'))
-        flattener.build_provider_references()
-        flattener.build_remote_provider_references()
-        flattener.make_provider_ref_map()
+        flattener.build_provider_references_map()
 
         """
         Sometimes it happens that the MRF is out of order: 
@@ -32,10 +30,12 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
         and root data.
         """
 
+        writer = MRFWriter(root_data)
+
         try:
             flattener.ffwd(('in_network', 'start_array', None))
             for item in flattener.in_network_items():
-                flattener.write_in_network_item(item, out_dir)
+                writer.write_in_network_item(item, out_dir)
             return
         except StopIteration:
             pass
@@ -46,5 +46,5 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         flattener.ffwd(('in_network', 'start_array', None))
         for item in flatter.in_network_items():
-            flattener.write_in_network_item(item, out_dir)
+            writer.write_in_network_item(item, out_dir)
 
