@@ -1,5 +1,5 @@
 from core import flatten_json
-from helpers import data_import
+from helpers import data_import, InvalidMRF
 from tqdm import tqdm
 from pathlib import Path
 
@@ -21,20 +21,25 @@ code_set = {
 
 p = Path(__file__).parent.absolute()
 urls = [
+    'http://www.google.com/',
     f'{p}/test/test_file_1.json',
     f'{p}/test/test_file_2.json',
     f'{p}/test/test_file_3.json.gz',
     f'{p}/test/test_file_4.json',
     f'{p}/test/test_file_5.json.gz',
+    
 ]
 
 for url in tqdm(urls):
-    flatten_json(
-        loc = url, 
-        out_dir = 'debug', 
-        code_set=code_set, 
-        npi_set = npi_set
-    )
+    try:
+        flatten_json(
+            loc = url, 
+            out_dir = 'debug', 
+            code_set=code_set, 
+            npi_set = npi_set
+        )
+    except InvalidMRF:
+        pass
 
 
 

@@ -41,6 +41,10 @@ def data_import(filename):
         return objs
 
 
+class InvalidMRF(Exception):
+    pass
+
+
 class MRFOpen:
     """
     Machine Readable File opener.
@@ -60,7 +64,7 @@ class MRFOpen:
 
         if self.suffix not in ('.json.gz', '.json'):
             log.critical(f'Not JSON: {self.loc}')
-            raise Exception
+            raise InvalidMRF
 
     def __enter__(self):
         is_remote = self.parsed_url.scheme in ('http', 'https')
@@ -78,6 +82,7 @@ class MRFOpen:
                 self.fileobj.read(1)
             except Exception as e:
                 log.critical(e)
+                raise InvalidMRF
 
         elif self.suffix == '.json':
             if self.response:
@@ -127,7 +132,7 @@ class MRFFlattener:
         self.parser = ijson.parse(f, use_float = True)
 
 
-    def ffwd(self, to_row):
+    def _ffwd(self, to_row):
         """Jump to later in the parsing stream"""
         while self.current_row != to_row:
 
@@ -154,111 +159,11 @@ class MRFFlattener:
             builder.event(event, value)
 
 
-    def build_local_provider_references(self):
-
-        try:
-            self.ffwd(('', 'map_key', 'provider_references'))
-        except StopIteration:
-            log.warning('Invalid file')
-            raise Exception
-
-        builder = ijson.ObjectBuilder()
-
-        for prefix, event, value in self.parser:
-            self.current_row = (prefix, event, value)
-
-            if (
-                (prefix, event, value) == ('provider_references', 'end_array', None)
-            ):
-                self.local_provider_references = builder.value
-                return
-
-            elif (
-                prefix.endswith('npi.item')
-                and self.npi_set
-                and not value in self.npi_set
-            ):
-                continue
-
-            elif (
-                prefix.endswith('provider_groups.item')
-                and event == 'end_map'
-            ):
-                if not builder.value[-1].get('provider_groups')[-1]['npi']:
-                    builder.value[-1]['provider_groups'].pop()
-
-            elif (
-                prefix.endswith('provider_references.item') 
-                and event == 'end_map'
-            ):
-                if builder.value and builder.value[-1].get('location'):
-                    self.remote_provider_references.append(builder.value.pop())
-
-                elif not builder.value[-1].get('provider_groups'):
-                    builder.value.pop()
-
-
-            builder.event(event, value)
-
-
-    def build_remote_provider_references(self):
-        """TODO: should be async function
-        """
-
-        for pref in self.remote_provider_references:
-
-            loc = pref.get('location')
-
-            try:
-                with MRFOpen(loc) as f:
-                    builder = ijson.ObjectBuilder()
-
-                    parser = ijson.parse(f, use_float = True)
-                    for prefix, event, value in parser:
-
-                        if (
-                            prefix.endswith('npi.item') 
-                            and self.npi_set
-                            and not value in self.npi_set
-                        ):
-                            continue
-
-                        elif (
-                            prefix.endswith('provider_groups.item') 
-                            and event == 'end_map'
-                        ):
-                            if not builder.value['provider_groups'][-1]['npi']:
-                                builder.value['provider_groups'].pop()
-
-                        builder.event(event, value)
-
-                    builder.value['provider_group_id'] = pref['provider_group_id']
-
-                self.local_provider_references.append(builder.value)
-            except Exception as e:
-                log.warn('Error retrieving remote provider references')
-                log.warn(loc)
-                pass
-                
-
-        self.remote_provider_references = None
-
-
-    def build_provider_references_map(self):
-
-        self.build_local_provider_references()
-        self.build_remote_provider_references()
-
-        self.provider_references_map = {
-            pref['provider_group_id']: pref['provider_groups'] for pref in self.local_provider_references
-        }
-
-
     def in_network_items(self):
         """
         Generator that yields in-network items one at a time
         """
-        self.ffwd(('', 'map_key', 'in_network'))
+        self._ffwd(('', 'map_key', 'in_network'))
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
@@ -283,7 +188,7 @@ class MRFFlattener:
                     and billing_code_tup not in self.code_set
                 ):
                     log.debug(f'Skipping: {billing_code_tup}')                    
-                    self.ffwd(('in_network.item', 'end_map', None))
+                    self._ffwd(('in_network.item', 'end_map', None))
                     builder.value.pop()
                     builder.containers.pop()
                     continue
@@ -293,7 +198,7 @@ class MRFFlattener:
                 and not builder.value[-1]['negotiated_rates']
             ):
                 log.info(f"No rates for {billing_code_tup}")
-                self.ffwd(('in_network.item', 'end_map', None))
+                self._ffwd(('in_network.item', 'end_map', None))
                 builder.value.pop()
                 builder.containers.pop()
                 builder.containers.pop()
@@ -351,11 +256,111 @@ class MRFFlattener:
             builder.event(event, value)
 
 
+    def build_provider_references(self):
+
+        self._build_local_provider_references()
+        self._build_remote_provider_references()
+
+        self.provider_references_map = {
+            pref['provider_group_id']: pref['provider_groups'] for pref in self.local_provider_references
+        }
+
+
+    def _build_local_provider_references(self):
+
+        try:
+            self._ffwd(('', 'map_key', 'provider_references'))
+        except StopIteration:
+            log.warning('Invalid file')
+            raise InvalidMRF
+
+        builder = ijson.ObjectBuilder()
+
+        for prefix, event, value in self.parser:
+            self.current_row = (prefix, event, value)
+
+            if (
+                (prefix, event, value) == ('provider_references', 'end_array', None)
+            ):
+                self.local_provider_references = builder.value
+                return
+
+            elif (
+                prefix.endswith('npi.item')
+                and self.npi_set
+                and not value in self.npi_set
+            ):
+                continue
+
+            elif (
+                prefix.endswith('provider_groups.item')
+                and event == 'end_map'
+            ):
+                if not builder.value[-1].get('provider_groups')[-1]['npi']:
+                    builder.value[-1]['provider_groups'].pop()
+
+            elif (
+                prefix.endswith('provider_references.item') 
+                and event == 'end_map'
+            ):
+                if builder.value and builder.value[-1].get('location'):
+                    self.remote_provider_references.append(builder.value.pop())
+
+                elif not builder.value[-1].get('provider_groups'):
+                    builder.value.pop()
+
+
+            builder.event(event, value)
+
+
+    def _build_remote_provider_references(self):
+        """TODO: should be async function
+        """
+
+        for pref in self.remote_provider_references:
+
+            loc = pref.get('location')
+
+            try:
+                with MRFOpen(loc) as f:
+                    builder = ijson.ObjectBuilder()
+
+                    parser = ijson.parse(f, use_float = True)
+                    for prefix, event, value in parser:
+
+                        if (
+                            prefix.endswith('npi.item') 
+                            and self.npi_set
+                            and not value in self.npi_set
+                        ):
+                            continue
+
+                        elif (
+                            prefix.endswith('provider_groups.item') 
+                            and event == 'end_map'
+                        ):
+                            if not builder.value['provider_groups'][-1]['npi']:
+                                builder.value['provider_groups'].pop()
+
+                        builder.event(event, value)
+
+                    builder.value['provider_group_id'] = pref['provider_group_id']
+
+                self.local_provider_references.append(builder.value)
+            except Exception as e:
+                log.warn('Error retrieving remote provider references')
+                log.warn(loc)
+                pass
+                
+
+        self.remote_provider_references = None
+
+
 class MRFWriter:
 
     def __init__(self, root_data):
 
-        self.root_hash_key = self.hashdict(root_data)
+        self.root_hash_key = self._hashdict(root_data)
         self.root_data = root_data
         self.root_data['root_hash_key'] = self.root_hash_key
 
@@ -363,7 +368,7 @@ class MRFWriter:
         self.root_data_written = False
 
 
-    def hashdict(self, data_dict):
+    def _hashdict(self, data_dict):
 
         if not data_dict:
             raise ValueError
@@ -375,7 +380,7 @@ class MRFWriter:
         return dict_hash
 
 
-    def in_network_item_to_rows(self, item):
+    def _in_network_item_to_rows(self, item):
 
         rows = []
 
@@ -389,13 +394,13 @@ class MRFWriter:
             'root_hash_key':             self.root_hash_key,
         }
 
-        in_network_hash_key = self.hashdict(in_network_vals)
+        in_network_hash_key = self._hashdict(in_network_vals)
         in_network_vals['in_network_hash_key'] = in_network_hash_key
 
         rows.append(Row('in_network', in_network_vals))
 
         for neg_rate in item.get('negotiated_rates', []):
-            neg_rates_hash_key = self.hashdict(neg_rate)
+            neg_rates_hash_key = self._hashdict(neg_rate)
 
             for provider_group in neg_rate['provider_groups']:
                 provider_group_vals = {
@@ -447,7 +452,7 @@ class MRFWriter:
         if not os.path.exists(out_dir):
             os.mkdir(self.out_dir)
 
-        rows = self.in_network_item_to_rows(item)
+        rows = self._in_network_item_to_rows(item)
 
         if not self.root_data_written:
             rows.append(Row('root', self.root_data))

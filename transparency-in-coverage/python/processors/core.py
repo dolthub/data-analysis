@@ -16,7 +16,7 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         # Jump (fast-forward) to provider references
         # Build (but don't write) the provider references
-        flattener.build_provider_references_map()
+        flattener.build_provider_references()
 
         """
         Sometimes it happens that the MRF is out of order: 
