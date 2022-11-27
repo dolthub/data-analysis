@@ -1,51 +1,30 @@
-from helpers import MRFFlattener, MRFOpen, MRFWriter, InvalidMRF
+from helpers import MRFOpen, MRFItemBuilder, MRFWriter
 
-def flatten_json(loc, out_dir, code_set = None, npi_set = None):
-    """
-    Pattern for flattening JSON and filtering with a code_set/npi_set.
-    Functions like a finite state machine.
-    """
+def run(loc, npi_set, code_set, out_dir):
 
     with MRFOpen(loc) as f:
 
-        flattener = MRFFlattener(code_set, npi_set)
-        flattener.init_parser(f)
+        m = MRFItemBuilder(f)
 
-        # Build (but don't write) the root data
-        root_data = flattener.build_root()
-
-        # Jump (fast-forward) to provider references
-        # Build (but don't write) the provider references
-        flattener.build_provider_references()
-
-        """
-        Sometimes it happens that the MRF is out of order: 
-        the provider references are at the bottom. Fast-forwarding
-        to the in-network items will result in a StopIteration.
-
-        In this case, re-open the file (start a new parser in a
-        new context) and then FFWD to the in-network items,
-        while holding onto the previously computed provider references
-        and root data.
-        """
-
+        root_data, cur_row = m.build_root()
         writer = MRFWriter(root_data)
 
-        # Provider references above in-network items
-        if flattener.provider_refs_at_top:
-            for item in flattener.in_network_items():
+        if cur_row == ('', 'map_key', 'provider_references'):
+            provider_references_map = m.build_provider_references(npi_set)
+
+            m.ffwd(('', 'map_key', 'in_network'))
+            for item in m.in_network_items(npi_set, code_set, provider_references_map):
                 writer.write_in_network_item(item, out_dir)
             return
 
-    # Close and re-open for when provider references are
-    # below the in-network items. If there are still no 
-    # in-network items, the file is marked as invalid
+        elif cur_row == ('', 'map_key', 'in_network'):
+            m.ffwd(('', 'map_key', 'provider_references'))
+            provider_references_map = m.build_provider_references(npi_set)
+
     with MRFOpen(loc) as f:
 
-        flattener.init_parser(f)
+        m = MRFItemBuilder(f)
 
-        try:
-            for item in flattener.in_network_items():
-                writer.write_in_network_item(item, out_dir)
-        except StopIteration:
-            raise InvalidMRF
+        m.ffwd(('', 'map_key', 'in_network'))
+        for item in m.in_network_items(npi_set, code_set, provider_references_map):
+            writer.write_in_network_item(item, out_dir)

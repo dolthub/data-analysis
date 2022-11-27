@@ -1,4 +1,4 @@
-from core import flatten_json
+from core import run
 from helpers import data_import, InvalidMRF
 from tqdm import tqdm
 from pathlib import Path
@@ -20,6 +20,7 @@ code_set = {
     }
 
 p = Path(__file__).parent.absolute()
+
 urls = [
     'http://www.google.com/',
     f'{p}/test/test_file_1.json',
@@ -31,7 +32,7 @@ urls = [
 
 for url in tqdm(urls):
     try:
-        flatten_json(
+        run(
             loc = url, 
             out_dir = 'debug', 
             code_set=code_set, 
