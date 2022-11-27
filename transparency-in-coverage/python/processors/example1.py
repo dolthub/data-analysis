@@ -1,5 +1,4 @@
-from core import run
-from mrfutils import data_import, InvalidMRF
+from mrfutils import data_import, flatten_mrf, InvalidMRF
 from tqdm import tqdm
 from pathlib import Path
 
@@ -32,7 +31,7 @@ urls = [
 
 for url in tqdm(urls):
     try:
-        run(
+        flatten_mrf(
             loc = url, 
             out_dir = 'debug', 
             code_set=code_set, 

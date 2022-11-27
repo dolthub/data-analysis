@@ -20,25 +20,6 @@ file_handler.setLevel(logging.DEBUG)
 log.addHandler(file_handler)
 
 
-def data_import(filename):
-    with open(filename, 'r') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
-        objs = set()
-        for row in reader:
-            objs.add(tuple(row[f] for f in fieldnames))
-        return objs
-
-
-def hashdict(data: dict):
-    if not data:
-        raise ValueError
-    sorted_tups = sorted(data.items())
-    data_as_bytes = json.dumps(sorted_tups).encode('utf-8')
-    data_hash = hashlib.sha256(data_as_bytes).hexdigest()[:16]
-    return data_hash
-
-
 class InvalidMRF(Exception):
     pass
 
@@ -401,3 +382,51 @@ class MRFWriter:
 
                 neg_price_rows.append(neg_price_vals)
                 self._write_rows(neg_price_rows, 'negotiated_prices')
+
+
+
+def data_import(filename):
+    with open(filename, 'r') as f:
+        reader = csv.DictReader(f)
+        fieldnames = reader.fieldnames
+        objs = set()
+        for row in reader:
+            objs.add(tuple(row[f] for f in fieldnames))
+        return objs
+
+
+def hashdict(data: dict):
+    if not data:
+        raise ValueError
+    sorted_tups = sorted(data.items())
+    data_as_bytes = json.dumps(sorted_tups).encode('utf-8')
+    data_hash = hashlib.sha256(data_as_bytes).hexdigest()[:16]
+    return data_hash
+
+
+def flatten_mrf(loc, npi_set, code_set, out_dir):
+    
+    with MRFOpen(loc) as f:
+        m = MRFObjectBuilder(f)
+        root_data, cur_row = m.build_root()
+        writer = MRFWriter(out_dir)
+
+        if cur_row == ('', 'map_key', 'provider_references'):
+            p_ref_map = m.build_p_refs(npi_set)
+
+            m.ffwd(('', 'map_key', 'in_network'))
+            for item in m.innet_items(npi_set, code_set, root_data, p_ref_map):
+                writer.write_innet(item)
+            writer.write_root(root_data)
+            return
+
+        elif cur_row == ('', 'map_key', 'in_network'):
+            m.ffwd(('', 'map_key', 'provider_references'))
+            p_ref_map = m.build_p_refs(npi_set)
+
+    with MRFOpen(loc) as f:
+        m = MRFObjectBuilder(f)
+        m.ffwd(('', 'map_key', 'in_network'))
+        for item in m.innet_items(npi_set, code_set, root_data, p_ref_map):
+            writer.write_innet(item)
+        writer.write_root(root_data)
