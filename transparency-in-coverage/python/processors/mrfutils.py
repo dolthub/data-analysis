@@ -118,14 +118,15 @@ class MRFObjectBuilder:
             raise InvalidMRF
 
     # parser
-    def in_network_items(
+    def innet_items(
         self, 
         npi_set, 
-        code_set, 
+        code_set,
+        root_data,
         provider_references_map,
     ):
-
         builder = ijson.ObjectBuilder()
+        root_hash_key = hashdict(root_data)
 
         for prefix, event, value in self.parser:
 
@@ -134,7 +135,9 @@ class MRFObjectBuilder:
 
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Found: {billing_code_tup}")
-                yield builder.value.pop()
+                in_network_item = builder.value.pop()
+                in_network_item['root_hash_key'] = root_hash_key
+                yield in_network_item
                 
             elif (
                 (prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
@@ -318,7 +321,7 @@ class MRFObjectBuilder:
 
 class MRFWriter:
 
-    def __init__(self, root_data, out_dir):
+    def __init__(self, out_dir):
         self.out_dir = out_dir
         self._make_dir()
 
@@ -341,6 +344,7 @@ class MRFWriter:
 
     # out_dir
     def write_root(self, root_data):
+        root_hash_key = hashdict(root_data)
         root_data['root_hash_key'] = root_hash_key
         self._write_rows([root_data], 'root')
 
@@ -354,12 +358,11 @@ class MRFWriter:
             'billing_code_type_version': item['billing_code_type_version'],
             'billing_code':              item['billing_code'],
             'description':               item['description'],
-            'root_hash_key':             self.root_hash_key,
+            'root_hash_key':             item['root_hash_key'],
         }
 
         in_network_hash_key = hashdict(in_network_vals)
         in_network_vals['in_network_hash_key'] = in_network_hash_key
-
         self._write_rows([in_network_vals], 'in_network')
 
         for neg_rate in item.get('negotiated_rates', []):
@@ -375,7 +378,7 @@ class MRFWriter:
                     'tin_value':                 provider_group['tin']['value'],
                     'negotiated_rates_hash_key': neg_rates_hash_key,
                     'in_network_hash_key':       in_network_hash_key,
-                    'root_hash_key':             self.root_hash_key,
+                    'root_hash_key':             item['root_hash_key'],
                 }
 
                 provider_group_rows.append(provider_group_vals)
@@ -393,7 +396,7 @@ class MRFWriter:
                     'service_code':              None if not (v := neg_price.get('service_code')) else v,
                     'additional_information':    neg_price.get('additional_information'),
                     'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
-                    'root_hash_key':             self.root_hash_key,
+                    'root_hash_key':             item['root_hash_key'],
                 }
 
                 neg_price_rows.append(neg_price_vals)

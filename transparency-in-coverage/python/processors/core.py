@@ -13,7 +13,7 @@ def run(loc, npi_set, code_set, out_dir):
             p_ref_map = m.build_provider_references(npi_set)
 
             m.ffwd(('', 'map_key', 'in_network'))
-            for item in m.in_network_items(npi_set, code_set, p_ref_map):
+            for item in m.innet_items(npi_set, code_set, root_data, p_ref_map):
                 writer.write_innet(item)
             writer.write_root(root_data)
             return
@@ -27,6 +27,6 @@ def run(loc, npi_set, code_set, out_dir):
         m = MRFObjectBuilder(f)
 
         m.ffwd(('', 'map_key', 'in_network'))
-        for item in m.in_network_items(npi_set, code_set, p_ref_map):
+        for item in m.innet_items(npi_set, code_set, root_data, p_ref_map):
             writer.write_innet(item)
         writer.write_root(root_data)
