@@ -1,8 +1,10 @@
-from helpers import MRFOpen, MRFItemBuilder, MRFWriter
+from helpers import MRFItemBuilder, MRFWriter
+from processors.helpers import open_mrf
+
 
 def run(loc, npi_set, code_set, out_dir):
 
-    with MRFOpen(loc) as f:
+    with open_mrf(loc) as f:
 
         m = MRFItemBuilder(f)
 
@@ -21,7 +23,7 @@ def run(loc, npi_set, code_set, out_dir):
             m.ffwd(('', 'map_key', 'provider_references'))
             provider_references_map = m.build_provider_references(npi_set)
 
-    with MRFOpen(loc) as f:
+    with open_mrf(loc) as f:
 
         m = MRFItemBuilder(f)
 

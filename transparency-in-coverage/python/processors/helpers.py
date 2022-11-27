@@ -3,6 +3,7 @@ import csv
 import glob
 import hashlib
 import json
+from contextlib import contextmanager
 
 import ijson
 import requests
@@ -45,7 +46,8 @@ class InvalidMRF(Exception):
     pass
 
 
-class MRFOpen:
+@contextmanager
+def open_mrf(loc: str):
     """
     Machine Readable File opener.
 
@@ -53,54 +55,51 @@ class MRFOpen:
     Will open remote and local files alike.
     """
 
-    def __init__(self, loc: str):
-        self.response = None
-        self.fileobj = None
-        self.loc = loc
+    response = None
+    fileobj = None
 
-        self.parsed_url = urllib.parse.urlparse(self.loc)
+    try:
+        parsed_url = urllib.parse.urlparse(loc)
 
-        self.suffix = ''.join(pathlib.Path(self.parsed_url.path).suffixes)
+        suffix = ''.join(pathlib.Path(parsed_url.path).suffixes)
 
-        if self.suffix not in ('.json.gz', '.json'):
-            log.critical(f'Not JSON: {self.loc}')
+        if suffix not in ('.json.gz', '.json'):
+            log.critical(f'Not JSON: {loc}')
             raise InvalidMRF
 
-    def __enter__(self):
-        is_remote = self.parsed_url.scheme in ('http', 'https')
+        is_remote = parsed_url.scheme in ('http', 'https')
         if is_remote:
-            self.response = requests.get(self.loc, stream = True)
+            response = requests.get(loc, stream = True)
 
-        if self.suffix == '.json.gz':
+        if suffix == '.json.gz':
 
-            if self.response:
-                self.fileobj = gzip.GzipFile(fileobj = self.response.raw)
+            if response:
+                fileobj = gzip.GzipFile(fileobj = response.raw)
             else:
-                self.fileobj = gzip.open(self.loc, 'r')
+                fileobj = gzip.open(loc, 'r')
 
             try:
-                self.fileobj.read(1)
+                fileobj.read(1)
             except Exception as e:
                 log.critical(e)
                 raise InvalidMRF
 
-        elif self.suffix == '.json':
-            if self.response:
-                self.response.raw.decode_content = True
-                self.fileobj = self.response.raw
+        elif suffix == '.json':
+            if response:
+                response.raw.decode_content = True
+                fileobj = response.raw
             else:
-                self.fileobj = open(self.loc, 'r')
+                fileobj = open(loc, 'r')
 
-        log.info(f'Succesfully opened file: {self.loc}')
-        return self.fileobj
+        log.info(f'Succesfully opened file: {loc}')
+        yield fileobj
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    finally:
+        if response:
+            response.close()
 
-        if self.response:
-            self.response.close()
-
-        if self.fileobj:
-            self.fileobj.close()
+        if fileobj:
+            fileobj.close()
 
 
 class MRFItemBuilder:
@@ -278,7 +277,7 @@ class MRFItemBuilder:
 
     def _build_remote_reference(self, loc):
 
-        with MRFOpen(loc) as f:
+        with open_mrf(loc) as f:
             builder = ijson.ObjectBuilder()
 
             parser = ijson.parse(f, use_float = True)
