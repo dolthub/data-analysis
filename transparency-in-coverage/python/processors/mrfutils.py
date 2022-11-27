@@ -166,7 +166,7 @@ class MRFOpen:
             self.f.close()
 
 
-class MRFItemBuilder:
+class MRFObjectBuilder:
 
 
     def __init__(self, f):
@@ -384,33 +384,35 @@ class MRFItemBuilder:
 
 class MRFWriter:
 
-    def __init__(self, root_data):
-        self.root_data = root_data
-        self.root_hash_key = hashdict(self.root_data)
+    def __init__(self):
         self.root_data_written = False
 
 
-    def write_in_network_item(self, item, out_dir):
+    def _prepare(self, item, root_data):
+        root_hash_key = hashdict(root_data)
+        rows = in_network_item_to_rows(item, root_hash_key)
+
+        if not self.root_data_written:
+            root_data['root_hash_key'] = root_hash_key
+            rows.append(Row('root', root_data))
+
+        return rows
+
+
+    def write_in_network_item(self, item, root_data, out_dir):
 
         if not os.path.exists(out_dir):
             os.mkdir(out_dir)
-        
-        rows = in_network_item_to_rows(item, self.root_hash_key)
 
-        if not self.root_data_written:
-            self.root_data['root_hash_key'] = self.root_hash_key
-            rows.append(Row('root', self.root_data))
+        rows = self._prepare(item, root_data)
 
         for row in rows:
-            filename = row.filename
-            data = row.data
-
+            filename, data = row.filename, row.data
             fieldnames = SCHEMA[filename]
             file_loc = f'{out_dir}/{filename}.csv'
             file_exists = os.path.exists(file_loc)
 
             with open(file_loc, 'a') as f:
-
                 writer = csv.DictWriter(f, fieldnames = fieldnames)
 
                 if not file_exists:
@@ -419,10 +421,6 @@ class MRFWriter:
                 writer.writerow(data)
 
         self.root_data_written = True
-
-
-
-
 
 
 

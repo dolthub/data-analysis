@@ -23,8 +23,8 @@ p = Path(__file__).parent.absolute()
 
 urls = [
     'http://www.google.com/',
-    f'{p}/test/test_file_1.json',
-    f'{p}/test/test_file_2.json',
+    # f'{p}/test/test_file_1.json',
+    # f'{p}/test/test_file_2.json',
     f'{p}/test/test_file_3.json.gz',
     f'{p}/test/test_file_4.json',
     f'{p}/test/test_file_5.json.gz',
