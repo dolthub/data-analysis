@@ -40,6 +40,7 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         writer = MRFWriter(root_data)
 
+        # What if you just deleted this part?
         try:
             flattener.ffwd(('', 'map_key', 'in_network'))
             for item in flattener.in_network_items():
