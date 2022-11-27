@@ -123,7 +123,7 @@ class MRFObjectBuilder:
         npi_set, 
         code_set,
         root_data,
-        provider_references_map,
+        p_refs_map,
     ):
         builder = ijson.ObjectBuilder()
         root_hash_key = hashdict(root_data)
@@ -174,9 +174,9 @@ class MRFObjectBuilder:
                 provider_groups = []
 
             elif (
-                provider_references_map 
+                p_refs_map 
                 and prefix.endswith('provider_references.item')
-                and (grps := provider_references_map.get(value))
+                and (grps := p_refs_map.get(value))
             ):
                 provider_groups.extend(grps)
 
@@ -218,21 +218,21 @@ class MRFObjectBuilder:
             builder.event(event, value)
 
     # parser
-    def build_provider_references(self, npi_set):
+    def build_p_refs(self, npi_set):
 
-        local_provider_references, remote_provider_references = self._build_local_provider_references(npi_set)
-        new_provider_references = self._build_remote_provider_references(remote_provider_references, npi_set)
+        local_p_refs, remote_p_refs = self._build_local_p_refs(npi_set)
+        new_p_refs = self._build_remote_p_refs(remote_p_refs, npi_set)
 
-        if new_provider_references:
-            local_provider_references.extend(new_provider_references)        
+        if new_p_refs:
+            local_p_refs.extend(new_p_refs)        
 
         return {
-            pref['provider_group_id']: pref['provider_groups'] for pref in local_provider_references
+            pref['provider_group_id']: pref['provider_groups'] for pref in local_p_refs
         }
 
     # parser
-    def _build_local_provider_references(self, npi_set):
-        remote_provider_references = []
+    def _build_local_p_refs(self, npi_set):
+        remote_p_refs = []
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
@@ -240,8 +240,8 @@ class MRFObjectBuilder:
             if (
                 (prefix, event, value) == ('provider_references', 'end_array', None)
             ):
-                local_provider_references = builder.value
-                return builder.value, remote_provider_references
+                local_p_refs = builder.value
+                return builder.value, remote_p_refs
 
             elif (
                 prefix.endswith('npi.item')
@@ -262,7 +262,7 @@ class MRFObjectBuilder:
                 and event == 'end_map'
             ):
                 if builder.value and builder.value[-1].get('location'):
-                    remote_provider_references.append(builder.value.pop())
+                    remote_p_refs.append(builder.value.pop())
 
                 elif not builder.value[-1].get('provider_groups'):
                     builder.value.pop()
@@ -298,20 +298,20 @@ class MRFObjectBuilder:
         return builder.value
 
     # parser
-    def _build_remote_provider_references(
+    def _build_remote_p_refs(
         self, 
-        remote_provider_references, 
+        remote_p_refs, 
         npi_set
     ):
 
-        new_provider_references = []
+        new_p_refs = []
 
-        for pref in remote_provider_references:
+        for pref in remote_p_refs:
             loc = pref.get('location')
             try:
                 remote_reference = self._build_remote_reference(loc, npi_set)
                 remote_reference['provider_group_id'] = pref['provider_group_id']
-                new_provider_references.append(remote_reference)
+                new_p_refs.append(remote_reference)
             except Exception as e:
                 log.warn('Error retrieving remote provider references')
                 log.warn(loc)
