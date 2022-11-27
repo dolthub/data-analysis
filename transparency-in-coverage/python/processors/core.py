@@ -16,7 +16,6 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         # Jump (fast-forward) to provider references
         # Build (but don't write) the provider references
-        flattener.ffwd(('', 'map_key', 'provider_references'))
         flattener.build_provider_references_map()
 
         """
@@ -32,19 +31,22 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
 
         writer = MRFWriter(root_data)
 
-        try:
-            flattener.ffwd(('', 'map_key', 'in_network'))
+        # Provider references above in-network items
+        if flattener.provider_refs_at_top:
             for item in flattener.in_network_items():
                 writer.write_in_network_item(item, out_dir)
             return
-        except StopIteration:
-            pass
 
+    # Close and re-open for when provider references are
+    # below the in-network items
     with MRFOpen(loc) as f:
 
         flattener.init_parser(f)
 
-        flattener.ffwd(('', 'map_key', 'in_network'))
-        for item in flatter.in_network_items():
-            writer.write_in_network_item(item, out_dir)
-
+        try:
+            for item in flattener.in_network_items():
+                writer.write_in_network_item(item, out_dir)
+        except StopIteration:
+            # If there are still no in-network items, the file 
+            # is marked as invalid
+            raise Exception('Invalid file')

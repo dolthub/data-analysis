@@ -86,6 +86,7 @@ class MRFOpen:
             else:
                 self.fileobj = open(self.loc, 'r')
 
+        log.info(f'Succesfully opened file: {self.loc}')
         return self.fileobj
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -112,19 +113,27 @@ class MRFFlattener:
         self.npi_set = npi_set
         self.code_set = code_set
 
+        self.current_row = None
+
         self.local_provider_references = None
         self.remote_provider_references = []
-
         self.provider_references_map = None
+
+        self.provider_refs_at_top = None
 
 
     def init_parser(self, f):
+        self.provider_refs_at_top = True
         self.parser = ijson.parse(f, use_float = True)
 
 
     def ffwd(self, to_row):
         """Jump to later in the parsing stream"""
         while self.current_row != to_row:
+
+            if self.current_row == ('', 'map_key', 'in_network'):
+                self.provider_refs_at_top = False
+
             self.current_row = next(self.parser)
 
 
@@ -139,12 +148,20 @@ class MRFFlattener:
                     ('', 'map_key', 'provider_references'),
                     ('', 'map_key', 'in_network'))
             ):
+                self.has_root_data = True
                 return builder.value
 
             builder.event(event, value)
 
 
     def build_local_provider_references(self):
+
+        try:
+            self.ffwd(('', 'map_key', 'provider_references'))
+        except StopIteration:
+            log.warning('Invalid file')
+            raise Exception
+
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
@@ -216,9 +233,11 @@ class MRFFlattener:
                         builder.event(event, value)
 
                     builder.value['provider_group_id'] = pref['provider_group_id']
-                    
+
                 self.local_provider_references.append(builder.value)
-            except:
+            except Exception as e:
+                log.warn('Error retrieving remote provider references')
+                log.warn(loc)
                 pass
                 
 
@@ -239,11 +258,11 @@ class MRFFlattener:
         """
         Generator that yields in-network items one at a time
         """
+        self.ffwd(('', 'map_key', 'in_network'))
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
             self.current_row = (prefix, event, value)
-            # print(self.current_row)
 
             if (prefix, event, value) == ('in_network', 'end_array', None):
                 return
