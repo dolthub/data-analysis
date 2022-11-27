@@ -11,17 +11,17 @@ from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
 
-log = logging.getLogger()
-logging.basicConfig(level=logging.INFO)
+log = logging.getLogger(__name__)
 
 file_handler = logging.FileHandler('log.txt', 'a')
-file_handler.setLevel(logging.DEBUG)
-
+file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
 
 class InvalidMRF(Exception):
-    pass
+
+    def __init__(self, value):
+        self.value = value
 
 
 class MRFOpen:
@@ -33,8 +33,7 @@ class MRFOpen:
         self.suffix = ''.join(Path(urlparse(self.loc).path).suffixes)
 
         if self.suffix not in ('.json.gz', '.json'):
-            log.critical(f'Not JSON: {self.loc}')
-            raise InvalidMRF
+            raise InvalidMRF(f'Not JSON: {self.loc}')
 
     def __enter__(self):
         is_remote = urlparse(self.loc).scheme in ('http', 'https')
@@ -50,8 +49,7 @@ class MRFOpen:
             try:
                 self.f.read(1)
             except Exception as e:
-                log.critical(e)
-                raise InvalidMRF
+                raise InvalidMRF(e)
         else:
             if is_remote:
                 self.r.raw.decode_content = True
@@ -59,7 +57,7 @@ class MRFOpen:
             else:
                 self.f = open(self.loc, 'r')
 
-        log.info(f'Succesfully opened file: {self.loc}')
+        log.debug(f'Succesfully opened file: {self.loc}')
         return self.f
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -95,8 +93,7 @@ class MRFObjectBuilder:
                 return builder.value, row
             builder.event(event, value)
         else:
-            log.critical('Invalid MRF')
-            raise InvalidMRF
+            raise InvalidMRF('Reached EOF before finding data')
 
     # parser
     def innet_items(
@@ -384,7 +381,6 @@ class MRFWriter:
                 self._write_rows(neg_price_rows, 'negotiated_prices')
 
 
-
 def data_import(filename):
     with open(filename, 'r') as f:
         reader = csv.DictReader(f)
@@ -405,7 +401,7 @@ def hashdict(data: dict):
 
 
 def flatten_mrf(loc, npi_set, code_set, out_dir):
-    
+
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
         root_data, cur_row = m.build_root()
