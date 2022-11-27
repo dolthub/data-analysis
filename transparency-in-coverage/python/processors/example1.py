@@ -1,5 +1,5 @@
 from core import run
-from helpers import data_import, InvalidMRF
+from mrfutils import data_import, InvalidMRF
 from tqdm import tqdm
 from pathlib import Path
 

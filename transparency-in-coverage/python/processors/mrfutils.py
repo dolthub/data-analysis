@@ -3,14 +3,12 @@ import csv
 import glob
 import hashlib
 import json
-
 import ijson
 import requests
 import gzip
-import urllib
-import pathlib
 import logging
-
+from urllib.parse import urlparse
+from pathlib import Path
 from schema import SCHEMA
 
 log = logging.getLogger()
@@ -26,9 +24,6 @@ Row = namedtuple('Row', ['filename', 'data'])
 
 
 def data_import(filename):
-    """
-    Convenience function for importing codes and NPIs
-    """
 
     with open(filename, 'r') as f:
         reader = csv.DictReader(f)
@@ -41,66 +36,134 @@ def data_import(filename):
         return objs
 
 
+def hashdict(data):
+
+    if not data:
+        raise ValueError
+
+    sorted_tups = sorted(data.items())
+    dict_as_bytes = json.dumps(sorted_tups).encode('utf-8')
+    dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
+
+    return dict_hash
+
+
+def in_network_item_to_rows(item, root_hash_key):
+
+    rows = []
+
+    in_network_vals = {
+        'negotiation_arrangement':   item['negotiation_arrangement'],
+        'name':                      item['name'],
+        'billing_code_type':         item['billing_code_type'],
+        'billing_code_type_version': item['billing_code_type_version'],
+        'billing_code':              item['billing_code'],
+        'description':               item['description'],
+        'root_hash_key':             root_hash_key,
+    }
+
+    in_network_hash_key = hashdict(in_network_vals)
+    in_network_vals['in_network_hash_key'] = in_network_hash_key
+
+    rows.append(Row('in_network', in_network_vals))
+
+    for neg_rate in item.get('negotiated_rates', []):
+        neg_rates_hash_key = hashdict(neg_rate)
+
+        for provider_group in neg_rate['provider_groups']:
+            provider_group_vals = {
+                'npi_numbers':               provider_group['npi'],
+                'tin_type':                  provider_group['tin']['type'],
+                'tin_value':                 provider_group['tin']['value'],
+                'negotiated_rates_hash_key': neg_rates_hash_key,
+                'in_network_hash_key':       in_network_hash_key,
+                'root_hash_key':             root_hash_key,
+            }
+
+            rows.append(Row('provider_groups', provider_group_vals))
+
+        for neg_price in neg_rate['negotiated_prices']:
+
+            neg_price_vals = {
+                'billing_class':             neg_price['billing_class'],
+                'negotiated_type':           neg_price['negotiated_type'],
+                'expiration_date':           neg_price['expiration_date'],
+                'negotiated_rate':           neg_price['negotiated_rate'],
+                'in_network_hash_key':       in_network_hash_key,
+                'negotiated_rates_hash_key': neg_rates_hash_key,
+                'service_code':              None if not (v := neg_price.get('service_code')) else v,
+                'additional_information':    neg_price.get('additional_information'),
+                'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
+                'root_hash_key':             root_hash_key,
+            }
+
+            rows.append(Row('negotiated_prices', neg_price_vals))
+
+    for bundle in item.get('bundled_codes', []):
+
+        bundle_vals = {
+            'billing_code_type':         bundle['billing_code_type'],
+            'billing_code_type_version': bundle['billing_code_type_version'],
+            'billing_code':              bundle['billing_code'],
+            'description':               bundle['description'],
+            'in_network_hash_key':       in_network_hash_key,
+            'root_hash_key':             root_hash_key,
+        }
+
+        rows.append(Row('bundled_codes', bundle_vals))
+
+    return rows
+
+
 class InvalidMRF(Exception):
     pass
 
 
 class MRFOpen:
-    """
-    Machine Readable File opener.
 
-    Context for cleanly opening and handling JSON MRFs.
-    Will open remote and local files alike.
-    """
-
-    def __init__(self, loc: str):
-        self.response = None
-        self.fileobj = None
+    def __init__(self, loc):
         self.loc = loc
-
-        self.parsed_url = urllib.parse.urlparse(self.loc)
-
-        self.suffix = ''.join(pathlib.Path(self.parsed_url.path).suffixes)
+        self.f = None
+        self.r = None
+        self.suffix = ''.join(Path(urlparse(self.loc).path).suffixes)
 
         if self.suffix not in ('.json.gz', '.json'):
             log.critical(f'Not JSON: {self.loc}')
             raise InvalidMRF
 
     def __enter__(self):
-        is_remote = self.parsed_url.scheme in ('http', 'https')
+        is_remote = urlparse(self.loc).scheme in ('http', 'https')
+
         if is_remote:
-            self.response = requests.get(self.loc, stream = True)
+            self.r = requests.get(self.loc, stream = True)
 
         if self.suffix == '.json.gz':
-
-            if self.response:
-                self.fileobj = gzip.GzipFile(fileobj = self.response.raw)
+            if is_remote:
+                self.f = gzip.GzipFile(fileobj = self.r.raw)
             else:
-                self.fileobj = gzip.open(self.loc, 'r')
-
+                self.f = gzip.open(self.loc, 'r')
             try:
-                self.fileobj.read(1)
+                self.f.read(1)
             except Exception as e:
                 log.critical(e)
                 raise InvalidMRF
-
-        elif self.suffix == '.json':
-            if self.response:
-                self.response.raw.decode_content = True
-                self.fileobj = self.response.raw
+        else:
+            if is_remote:
+                self.r.raw.decode_content = True
+                self.f = self.r.raw
             else:
-                self.fileobj = open(self.loc, 'r')
+                self.f = open(self.loc, 'r')
 
         log.info(f'Succesfully opened file: {self.loc}')
-        return self.fileobj
+        return self.f
 
     def __exit__(self, exc_type, exc_val, exc_tb):
 
-        if self.response:
-            self.response.close()
+        if self.r:
+            self.r.close()
 
-        if self.fileobj:
-            self.fileobj.close()
+        if self.f:
+            self.f.close()
 
 
 class MRFItemBuilder:
@@ -201,7 +264,6 @@ class MRFItemBuilder:
             elif (
                 prefix.endswith('provider_groups.item') 
                 and event == 'end_map'
-                # and builder.value
                 and not builder.value[-1]['negotiated_rates'][-1]['provider_groups'][-1]['npi']
             ):
                 builder.value[-1]['negotiated_rates'][-1]['provider_groups'].pop()
@@ -228,8 +290,8 @@ class MRFItemBuilder:
         local_provider_references, remote_provider_references = self._build_local_provider_references(npi_set)
         new_provider_references = self._build_remote_provider_references(remote_provider_references, npi_set)
 
-        if new_provider_references:    
-            provider_references = local_provider_references.extend(new_provider_references)        
+        if new_provider_references:
+            local_provider_references.extend(new_provider_references)        
 
         return {
             pref['provider_group_id']: pref['provider_groups'] for pref in local_provider_references
@@ -276,7 +338,7 @@ class MRFItemBuilder:
             builder.event(event, value)
 
 
-    def _build_remote_reference(self, loc):
+    def _build_remote_reference(self, loc, npi_set):
 
         with MRFOpen(loc) as f:
             builder = ijson.ObjectBuilder()
@@ -286,8 +348,8 @@ class MRFItemBuilder:
 
                 if (
                     prefix.endswith('npi.item') 
-                    and self.npi_set
-                    and not value in self.npi_set
+                    and npi_set
+                    and not value in npi_set
                 ):
                     continue
 
@@ -310,115 +372,33 @@ class MRFItemBuilder:
         for pref in remote_provider_references:
             loc = pref.get('location')
             try:
-                builder.value['provider_group_id'] = pref['provider_group_id']
-                new_provider_references.append(builder.value)
+                remote_reference = self._build_remote_reference(loc, npi_set)
+                remote_reference['provider_group_id'] = pref['provider_group_id']
+                new_provider_references.append(remote_reference)
             except Exception as e:
                 log.warn('Error retrieving remote provider references')
                 log.warn(loc)
+                log.warn(e)
                 pass
 
 
 class MRFWriter:
-    # root data
-    # in_network items
 
     def __init__(self, root_data):
-
-        self.root_hash_key = self._hashdict(root_data)
         self.root_data = root_data
-        self.root_data['root_hash_key'] = self.root_hash_key
-
-
+        self.root_hash_key = hashdict(self.root_data)
         self.root_data_written = False
-
-
-    def _hashdict(self, data_dict):
-
-        if not data_dict:
-            raise ValueError
-
-        sorted_tups = sorted(data_dict.items())
-        dict_as_bytes = json.dumps(sorted_tups).encode('utf-8')
-        dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
-
-        return dict_hash
-
-
-    def _in_network_item_to_rows(self, item):
-
-        rows = []
-
-        in_network_vals = {
-            'negotiation_arrangement':   item['negotiation_arrangement'],
-            'name':                      item['name'],
-            'billing_code_type':         item['billing_code_type'],
-            'billing_code_type_version': item['billing_code_type_version'],
-            'billing_code':              item['billing_code'],
-            'description':               item['description'],
-            'root_hash_key':             self.root_hash_key,
-        }
-
-        in_network_hash_key = self._hashdict(in_network_vals)
-        in_network_vals['in_network_hash_key'] = in_network_hash_key
-
-        rows.append(Row('in_network', in_network_vals))
-
-        for neg_rate in item.get('negotiated_rates', []):
-            neg_rates_hash_key = self._hashdict(neg_rate)
-
-            for provider_group in neg_rate['provider_groups']:
-                provider_group_vals = {
-                    'npi_numbers':               provider_group['npi'],
-                    'tin_type':                  provider_group['tin']['type'],
-                    'tin_value':                 provider_group['tin']['value'],
-                    'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'in_network_hash_key':       in_network_hash_key,
-                    'root_hash_key':             self.root_hash_key,
-                }
-
-                rows.append(Row('provider_groups', provider_group_vals))
-
-            for neg_price in neg_rate['negotiated_prices']:
-
-                neg_price_vals = {
-                    'billing_class':             neg_price['billing_class'],
-                    'negotiated_type':           neg_price['negotiated_type'],
-                    'expiration_date':           neg_price['expiration_date'],
-                    'negotiated_rate':           neg_price['negotiated_rate'],
-                    'in_network_hash_key':       in_network_hash_key,
-                    'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'service_code':              None if not (v := neg_price.get('service_code')) else v,
-                    'additional_information':    neg_price.get('additional_information'),
-                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
-                    'root_hash_key':             self.root_hash_key,
-                }
-
-                rows.append(Row('negotiated_prices', neg_price_vals))
-
-        for bundle in item.get('bundled_codes', []):
-
-            bundle_vals = {
-                'billing_code_type':         bundle['billing_code_type'],
-                'billing_code_type_version': bundle['billing_code_type_version'],
-                'billing_code':              bundle['billing_code'],
-                'description':               bundle['description'],
-                'in_network_hash_key':       in_network_hash_key,
-                'root_hash_key':             self.root_hash_key,
-            }
-
-            rows.append(Row('bundled_codes', bundle_vals))
-
-        return rows
 
 
     def write_in_network_item(self, item, out_dir):
 
         if not os.path.exists(out_dir):
-            os.mkdir(self.out_dir)
-
-        rows = self._in_network_item_to_rows(item)
+            os.mkdir(out_dir)
+        
+        rows = in_network_item_to_rows(item, self.root_hash_key)
 
         if not self.root_data_written:
+            self.root_data['root_hash_key'] = self.root_hash_key
             rows.append(Row('root', self.root_data))
 
         for row in rows:
@@ -429,7 +409,6 @@ class MRFWriter:
             file_loc = f'{out_dir}/{filename}.csv'
             file_exists = os.path.exists(file_loc)
 
-            # TODO: this opens a file for each row
             with open(file_loc, 'a') as f:
 
                 writer = csv.DictWriter(f, fieldnames = fieldnames)
