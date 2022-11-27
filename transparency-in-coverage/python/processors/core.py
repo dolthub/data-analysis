@@ -7,14 +7,15 @@ def run(loc, npi_set, code_set, out_dir):
         m = MRFObjectBuilder(f)
 
         root_data, cur_row = m.build_root()
-        writer = MRFWriter(root_data)
+        writer = MRFWriter(out_dir)
 
         if cur_row == ('', 'map_key', 'provider_references'):
             p_ref_map = m.build_provider_references(npi_set)
 
             m.ffwd(('', 'map_key', 'in_network'))
             for item in m.in_network_items(npi_set, code_set, p_ref_map):
-                writer.write_in_network_item(item, root_data, out_dir)
+                writer.write_innet(item)
+            writer.write_root(root_data)
             return
 
         elif cur_row == ('', 'map_key', 'in_network'):
@@ -27,4 +28,5 @@ def run(loc, npi_set, code_set, out_dir):
 
         m.ffwd(('', 'map_key', 'in_network'))
         for item in m.in_network_items(npi_set, code_set, p_ref_map):
-            writer.write_in_network_item(item, root_data, out_dir)
+            writer.write_innet(item)
+        writer.write_root(root_data)

@@ -19,100 +19,24 @@ file_handler.setLevel(logging.DEBUG)
 
 log.addHandler(file_handler)
 
-from collections import namedtuple
-Row = namedtuple('Row', ['filename', 'data'])
-
 
 def data_import(filename):
-
     with open(filename, 'r') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
         objs = set()
-
         for row in reader:
             objs.add(tuple(row[f] for f in fieldnames))
-
         return objs
 
 
-def hashdict(data):
-
+def hashdict(data: dict):
     if not data:
         raise ValueError
-
     sorted_tups = sorted(data.items())
-    dict_as_bytes = json.dumps(sorted_tups).encode('utf-8')
-    dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
-
-    return dict_hash
-
-
-def in_network_item_to_rows(item, root_hash_key):
-
-    rows = []
-
-    in_network_vals = {
-        'negotiation_arrangement':   item['negotiation_arrangement'],
-        'name':                      item['name'],
-        'billing_code_type':         item['billing_code_type'],
-        'billing_code_type_version': item['billing_code_type_version'],
-        'billing_code':              item['billing_code'],
-        'description':               item['description'],
-        'root_hash_key':             root_hash_key,
-    }
-
-    in_network_hash_key = hashdict(in_network_vals)
-    in_network_vals['in_network_hash_key'] = in_network_hash_key
-
-    rows.append(Row('in_network', in_network_vals))
-
-    for neg_rate in item.get('negotiated_rates', []):
-        neg_rates_hash_key = hashdict(neg_rate)
-
-        for provider_group in neg_rate['provider_groups']:
-            provider_group_vals = {
-                'npi_numbers':               provider_group['npi'],
-                'tin_type':                  provider_group['tin']['type'],
-                'tin_value':                 provider_group['tin']['value'],
-                'negotiated_rates_hash_key': neg_rates_hash_key,
-                'in_network_hash_key':       in_network_hash_key,
-                'root_hash_key':             root_hash_key,
-            }
-
-            rows.append(Row('provider_groups', provider_group_vals))
-
-        for neg_price in neg_rate['negotiated_prices']:
-
-            neg_price_vals = {
-                'billing_class':             neg_price['billing_class'],
-                'negotiated_type':           neg_price['negotiated_type'],
-                'expiration_date':           neg_price['expiration_date'],
-                'negotiated_rate':           neg_price['negotiated_rate'],
-                'in_network_hash_key':       in_network_hash_key,
-                'negotiated_rates_hash_key': neg_rates_hash_key,
-                'service_code':              None if not (v := neg_price.get('service_code')) else v,
-                'additional_information':    neg_price.get('additional_information'),
-                'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
-                'root_hash_key':             root_hash_key,
-            }
-
-            rows.append(Row('negotiated_prices', neg_price_vals))
-
-    for bundle in item.get('bundled_codes', []):
-
-        bundle_vals = {
-            'billing_code_type':         bundle['billing_code_type'],
-            'billing_code_type_version': bundle['billing_code_type_version'],
-            'billing_code':              bundle['billing_code'],
-            'description':               bundle['description'],
-            'in_network_hash_key':       in_network_hash_key,
-            'root_hash_key':             root_hash_key,
-        }
-
-        rows.append(Row('bundled_codes', bundle_vals))
-
-    return rows
+    data_as_bytes = json.dumps(sorted_tups).encode('utf-8')
+    data_hash = hashlib.sha256(data_as_bytes).hexdigest()[:16]
+    return data_hash
 
 
 class InvalidMRF(Exception):
@@ -172,13 +96,13 @@ class MRFObjectBuilder:
     def __init__(self, f):
         self.parser = ijson.parse(f, use_float = True)
 
-
+    # parser
     def ffwd(self, to_row):
         for current_row in self.parser:
             if current_row == to_row:
                 break
 
-
+    # parser
     def build_root(self):
         builder = ijson.ObjectBuilder()
 
@@ -193,8 +117,14 @@ class MRFObjectBuilder:
             log.critical('Invalid MRF')
             raise InvalidMRF
 
+    # parser
+    def in_network_items(
+        self, 
+        npi_set, 
+        code_set, 
+        provider_references_map,
+    ):
 
-    def in_network_items(self, npi_set, code_set, provider_references_map):
         builder = ijson.ObjectBuilder()
 
         for prefix, event, value in self.parser:
@@ -284,7 +214,7 @@ class MRFObjectBuilder:
             
             builder.event(event, value)
 
-
+    # parser
     def build_provider_references(self, npi_set):
 
         local_provider_references, remote_provider_references = self._build_local_provider_references(npi_set)
@@ -297,7 +227,7 @@ class MRFObjectBuilder:
             pref['provider_group_id']: pref['provider_groups'] for pref in local_provider_references
         }
 
-
+    # parser
     def _build_local_provider_references(self, npi_set):
         remote_provider_references = []
         builder = ijson.ObjectBuilder()
@@ -337,7 +267,7 @@ class MRFObjectBuilder:
 
             builder.event(event, value)
 
-
+    # parser
     def _build_remote_reference(self, loc, npi_set):
 
         with MRFOpen(loc) as f:
@@ -364,8 +294,12 @@ class MRFObjectBuilder:
 
         return builder.value
 
-
-    def _build_remote_provider_references(self, remote_provider_references, npi_set):
+    # parser
+    def _build_remote_provider_references(
+        self, 
+        remote_provider_references, 
+        npi_set
+    ):
 
         new_provider_references = []
 
@@ -384,43 +318,83 @@ class MRFObjectBuilder:
 
 class MRFWriter:
 
-    def __init__(self):
-        self.root_data_written = False
+    def __init__(self, root_data, out_dir):
+        self.out_dir = out_dir
+        self._make_dir()
 
+    # out_dir
+    def _make_dir(self):
+        if not os.path.exists(self.out_dir):
+            os.mkdir(self.out_dir)
 
-    def _prepare(self, item, root_data):
-        root_hash_key = hashdict(root_data)
-        rows = in_network_item_to_rows(item, root_hash_key)
+    # out_dir
+    def _write_rows(self, rows, filename):
+        fieldnames = SCHEMA[filename]
+        file_loc = f'{self.out_dir}/{filename}.csv'
+        file_exists = os.path.exists(file_loc)
 
-        if not self.root_data_written:
-            root_data['root_hash_key'] = root_hash_key
-            rows.append(Row('root', root_data))
+        with open(file_loc, 'a') as f:
+            writer = csv.DictWriter(f, fieldnames = fieldnames)
+            if not file_exists:
+                writer.writeheader()
+            writer.writerows(rows)
 
-        return rows
+    # out_dir
+    def write_root(self, root_data):
+        root_data['root_hash_key'] = root_hash_key
+        self._write_rows([root_data], 'root')
 
+    # out_dir
+    def write_innet(self, item):
 
-    def write_in_network_item(self, item, root_data, out_dir):
+        in_network_vals = {
+            'negotiation_arrangement':   item['negotiation_arrangement'],
+            'name':                      item['name'],
+            'billing_code_type':         item['billing_code_type'],
+            'billing_code_type_version': item['billing_code_type_version'],
+            'billing_code':              item['billing_code'],
+            'description':               item['description'],
+            'root_hash_key':             self.root_hash_key,
+        }
 
-        if not os.path.exists(out_dir):
-            os.mkdir(out_dir)
+        in_network_hash_key = hashdict(in_network_vals)
+        in_network_vals['in_network_hash_key'] = in_network_hash_key
 
-        rows = self._prepare(item, root_data)
+        self._write_rows([in_network_vals], 'in_network')
 
-        for row in rows:
-            filename, data = row.filename, row.data
-            fieldnames = SCHEMA[filename]
-            file_loc = f'{out_dir}/{filename}.csv'
-            file_exists = os.path.exists(file_loc)
+        for neg_rate in item.get('negotiated_rates', []):
 
-            with open(file_loc, 'a') as f:
-                writer = csv.DictWriter(f, fieldnames = fieldnames)
+            neg_rates_hash_key = hashdict(neg_rate)
+            provider_group_rows = []
+            neg_price_rows = []
 
-                if not file_exists:
-                    writer.writeheader()
+            for provider_group in neg_rate['provider_groups']:
+                provider_group_vals = {
+                    'npi_numbers':               provider_group['npi'],
+                    'tin_type':                  provider_group['tin']['type'],
+                    'tin_value':                 provider_group['tin']['value'],
+                    'negotiated_rates_hash_key': neg_rates_hash_key,
+                    'in_network_hash_key':       in_network_hash_key,
+                    'root_hash_key':             self.root_hash_key,
+                }
 
-                writer.writerow(data)
+                provider_group_rows.append(provider_group_vals)
+                self._write_rows(provider_group_rows, 'provider_groups')
 
-        self.root_data_written = True
+            for neg_price in neg_rate['negotiated_prices']:
 
+                neg_price_vals = {
+                    'billing_class':             neg_price['billing_class'],
+                    'negotiated_type':           neg_price['negotiated_type'],
+                    'expiration_date':           neg_price['expiration_date'],
+                    'negotiated_rate':           neg_price['negotiated_rate'],
+                    'in_network_hash_key':       in_network_hash_key,
+                    'negotiated_rates_hash_key': neg_rates_hash_key,
+                    'service_code':              None if not (v := neg_price.get('service_code')) else v,
+                    'additional_information':    neg_price.get('additional_information'),
+                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
+                    'root_hash_key':             self.root_hash_key,
+                }
 
-
+                neg_price_rows.append(neg_price_vals)
+                self._write_rows(neg_price_rows, 'negotiated_prices')
