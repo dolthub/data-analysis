@@ -27,7 +27,6 @@ urls = [
     f'{p}/test/test_file_3.json.gz',
     f'{p}/test/test_file_4.json',
     f'{p}/test/test_file_5.json.gz',
-    
 ]
 
 for url in tqdm(urls):

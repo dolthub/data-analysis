@@ -1,4 +1,4 @@
-from helpers import MRFFlattener, MRFOpen, MRFWriter
+from helpers import MRFFlattener, MRFOpen, MRFWriter, InvalidMRF
 
 def flatten_json(loc, out_dir, code_set = None, npi_set = None):
     """
@@ -38,7 +38,8 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
             return
 
     # Close and re-open for when provider references are
-    # below the in-network items
+    # below the in-network items. If there are still no 
+    # in-network items, the file is marked as invalid
     with MRFOpen(loc) as f:
 
         flattener.init_parser(f)
@@ -47,6 +48,4 @@ def flatten_json(loc, out_dir, code_set = None, npi_set = None):
             for item in flattener.in_network_items():
                 writer.write_in_network_item(item, out_dir)
         except StopIteration:
-            # If there are still no in-network items, the file 
-            # is marked as invalid
-            raise Exception('Invalid file')
+            raise InvalidMRF
