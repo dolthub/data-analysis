@@ -1,12 +1,10 @@
 import unittest
 
-
 from processors.helpers import MRFOpen
-
 
 class TestMRFOpen(unittest.TestCase):
     def test_when_loc_is_web_url_is_remote(self):
-        opener = MRFOpen(loc="https://my.website.net/file.json")
+        opener = MRFOpen(loc="")
         self.assertTrue(opener.is_remote)
 
     def test_when_loc_is_local_url_is_not_remote(self):

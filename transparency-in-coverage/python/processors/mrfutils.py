@@ -30,43 +30,53 @@ class MRFOpen:
         self.loc = loc
         self.f = None
         self.r = None
-        self.suffix = ''.join(Path(urlparse(self.loc).path).suffixes)
+
+        parsed_url = urlparse(self.loc)
+        self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
         if self.suffix not in ('.json.gz', '.json'):
             raise InvalidMRF(f'Not JSON: {self.loc}')
 
+        self.is_remote = parsed_url.scheme in ('http', 'https')
+
     def __enter__(self):
-        is_remote = urlparse(self.loc).scheme in ('http', 'https')
 
-        if is_remote:
+        if (
+            self.is_remote 
+            and self.suffix == '.json.gz'
+        ):
             self.r = requests.get(self.loc, stream = True)
+            self.f = gzip.GzipFile(fileobj = self.r.raw)
 
-        if self.suffix == '.json.gz':
-            if is_remote:
-                self.f = gzip.GzipFile(fileobj = self.r.raw)
-            else:
-                self.f = gzip.open(self.loc, 'r')
+        elif (
+            self.is_remote 
+            and self.suffix == '.json'
+        ):            
+            self.r = requests.get(self.loc, stream = True)
+            self.r.raw.decode_content = True
+            self.f = self.r.raw
+
+        elif (self.suffix == '.json.gz'):
+            self.f = gzip.open(self.loc, 'r')
+
+        else:
+            self.f = open(self.loc, 'r')
+
+        if (self.suffix == '.json.gz'):
             try:
                 self.f.read(1)
-            except Exception as e:
-                raise InvalidMRF(e)
-        else:
-            if is_remote:
-                self.r.raw.decode_content = True
-                self.f = self.r.raw
-            else:
-                self.f = open(self.loc, 'r')
+            except Exception:
+                raise InvalidMRF(f'File is not valid GZIP: {self.loc}')
 
-        log.debug(f'Succesfully opened file: {self.loc}')
+        log.debug(f'Opened file: {self.loc}')
         return self.f
 
     def __exit__(self, exc_type, exc_val, exc_tb):
 
-        if self.r:
+        if self.is_remote:
             self.r.close()
 
-        if self.f:
-            self.f.close()
+        self.f.close()
 
 
 class MRFObjectBuilder:
