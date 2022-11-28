@@ -5,3 +5,5 @@ __pycache__/
 .python-version
 
 log.txt
+*.lock.hcl
+.terraform
