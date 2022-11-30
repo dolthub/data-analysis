@@ -7,3 +7,6 @@ __pycache__/
 log.txt
 *.lock.hcl
 .terraform
+
+.DS_Store
+*.swp
