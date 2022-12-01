@@ -5,7 +5,7 @@ from pathlib import Path
 import logging
 
 log = logging.getLogger('mrfutils')
-logging.basicConfig(level = logging.INFO)
+logging.basicConfig(level = logging.DEBUG)
 
 npi_set = {
     1508935891, 
@@ -26,6 +26,7 @@ code_set = {
 p = Path(__file__).parent.absolute()
 
 urls = [
+    'https://uhc-tic-mrf.azureedge.net/public-mrf/2022-11-01/2022-11-01_ALL-SAVERS-INSURANCE-COMPANY_Insurer_PS1-50_C2_in-network-rates.json.gz',
     'http://www.google.com/',
     f'{p}/test/test_file_1.json',
     f'{p}/test/test_file_2.json',
