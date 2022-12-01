@@ -1,6 +1,5 @@
 import os
 import csv
-import glob
 import hashlib
 import json
 import ijson
@@ -17,6 +16,18 @@ file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
+
+class Parser:
+
+    def __init__(self, f):
+        self.__p = ijson.parse(f, use_float = True)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.value = next(self.__p)
+        return self.value
 
 class InvalidMRF(Exception):
 
@@ -81,18 +92,25 @@ class MRFOpen:
 
 class MRFObjectBuilder:
 
-
     def __init__(self, f):
-        self.parser = ijson.parse(f, use_float = True)
+        self.parser = Parser(f)
 
-    # parser
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.row = next(self.__p)
+        return self.row
+
     def ffwd(self, to_row):
+        """
+        @param to_row: the row to fast-forward to
+        """
         for current_row in self.parser:
             if current_row == to_row:
                 break
 
-    # parser
-    def build_root(self):
+    def collect_root(self):
         builder = ijson.ObjectBuilder()
 
         for (prefix, event, value) in self.parser:
@@ -100,19 +118,26 @@ class MRFObjectBuilder:
             if (row in [
                     ('', 'map_key', 'provider_references'),
                     ('', 'map_key', 'in_network')]):
-                return builder.value, row
+                return builder.value
             builder.event(event, value)
         else:
             raise InvalidMRF('Reached EOF before finding data')
 
-    # parser
-    def innet_items(
+    def gen_innet_items(
         self, 
         npi_set, 
         code_set,
         root_data,
         p_refs_map,
     ):
+        """
+        Generator that returns a fully-constructed in-network item.
+        @param npi_set: set
+        @param code_set: set
+        @param root_data: dict
+        @param p_refs_map: dict
+        @return: dict
+        """
         builder = ijson.ObjectBuilder()
         root_hash_key = hashdict(root_data)
 
@@ -205,21 +230,24 @@ class MRFObjectBuilder:
             
             builder.event(event, value)
 
-    # parser
-    def build_p_refs(self, npi_set):
-
-        local_p_refs, remote_p_refs = self._build_local_p_refs(npi_set)
-        new_p_refs = self._build_remote_p_refs(remote_p_refs, npi_set)
+    def collect_p_refs(self, npi_set):
+        """
+        Collects the provider references into a map. This replaces
+        "provider_group_id" with provider groups
+        @param npi_set: set
+        @return: dict
+        """
+        p_refs, remote_p_refs = self._collect_p_refs(npi_set)
+        new_p_refs = self._collect_remote_p_refs(remote_p_refs, npi_set)
 
         if new_p_refs:
-            local_p_refs.extend(new_p_refs)        
+            p_refs.extend(new_p_refs)
 
         return {
-            pref['provider_group_id']: pref['provider_groups'] for pref in local_p_refs
+            p_ref['provider_group_id']: p_ref['provider_groups'] for p_ref in p_refs
         }
 
-    # parser
-    def _build_local_p_refs(self, npi_set):
+    def _collect_p_refs(self, npi_set):
         remote_p_refs = []
         builder = ijson.ObjectBuilder()
 
@@ -228,7 +256,6 @@ class MRFObjectBuilder:
             if (
                 (prefix, event, value) == ('provider_references', 'end_array', None)
             ):
-                local_p_refs = builder.value
                 return builder.value, remote_p_refs
 
             elif (
@@ -258,8 +285,7 @@ class MRFObjectBuilder:
 
             builder.event(event, value)
 
-    # parser
-    def _build_remote_reference(self, loc, npi_set):
+    def _collect_remote_reference(self, loc, npi_set):
 
         with MRFOpen(loc) as f:
             builder = ijson.ObjectBuilder()
@@ -285,8 +311,7 @@ class MRFObjectBuilder:
 
         return builder.value
 
-    # parser
-    def _build_remote_p_refs(
+    def _collect_remote_p_refs(
         self, 
         remote_p_refs, 
         npi_set
@@ -297,14 +322,12 @@ class MRFObjectBuilder:
         for pref in remote_p_refs:
             loc = pref.get('location')
             try:
-                remote_reference = self._build_remote_reference(loc, npi_set)
+                remote_reference = self._collect_remote_reference(loc, npi_set)
                 remote_reference['provider_group_id'] = pref['provider_group_id']
                 new_p_refs.append(remote_reference)
             except Exception as e:
-                log.warn('Error retrieving remote provider references')
-                log.warn(loc)
-                log.warn(e)
-                pass
+                log.warning(f'Error building remote provider references from {loc}')
+                log.warning(e)
 
 
 class MRFWriter:
@@ -313,12 +336,10 @@ class MRFWriter:
         self.out_dir = out_dir
         self._make_dir()
 
-    # out_dir
     def _make_dir(self):
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
 
-    # out_dir
     def _write_rows(self, rows, filename):
         fieldnames = SCHEMA[filename]
         file_loc = f'{self.out_dir}/{filename}.csv'
@@ -330,14 +351,12 @@ class MRFWriter:
                 writer.writeheader()
             writer.writerows(rows)
 
-    # out_dir
     def write_root(self, root_data):
         root_hash_key = hashdict(root_data)
         root_data['root_hash_key'] = root_hash_key
         self._write_rows([root_data], 'root')
 
-    # out_dir
-    def write_innet(self, item):
+    def write_innet_item(self, item):
 
         in_network_vals = {
             'negotiation_arrangement':   item['negotiation_arrangement'],
@@ -401,7 +420,11 @@ def data_import(filename):
         return objs
 
 
-def hashdict(data: dict):
+def hashdict(data):
+    """
+    @param data: dict
+    @return: hash of the dictionary
+    """
     if not data:
         raise ValueError
     sorted_tups = sorted(data.items())
@@ -414,25 +437,25 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
 
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
-        root_data, cur_row = m.build_root()
         writer = MRFWriter(out_dir)
 
-        if cur_row == ('', 'map_key', 'provider_references'):
-            p_ref_map = m.build_p_refs(npi_set)
+        root_data = m.collect_root()
 
+        if m.parser.value == ('', 'map_key', 'provider_references'):
+            p_ref_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
-            for item in m.innet_items(npi_set, code_set, root_data, p_ref_map):
-                writer.write_innet(item)
+            for item_data in m.gen_innet_items(npi_set, code_set, root_data, p_ref_map):
+                writer.write_innet_item(item_data)
             writer.write_root(root_data)
             return
 
-        elif cur_row == ('', 'map_key', 'in_network'):
+        elif m.parser.value == ('', 'map_key', 'in_network'):
             m.ffwd(('', 'map_key', 'provider_references'))
-            p_ref_map = m.build_p_refs(npi_set)
+            p_ref_map = m.collect_p_refs(npi_set)
 
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
         m.ffwd(('', 'map_key', 'in_network'))
-        for item in m.innet_items(npi_set, code_set, root_data, p_ref_map):
-            writer.write_innet(item)
+        for item_data in m.gen_innet_items(npi_set, code_set, root_data, p_ref_map):
+            writer.write_innet_item(item_data)
         writer.write_root(root_data)
