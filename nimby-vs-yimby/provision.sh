@@ -17,8 +17,7 @@ bash /tmp/install.sh
 mkdir /root/data
 
 pushd /root/data || exit
-#dolt clone dolthub/us-housing-prices-v2
-dolt clone onefact/paylesshealth
+dolt clone dolthub/us-housing-prices-v2
 popd || exit
 
 cd /root || exit
