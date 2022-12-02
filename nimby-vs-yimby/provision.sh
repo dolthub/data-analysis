@@ -41,3 +41,8 @@ chmod 0600 /swapfile
 mkswap /swapfile
 swapon /swapfile
 echo "/swapfile swap swap sw 0 0" >> /etc/fstab
+
+git clone https://github.com/rl1987/data-analysis.git
+cd data-analysis
+git fetch origin ticket11
+git checkout ticket11
