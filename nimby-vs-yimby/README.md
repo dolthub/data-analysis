@@ -6,6 +6,15 @@ During the second iteration of DoltHub's USA housing price data bounty a large a
 
 Some parts of United States are said to suffer from [NIMBYism](https://en.wikipedia.org/wiki/NIMBY) - a political resistance to new property developments in area by residents of the area. One famous example is Marc Andreesen, a prominent Silicon Valley venture capitalist, [going out of his way](https://www.theatlantic.com/ideas/archive/2022/08/marc-andreessens-opposition-housing-project-nimby/671061/) to prevent new housing to be built in his town - Atherton, CA (despite [generally supporting](https://a16z.com/2020/04/18/its-time-to-build/) new real estate projects in the rest of USA).
 
+There are multiple reasons why people would want to prevent new building from being constructed in their neighborhood:
+* Increase in traffic and polution from vehicles
+* Inconvenience and noise from facilities such as power plants
+* Change in character of the area
+* Potential decrease in value of the current housing
+* Less visibility to historical buildings
+* Environmental impact and decrease of green spaces
+* [Long shadows](https://www.mas.org/interactive_features/accidental-skyline-shadows/)
+
 But perhaps there's also areas that welcome and support new real estate projects? By wielding the power of programming and open data, we are able to leverage the [`us-housing-prices-v2` database](https://www.dolthub.com/repositories/dolthub/us-housing-prices-v2) and find which are which. 
 
 ## Methodology
@@ -156,14 +165,18 @@ from IPython.display import Image
 
 labels = {
     "county_state": "County",
-    "per_area": "new projects per square mile",
-    "per_capita": "new projects per capita",
-    "per_capita_stdevs_from_mean": "standard devs. from mean (per capita)",
-    "per_area_stdevs_from_mean": "standard devs. from mean (per area)"
+    "per_area": "Projects per square mile",
+    "per_capita": "Projects per capita",
+    "per_capita_stdevs_from_mean": "St. devs. from mean (per capita)",
+    "per_area_stdevs_from_mean": "St. devs. from mean (per area)"
 }
 
 df_counts_by_county = df_counts_by_county.sort_values('per_capita', ascending=False)
-fig = px.bar(df_counts_by_county, x='county_state', y='per_capita', title="New real estate sales per capita", labels=labels)
+fig = px.bar(df_counts_by_county, 
+             x='county_state', 
+             y='per_capita', 
+             title="New real estate projects per capita", 
+             labels=labels)
 fig.write_image("per_capita_by_county.png")
 Image(filename="per_capita_by_county.png")
 ```
@@ -179,7 +192,11 @@ Image(filename="per_capita_by_county.png")
 
 
 ```python
-fig = px.bar(df_counts_by_county, x='county_state', y='per_capita_stdevs_from_mean', title="New real estate sales per capita (stdevs. from mean)", labels=labels)
+fig = px.bar(df_counts_by_county,
+             x='county_state', 
+             y='per_capita_stdevs_from_mean', 
+             title="New real estate sales per capita (stdevs. from mean)<br><sup>How much does each country stand out in terms of new real estate projects per capita?<br> Positive values mean above average, negative values mean below average</sup>", 
+             labels=labels)
 fig.write_image("per_capita_stdevs_by_county.png")
 Image(filename="per_capita_stdevs_by_county.png")
 ```
@@ -201,7 +218,11 @@ What are top 10 counties we know of with highest per capita number of new real e
 ```python
 df_best_per_capita = df_counts_by_county.sort_values('per_capita', ascending=False).head(10)
 
-fig = px.bar(df_best_per_capita, x="county_state", y="per_capita", labels=labels)
+fig = px.bar(df_best_per_capita, 
+             x="county_state", 
+             y="per_capita", 
+             title="New real estate projects per capita<br><sub>Top 10 counties</sub>",
+             labels=labels)
 fig.write_image("top10_per_capita_by_county.png")
 Image(filename="top10_per_capita_by_county.png")
 ```
@@ -223,7 +244,11 @@ What are the 10 counties with lowest per capita amounts of new real estate proje
 
 ```python
 df_worst_per_capita = df_counts_by_county.sort_values('per_capita', ascending=True).head(10)
-fig = px.bar(df_worst_per_capita, x="county_state", y="per_capita", labels=labels)
+fig = px.bar(df_worst_per_capita,
+             x="county_state",
+             y="per_capita", 
+             title="New real estate projects per capita<br><sub>Bottom 10 counties</sub>",
+             labels=labels)
 fig.write_image("worst10_per_capita_by_county.png")
 Image(filename="worst10_per_capita_by_county.png")
 ```
@@ -249,7 +274,11 @@ Now, let us look into per-area numbers using the same kind of charts.
 
 ```python
 df_counts_by_county = df_counts_by_county.sort_values('per_area', ascending=False)
-fig = px.bar(df_counts_by_county, x='county_state', y='per_area', title="New real estate sales per area", labels=labels)
+fig = px.bar(df_counts_by_county, 
+             x='county_state', 
+             y='per_area', 
+             title="New real estate projects per area", 
+             labels=labels)
 fig.write_image("per_area_by_county.png")
 Image(filename="per_area_by_county.png")
 ```
@@ -266,7 +295,11 @@ Image(filename="per_area_by_county.png")
 
 ```python
 df_counts_by_county = df_counts_by_county.sort_values('per_area_stdevs_from_mean', ascending=False)
-fig = px.bar(df_counts_by_county, x='county_state', y='per_area_stdevs_from_mean', title="New real estate sales per area (stdevs. from mean)", labels=labels)
+fig = px.bar(df_counts_by_county,
+             x='county_state', 
+             y='per_area_stdevs_from_mean', 
+             title="New real estate projects per area (stdevs. from mean)<br><sup>How much does each country stand out in terms of new real estate projects?<br> Positive values mean above average, negative values mean below average</sup>", 
+             labels=labels)
 fig.write_image("per_area_stdevs_by_county.png")
 Image(filename="per_area_stdevs_by_county.png")
 ```
@@ -283,7 +316,11 @@ Image(filename="per_area_stdevs_by_county.png")
 
 ```python
 df_best_per_area = df_counts_by_county.sort_values('per_area', ascending=False).head(10)
-fig = px.bar(df_best_per_area, x="county_state", y="per_area", labels=labels)
+fig = px.bar(df_best_per_area, 
+             x="county_state", 
+             y="per_area", 
+             title="New real estate projects per capita<br><sub>Top 10 counties</sub>",
+             labels=labels)
 fig.write_image("top10_per_area_by_count.png")
 Image(filename="top10_per_area_by_count.png")
 ```
@@ -297,10 +334,11 @@ Image(filename="top10_per_area_by_count.png")
 
 
 
-* A strong outlier here is New York, which is probably unsuprising.
+* A strong outlier here is New York County, which is probably unsuprising. Kings County (Brooklyn) and Queens County also have strong per-area values.
 * Hudson, NJ is the most densely populated county in New Jersey. Some other counties of NJ are also represented.
 * Philadelpia, PA is (was?) undergoing a [real estate boom](https://whyy.org/articles/as-philadelphia-s-housing-market-booms-economists-warn-the-city-may-be-in-a-bubble-or-something-worse/) including some [billion-dollar projects](https://www.bizjournals.com/philadelphia/news/2022/10/16/philadelphia-development-projects-real-estate.html).
 * Suffolk County, MA is of interest to investors and is now building some [10 000 new housing units](https://bostonrealestatetimes.com/150-million-construction-loan-secured-for-suffolk-downs-redevelopment/).
+* Distribution of per-area values has some positive outliers, but no negative outliers - after the initial dropoff distance from the mean stays quite small.
 
 ## Conclusions
 
