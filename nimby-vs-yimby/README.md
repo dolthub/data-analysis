@@ -25,7 +25,11 @@ Property sales data was primarily sourced from official county institution websi
 
 We believe that data analysis should be reproducible. Reproducibility of data science requires two pillars: open data and free, open software. In this particular case, open data requirement is fullfilled by `us-housing-prices-v2` database, hosted on DoltHub. The latter requirement is fullfilled by Dolt DBMS and a Pythonic data science environment based on Jupyter. We did the heavy lifting of tabular data with Pandas library. To establish a connection between Dolt running in server mode and Pandas we used MySQL connector Python module with SQLAlchemy (Dolt is compatible-enough with MySQL for this to work). Plotly was used to visualise county-level data on interactive map view. Some supporting geospatial data was downloaded with Python `requests` module.
 
-We are utilizing [US counties dataset](https://www.openintro.org/data/index.php?data=county_complete) provided by OpenIntro to enrich data scraped during the bounty with population and land area numbers so that we could compute per capita and per area values. Once that is done, we are ready to crunch the numbers.
+To compute per capita and per area numbers we are enriching the data scraped during the bounty with the following:
+* [US counties dataset](https://www.openintro.org/data/index.php?data=county_complete) provided by OpenIntro for county land area values
+* [US Census Population Estimate 2010-2020](https://www2.census.gov/programs-surveys/popest/datasets/2010-2020/counties/totals/co-est2020.csv) dataset for county population values within 2010s.
+
+Once that is done, we are ready to crunch the numbers.
 
 ## Crunching the numbers
 
@@ -76,7 +80,7 @@ def fix_fips(fips):
 buf = StringIO(resp.text)
 
 df_counties = pd.read_csv(buf, dtype={'fips': str})
-df_counties = df_counties[["fips", "state", "name", "pop2010", "area_2010", "density_2010"]]
+df_counties = df_counties[["fips", "state", "name", "area_2010"]]
 df_counties = df_counties.rename(columns={'name': 'county'})
 df_counties['county'] = df_counties['county'].apply(cleanup_county)
 df_counties['fips'] = df_counties['fips'].apply(fix_fips)
@@ -98,6 +102,27 @@ df_counties.loc[df_counties['fips'] == "51600", "county_state"] = "FAIRFAX CITY,
 df_counties.loc[df_counties['fips'] == "24510", "county_state"] = "BALTIMORE CITY, MD"
 df_counties.to_csv("counties.csv")
 
+df_census_pop_raw = pd.read_csv("https://www2.census.gov/programs-surveys/popest/datasets/2010-2020/counties/totals/co-est2020.csv", 
+                                encoding="latin-1", dtype={"STATE": str, "COUNTY": str})
+
+est_pop_columns = [ "POPESTIMATE{}".format(year) for year in range(2010, 2020)]
+
+df_county_pop = pd.DataFrame(df_census_pop_raw[["STATE", "COUNTY", "STNAME", "CTYNAME"] + est_pop_columns])
+col = df_county_pop.loc[:, "POPESTIMATE2010":"POPESTIMATE2019"]
+df_county_pop['population'] = col.mean(axis=1)
+df_county_pop['fips'] = df_county_pop['STATE'] + df_county_pop['COUNTY']
+df_county_pop['CTYNAME'] = df_county_pop['CTYNAME'].apply(cleanup_county)
+del df_county_pop['STATE']
+df_county_pop = df_county_pop.rename(columns={'STNAME': 'state'})
+df_county_pop = pd.merge(df_county_pop, states_df, on='state')
+df_county_pop['county_state'] = df_county_pop['CTYNAME'] + ', ' + df_county_pop['code'] 
+df_county_pop = df_county_pop[["fips", "county_state", "population"]]
+
+df_counties = pd.merge(df_counties, df_county_pop, on='fips')
+df_counties = df_counties.rename(columns={'county_state_x': 'county_state'})
+df_counties = df_counties[["fips", "county_state", "population", "area_2010"]]
+df_counties['density'] = df_counties["population"]  / df_counties["area_2010"]
+
 query = """
 SELECT a.*
 FROM `sales` a
@@ -112,6 +137,7 @@ WHERE b.first_sale_datetime > \"2009-06-30\" AND b.first_sale_datetime < \"2020-
 
 raw_count_df = pd.read_sql(query, db_connection)
 raw_count_df.to_csv("~/raw.csv")
+
 result_df = pd.DataFrame(raw_count_df)
 result_df = result_df[['state', 'property_county', 'sale_datetime', 'property_id']]
 result_df = result_df.rename(columns={'property_county': 'county', 'state':'code'})
@@ -130,7 +156,7 @@ df_counts_by_county = df_counts_by_county.sort_values('n', ascending=False)
 
 df_counts_by_county = pd.merge(df_counts_by_county, df_counties, on='county_state')
 
-df_counts_by_county['per_capita'] = df_counts_by_county['n'] / df_counts_by_county['pop2010']
+df_counts_by_county['per_capita'] = df_counts_by_county['n'] / df_counts_by_county['population']
 df_counts_by_county['per_area'] = df_counts_by_county['n'] / df_counts_by_county['area_2010']
 
 per_capita_mean = float(df_counts_by_county['per_capita'].mean())
@@ -149,7 +175,7 @@ df_counts_by_county.to_csv("~/counts.csv")
 
 The above code computed a Pandas data frame with the following fields for each country:
 * `n` - absolute number of new real estate projects (number of initial sale records).
-* `per_capita` - `n` divided by population of the county (for year 2010).
+* `per_capita` - `n` divided by population of the county (average across 2010s).
 * `per_area` - `n` divided by land area of the county (in square miles).
 * `per_capita_stdevs_from_mean` - how many standard deviations is `per_capita` away from the mean value of entire data we're looking into
 * `per_area_stdevs_from_mean` - equivalent of `per_capita` for `per_area` value.]
