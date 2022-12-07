@@ -33,7 +33,6 @@ Once that is done, we are ready to crunch the numbers.
 
 ## Crunching the numbers
 
-
 ```python
 from io import StringIO
 
@@ -183,7 +182,6 @@ Based on the numbers that we have now, we can find the best and worst counties i
 
 How does the overall distribution look for per capita values and their distance from the mean? We can plot some simple bar charts to find out.
 
-
 ```python
 import plotly.express as px
 from IPython.display import Image
@@ -210,17 +208,9 @@ fig.update_layout(title={ # https://stackoverflow.com/a/67504387/1044147
 fig.write_image("per_capita_by_county.png")
 Image(filename="per_capita_by_county.png")
 ```
-
-
-
-
     
 ![png](output_6_0.png)
     
-
-
-
-
 ```python
 fig = px.bar(df_counts_by_county,
              x='county_state', 
@@ -235,20 +225,12 @@ fig.update_layout(title={
 fig.write_image("per_capita_stdevs_by_county.png")
 Image(filename="per_capita_stdevs_by_county.png")
 ```
-
-
-
-
     
 ![png](output_7_0.png)
     
-
-
-
 We can see that the spread is quite severe. Some counties have over two standard deviations more real estate developments than the mean value (per capita). Some other counties lag behind by having their per capita number below one standard deviation from the mean. Let us look into some outliers on both extremes to try getting some ideas for explanation.
 
 What are top 10 counties we know of with highest per capita number of new real estate projects?
-
 
 ```python
 df_best_per_capita = df_counts_by_county.sort_values('per_capita', ascending=False).head(10)
@@ -266,21 +248,13 @@ fig.update_layout(title={
 fig.write_image("top10_per_capita_by_county.png")
 Image(filename="top10_per_capita_by_county.png")
 ```
-
-
-
-
     
 ![png](output_9_0.png)
-    
-
-
 
 * Cape May County, NJ lays on southernmost part of New Jersey and is quite attractive to tourists, which also makes it attractive to real estate investors. This county is somewhat urbanised by coastal beach towns and has a moderate population density - largest in the top 10 list, but significantly lower than that in San Francisco.
 * Grand County, CO is mostly rural place with low population density. The same applies to all entries on top 10 list except Cape May, NJ. It's probably not significant that these locations have high per capita amount of real estate developments, given that populations are small and per area amounts of new projects are below average. Unsurprisingly, lack of population means lack of NIMBYs.
 
 What are the 10 counties with lowest per capita amounts of new real estate projects?
-
 
 ```python
 df_worst_per_capita = df_counts_by_county.sort_values('per_capita', ascending=True).head(10)
@@ -297,15 +271,8 @@ fig.update_layout(title={
 fig.write_image("worst10_per_capita_by_county.png")
 Image(filename="worst10_per_capita_by_county.png")
 ```
-
-
-
-
     
 ![png](output_11_0.png)
-    
-
-
 
 * Arlington, VA had only one sales record scraped during the bounty, so it's safe to say this is statistical anomaly.
 * Most (but not all) of these areas are more urbanised with population density exceeding 200 people per square mile.
@@ -315,7 +282,6 @@ Image(filename="worst10_per_capita_by_county.png")
 * Clayton county, GA overlaps with Atlanta metropolitan area that is known for [NIMBY activity](https://www.popeandland.com/atlanta-suburbs-grapple-with-nimbys-and-housing-affordability/).
 
 Now, let us look into per-area numbers using the same kind of charts.
-
 
 ```python
 df_counts_by_county = df_counts_by_county.sort_values('per_area', ascending=False)
@@ -332,16 +298,8 @@ fig.update_layout(title={
 fig.write_image("per_area_by_county.png")
 Image(filename="per_area_by_county.png")
 ```
-
-
-
-
     
 ![png](output_13_0.png)
-    
-
-
-
 
 ```python
 df_counts_by_county = df_counts_by_county.sort_values('per_area_stdevs_from_mean', ascending=False)
@@ -358,16 +316,8 @@ fig.update_layout(title={
 fig.write_image("per_area_stdevs_by_county.png")
 Image(filename="per_area_stdevs_by_county.png")
 ```
-
-
-
-
     
 ![png](output_14_0.png)
-    
-
-
-
 
 ```python
 df_best_per_area = df_counts_by_county.sort_values('per_area', ascending=False).head(10)
@@ -384,15 +334,8 @@ fig.update_layout(title={
 fig.write_image("top10_per_area_by_count.png")
 Image(filename="top10_per_area_by_count.png")
 ```
-
-
-
-
     
 ![png](output_15_0.png)
-    
-
-
 
 * A strong outlier here is New York County, which is probably unsuprising. Kings County (Brooklyn) and Queens County also have strong per-area values.
 * Hudson, NJ is the most densely populated county in New Jersey. Some other counties of NJ are also represented.
