@@ -190,8 +190,8 @@ from IPython.display import Image
 
 labels = {
     "county_state": "County",
-    "per_area": "Projects per square mile",
-    "per_capita": "Projects per capita",
+    "per_area": "New projects per square mile",
+    "per_capita": "New projects per capita",
     "per_capita_stdevs_from_mean": "St. devs. from mean (per capita)",
     "per_area_stdevs_from_mean": "St. devs. from mean (per area)"
 }
@@ -200,8 +200,13 @@ df_counts_by_county = df_counts_by_county.sort_values('per_capita', ascending=Fa
 fig = px.bar(df_counts_by_county, 
              x='county_state', 
              y='per_capita', 
-             title="New real estate projects per capita", 
              labels=labels)
+fig.update_layout(title={ # https://stackoverflow.com/a/67504387/1044147
+                 "text":"New real estate per capita", 
+                 "x": 0.5,
+                 "xanchor": "center",
+                 "yanchor": "top"
+             })
 fig.write_image("per_capita_by_county.png")
 Image(filename="per_capita_by_county.png")
 ```
@@ -220,8 +225,13 @@ Image(filename="per_capita_by_county.png")
 fig = px.bar(df_counts_by_county,
              x='county_state', 
              y='per_capita_stdevs_from_mean', 
-             title="New real estate sales per capita (stdevs. from mean)<br><sup>How much does each country stand out in terms of new real estate projects per capita?<br> Positive values mean above average, negative values mean below average</sup>", 
              labels=labels)
+fig.update_layout(title={
+                 "text": "New real estate per capita (stdevs. from mean)<br><sup>How much does each country stand out? Positive - above average, negative - below average</sup>", 
+                 "x": 0.5,
+                 "xanchor": "center",
+                 "yanchor": "top"
+             })
 fig.write_image("per_capita_stdevs_by_county.png")
 Image(filename="per_capita_stdevs_by_county.png")
 ```
@@ -246,8 +256,13 @@ df_best_per_capita = df_counts_by_county.sort_values('per_capita', ascending=Fal
 fig = px.bar(df_best_per_capita, 
              x="county_state", 
              y="per_capita", 
-             title="New real estate projects per capita<br><sub>Top 10 counties</sub>",
              labels=labels)
+fig.update_layout(title={
+                 "text":"New real estate per capita<br><sub>Top 10 counties</sub>",
+                 "x": 0.5,
+                 "xanchor": "center",
+                 "yanchor": "top"
+             })
 fig.write_image("top10_per_capita_by_county.png")
 Image(filename="top10_per_capita_by_county.png")
 ```
@@ -272,8 +287,13 @@ df_worst_per_capita = df_counts_by_county.sort_values('per_capita', ascending=Tr
 fig = px.bar(df_worst_per_capita,
              x="county_state",
              y="per_capita", 
-             title="New real estate projects per capita<br><sub>Bottom 10 counties</sub>",
              labels=labels)
+fig.update_layout(title={
+                "text": "New real estate per capita<br><sub>Bottom 10 counties</sub>",
+                "x": 0.5,
+                "xanchor": "center",
+                "yanchor": "top"
+             })
 fig.write_image("worst10_per_capita_by_county.png")
 Image(filename="worst10_per_capita_by_county.png")
 ```
@@ -302,8 +322,13 @@ df_counts_by_county = df_counts_by_county.sort_values('per_area', ascending=Fals
 fig = px.bar(df_counts_by_county, 
              x='county_state', 
              y='per_area', 
-             title="New real estate projects per area", 
              labels=labels)
+fig.update_layout(title={
+                 "text": "New real estate per area",
+                 "x": 0.5,
+                 "xanchor": "center",
+                 "yanchor": "top"
+             })
 fig.write_image("per_area_by_county.png")
 Image(filename="per_area_by_county.png")
 ```
@@ -323,8 +348,13 @@ df_counts_by_county = df_counts_by_county.sort_values('per_area_stdevs_from_mean
 fig = px.bar(df_counts_by_county,
              x='county_state', 
              y='per_area_stdevs_from_mean', 
-             title="New real estate projects per area (stdevs. from mean)<br><sup>How much does each country stand out in terms of new real estate projects?<br> Positive values mean above average, negative values mean below average</sup>", 
              labels=labels)
+fig.update_layout(title={
+                 "text": "New real estate per area (stdevs. from mean)<br><sup>How much does each country stand out? Positive - above average, negative - below average</sup>",
+                 "x": 0.5,
+                 "xanchor": "center",
+                 "yanchor": "top"
+             })
 fig.write_image("per_area_stdevs_by_county.png")
 Image(filename="per_area_stdevs_by_county.png")
 ```
@@ -344,8 +374,13 @@ df_best_per_area = df_counts_by_county.sort_values('per_area', ascending=False).
 fig = px.bar(df_best_per_area, 
              x="county_state", 
              y="per_area", 
-             title="New real estate projects per capita<br><sub>Top 10 counties</sub>",
              labels=labels)
+fig.update_layout(title={
+                 "text":"New real estate per area<br><sub>Top 10 counties</sub>",
+                 "x": 0.5,
+                 "xanchor": "center",
+                 "yanchor": "top"
+             })
 fig.write_image("top10_per_area_by_count.png")
 Image(filename="top10_per_area_by_count.png")
 ```
