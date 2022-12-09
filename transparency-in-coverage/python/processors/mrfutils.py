@@ -18,7 +18,10 @@ log.addHandler(file_handler)
 
 
 class Parser:
-
+    """
+    Wrapper for default ijson parser that allows
+    access to the current value
+    """
     def __init__(self, f):
         self.__p = ijson.parse(f, use_float = True)
 
@@ -29,14 +32,14 @@ class Parser:
         self.value = next(self.__p)
         return self.value
 
-class InvalidMRF(Exception):
 
+class InvalidMRF(Exception):
     def __init__(self, value):
         self.value = value
 
 
 class MRFOpen:
-
+    "Context manager for opening JSON(.gz) MRFs"
     def __init__(self, loc):
         self.loc = loc
         self.f = None
@@ -91,7 +94,10 @@ class MRFOpen:
 
 
 class MRFObjectBuilder:
-
+    """
+    Takes a parser and returns necessary objects
+    for parsing and flattening MRFs
+    """
     def __init__(self, f):
         self.parser = Parser(f)
 
@@ -227,7 +233,6 @@ class MRFObjectBuilder:
                 except ValueError:
                     pass
 
-            
             builder.event(event, value)
 
     def collect_p_refs(self, npi_set):
@@ -331,17 +336,19 @@ class MRFObjectBuilder:
 
 
 class MRFWriter:
-
-    def __init__(self, out_dir):
+    """Class for writing the MRF data to the appropriate
+    files in the specified schema"""
+    def __init__(self, out_dir, schema):
         self.out_dir = out_dir
         self._make_dir()
+        self.schema = schema
 
     def _make_dir(self):
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
 
     def _write_rows(self, rows, filename):
-        fieldnames = SCHEMA[filename]
+        fieldnames = self.schema[filename]
         file_loc = f'{self.out_dir}/{filename}.csv'
         file_exists = os.path.exists(file_loc)
 
@@ -411,6 +418,12 @@ class MRFWriter:
 
 
 def data_import(filename):
+    """
+    Imports data as tuples from a given file.
+    Iterates over rows
+    @param filename: filename
+    @return:
+    """
     with open(filename, 'r') as f:
         reader = csv.DictReader(f)
         fieldnames = reader.fieldnames
@@ -434,10 +447,17 @@ def hashdict(data):
 
 
 def flatten_mrf(loc, npi_set, code_set, out_dir):
-
+    """
+    Main function for flattening MRFs
+    @param loc: remote or local file location
+    @param npi_set: set of NPI numbers
+    @param code_set: set of (CODE_TYPE, CODE) tuples (str, str)
+    @param out_dir: output directry
+    @return: returns nothing
+    """
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
-        writer = MRFWriter(out_dir)
+        writer = MRFWriter(out_dir, SCHEMA)
 
         root_data = m.collect_root()
 
