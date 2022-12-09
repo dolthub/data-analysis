@@ -1,15 +1,4 @@
-# data-analysis
+# Dolt data-analysis
 
-## Development
-
-### Installation
-
-Install requirements with `pip install -r requirements.txt`
-
-### Testing
-
-Run unit tests with the following command:
-
-```python
-python -m unittest
-```
+Current data analysis projects including hospital price transparency, transparency in coverage, and guest blogs.
+ 

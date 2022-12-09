@@ -5,6 +5,11 @@
 1. https://www.dolthub.com/blog/2022-10-03-c-sections/
 1. https://www.dolthub.com/blog/2022-09-02-a-trillion-prices
 
+## Requirements
+
+Do 
+`pip install -r requirements.txt`
+
 ## If you were shocked to find
 
 that United Healthcare, Aetna, and Anthem Blue Cross have their negotiated rates in humongous JSON files, so was I. My initial reaction is that these were unprocessable, but some discussion with friends online hinted that there might be a way to stream them.
