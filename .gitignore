@@ -5,3 +5,12 @@ __pycache__/
 .python-version
 
 log.txt
+*.lock.hcl
+.terraform
+
+.DS_Store
+*.swp
+*.tfstate
+*.tfstate.backup
+*.plan
+do_token.txt
