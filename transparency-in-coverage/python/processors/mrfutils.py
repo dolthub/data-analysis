@@ -1,6 +1,7 @@
 import os
 import csv
 import hashlib
+import base64
 import json
 import ijson
 import requests
@@ -387,7 +388,7 @@ class MRFWriter:
 
             for provider_group in neg_rate['provider_groups']:
                 provider_group_vals = {
-                    'npi_numbers':               provider_group['npi'],
+                    'npi_numbers':               sorted(provider_group['npi']),
                     'tin_type':                  provider_group['tin']['type'],
                     'tin_value':                 provider_group['tin']['value'],
                     'negotiated_rates_hash_key': neg_rates_hash_key,
@@ -407,9 +408,9 @@ class MRFWriter:
                     'negotiated_rate':           neg_price['negotiated_rate'],
                     'in_network_hash_key':       in_network_hash_key,
                     'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'service_code':              None if not (v := neg_price.get('service_code')) else v,
+                    'service_code':              None if not (v := neg_price.get('service_code')) else sorted(v),
                     'additional_information':    neg_price.get('additional_information'),
-                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else v,
+                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else sorted(v),
                     'root_hash_key':             item['root_hash_key'],
                 }
 
@@ -438,12 +439,16 @@ def hashdict(data):
     @param data: dict
     @return: hash of the dictionary
     """
+
     if not data:
         raise ValueError
+
     sorted_tups = sorted(data.items())
-    data_as_bytes = json.dumps(sorted_tups).encode('utf-8')
-    data_hash = hashlib.sha256(data_as_bytes).hexdigest()[:16]
-    return data_hash
+    data_utf8 = json.dumps(sorted_tups).encode()
+    hash_s = hashlib.sha256(data_utf8).hexdigest()[:10]
+    hash_b = bytes.fromhex(hash_s)
+    hash_b64 = base64.b64encode(hash_b).decode('utf-8')
+    return hash_b64
 
 
 def flatten_mrf(loc, npi_set, code_set, out_dir):
