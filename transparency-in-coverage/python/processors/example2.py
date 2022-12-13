@@ -2,7 +2,8 @@ import requests
 import time
 import ijson
 from urllib.parse import urlparse
-from helpers import MRFOpen
+from mrfutils import MRFOpen
+
 
 def mrfs_from_idx(idx_url):
     '''
