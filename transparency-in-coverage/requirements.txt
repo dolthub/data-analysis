@@ -1,0 +1,2 @@
+ijson==3.1.4
+requests==2.28.1
