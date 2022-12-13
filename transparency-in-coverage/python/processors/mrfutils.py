@@ -11,12 +11,12 @@ from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
 
-log = logging.getLogger(__name__)
+log = logging.getLogger()
+log.setLevel(logging.INFO)
 
 file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
-
 
 class Parser:
     """
@@ -55,7 +55,7 @@ class MRFOpen:
         self.is_remote = parsed_url.scheme in ('http', 'https')
 
     def __enter__(self):
-
+        log.info(f'Opening {self.loc}')
         if (
             self.is_remote 
             and self.suffix == '.json.gz'
@@ -87,7 +87,7 @@ class MRFOpen:
         return self.f
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-
+        log.info(f'Closing {self.loc}')
         if self.is_remote:
             self.r.close()
 
@@ -128,7 +128,7 @@ class MRFObjectBuilder:
                 return builder.value
             builder.event(event, value)
         else:
-            raise InvalidMRF('Reached EOF before finding data')
+            raise InvalidMRF("Read to EOF without finding root data")
 
     def gen_innet_items(
         self, 
@@ -154,7 +154,7 @@ class MRFObjectBuilder:
                 return
 
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
-                log.info(f"Found: {billing_code_tup}")
+                log.info(f"Rates found for {billing_code_type} {billing_code}")
                 in_network_item = builder.value.pop()
                 in_network_item['root_hash_key'] = root_hash_key
                 yield in_network_item
@@ -170,7 +170,7 @@ class MRFObjectBuilder:
                     code_set
                     and billing_code_tup not in code_set
                 ):
-                    log.debug(f'Skipping: {billing_code_tup}')                    
+                    log.debug(f'Skipping: {billing_code_tup}')
                     self.ffwd(('in_network.item', 'end_map', None))
                     builder.value.pop()
                     builder.containers.pop()
@@ -180,7 +180,7 @@ class MRFObjectBuilder:
                 (prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
                 and not builder.value[-1]['negotiated_rates']
             ):
-                log.info(f"No rates for {billing_code_tup}")
+                log.debug(f"Found {billing_code_tup} in file but no providers: skipping")
                 self.ffwd(('in_network.item', 'end_map', None))
                 builder.value.pop()
                 builder.containers.pop()

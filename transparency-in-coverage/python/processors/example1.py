@@ -1,11 +1,10 @@
-from mrfutils import data_import, flatten_mrf, InvalidMRF
+from mrfutils import flatten_mrf, InvalidMRF
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm import tqdm
 from pathlib import Path
 import logging
 
 log = logging.getLogger('mrfutils')
-logging.basicConfig(level = logging.DEBUG)
 
 npi_set = {
     1508935891, 
@@ -34,7 +33,6 @@ urls = [
     f'{p}/test/test_file_4.json',
     f'{p}/test/test_file_5.json.gz',
 ]
-
 
 for url in tqdm(urls):
     with logging_redirect_tqdm():
