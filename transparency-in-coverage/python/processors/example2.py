@@ -1,5 +1,7 @@
 import ijson
+from urllib.parse import urlparse
 from mrfutils import MRFOpen
+
 
 def mrfs_from_idx(index_loc):
     """
