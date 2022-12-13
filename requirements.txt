@@ -1,3 +1,6 @@
 ijson
 requests
+<<<<<<< HEAD
 tqdm
+=======
+>>>>>>> 76c3fb4 (Started reqs file and fixed import statement)
