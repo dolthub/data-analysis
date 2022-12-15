@@ -515,7 +515,7 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         # the provider references. If we do find them, we make a map.
         # Then read the file again.
         elif m.parser.value == ('', 'map_key', 'in_network'):
-            log.info('No provider references found\n' \
+            log.info('No provider references found\n'
                      'Checking at end of file')
             try:
                 m.ffwd(('', 'map_key', 'provider_references'))
