@@ -498,14 +498,14 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         # Get root data from top of file
         root_data = m.collect_root()
 
+        root_data['url'] = loc
+        writer.write_root(root_data)
+
         # Case 1. The MRF has its provider references at the top
         if m.parser.value == ('', 'map_key', 'provider_references'):
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
-            for (idx, item_data) in enumerate(m.gen_innet_items(npi_set, code_set, root_data, p_refs_map)):
-                if idx == 0:
-                    writer.write_root(root_data)
-                # log.debug(item_data)
+            for item_data in m.gen_innet_items(npi_set, code_set, root_data, p_refs_map):
                 writer.write_innet_item(item_data)
             return
 
@@ -526,7 +526,5 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
         m.ffwd(('', 'map_key', 'in_network'))
-        for (idx, item_data) in enumerate(m.gen_innet_items(npi_set, code_set, root_data, p_refs_map)):
-            if idx == 0:
-                writer.write_root(root_data)
+        for item_data in m.gen_innet_items(npi_set, code_set, root_data, p_refs_map):
             writer.write_innet_item(item_data)
