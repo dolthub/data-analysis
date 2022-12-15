@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
 
-log = logging.getLogger()
+log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
 file_handler = logging.FileHandler('log.txt', 'a')
