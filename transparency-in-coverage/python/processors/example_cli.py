@@ -10,6 +10,9 @@ parser.add_argument('-o', '--out')
 
 args = parser.parse_args()
 
+url = args.u
+out_dir = args.o
+
 code_set = data_import('test/codes.csv')
 npi_set = {int(x[0]) for x in data_import('test/npis.csv')}
 
@@ -17,7 +20,7 @@ if __name__ == '__main__':
     try:
         flatten_mrf(
             loc=url,
-            out_dir='debug',
+            out_dir=out_dir,
             code_set=code_set,
             npi_set=npi_set
         )
