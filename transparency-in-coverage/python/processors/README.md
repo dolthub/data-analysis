@@ -34,6 +34,9 @@ You can try it on https://mrf.healthsparq.com/bsca-egress.nophi.kyruushsq.com/pr
 2. Run the command above on different URLs
 3. Import any tables that are produced. `root.csv` can be imported with `dolt table import -u root root.csv`, and the same for the other files.
 
+## FAQ
+1. You can run the file on any in-network.json file. Some plans are more likely to have rates than others. For example, Dental plans are unlikely to contain the codes <company> is looking for.
+
 
 ## My open questions/TODOs
 1. Should there be a foreign key relationship between tables?
