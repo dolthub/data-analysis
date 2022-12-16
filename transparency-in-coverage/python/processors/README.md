@@ -40,4 +40,5 @@ You can try it on https://mrf.healthsparq.com/bsca-egress.nophi.kyruushsq.com/pr
 
 ## My open questions/TODOs
 1. Should there be a foreign key relationship between tables?
-2. 
+2. Don't need root data in in-network table
+3. 

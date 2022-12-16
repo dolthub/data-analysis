@@ -392,8 +392,6 @@ class MRFWriter:
         self._write_rows([in_network_vals], 'in_network')
 
         for neg_rate in item.get('negotiated_rates', []):
-
-            # print(json.dumps(neg_rate, indent = 1))
             neg_rates_hash_key = hashdict(neg_rate)
             provider_group_rows = []
             neg_price_rows = []
@@ -420,17 +418,14 @@ class MRFWriter:
                     'negotiated_rate':           neg_price['negotiated_rate'],
                     'in_network_hash_key':       in_network_hash_key,
                     'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'service_code':              None if not (v := neg_price.get('service_code')) else sorted(v),
+                    'service_code':              None if not (v := neg_price.get('service_code')) else json.dumps(sorted(v)),
                     'additional_information':    neg_price.get('additional_information'),
-                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else sorted(v),
+                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else json.dumps(sorted(v)),
                     'root_hash_key':             item['root_hash_key'],
                 }
 
                 neg_price_rows.append(neg_price_vals)
             self._write_rows(neg_price_rows, 'negotiated_prices')
-
-            break
-
 
 def data_import(filename):
     """
@@ -448,7 +443,7 @@ def data_import(filename):
         return objs
 
 
-def hashdict(data, n_bytes = 6):
+def hashdict(data, n_bytes = 8):
     """
     We use a SHA256 256-bit hash.
 
@@ -456,12 +451,9 @@ def hashdict(data, n_bytes = 6):
         * the hexadecimal representation is 64 chars long
         * each hexadecimal (2 chars) is a byte of information
 
-    A good starting point is to use 40 bits for each hash, which is 5 bytes,
-    or 10 hexadecimal chars.
-
     @param data: dict
     @param length: number of bits
-    @return:
+    @return: hash as a UINT
     """
     if not data:
         raise ValueError
@@ -469,9 +461,7 @@ def hashdict(data, n_bytes = 6):
     sorted_tups = sorted(data.items())
     data_utf8 = json.dumps(sorted_tups).encode()
     hash_s = hashlib.sha256(data_utf8).hexdigest()[:2*n_bytes]
-    hash_b = bytes.fromhex(hash_s)
-    hash_b64 = base64.b64encode(hash_b).decode('utf-8')
-    return hash_b64
+    return int(hash_s, 16)
 
 
 def flatten_mrf(loc, npi_set, code_set, out_dir):
