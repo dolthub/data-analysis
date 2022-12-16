@@ -1,25 +1,30 @@
-# Using the CLI tool
+# About `mrfutils`
 
-Pick a file labeled "in-network rates" from 
+`mrfutils.py` is a single file pythons script to help filter and flatten the enormous MRF files that come from different insurance payers. 
 
-https://transparency-in-coverage.uhc.com/
+The amount of data in thes files is staggering. MRFUtils will allow you to give it a list of billing codes and NPI numbers and then only take the prices from the MRF that match both the code and NPI.
 
-or 
+The codes and NPIs should be passed as CSV files.
 
-https://web.healthsparq.com/healthsparq/public/#/one/insurerCode=BSCA_I&brandCode=BSCA/machine-readable-transparency-in-coverage
-
-**Do not choose a file labeled "index" or "allowed amounts".** The script will fail. Those files don't contain what we're looking for. 
-
-I'll provide the codes and npis in two separate csv files, codes.csv and npis.csv. 
-
-Then, with your codes.csv and npis.csv files, do
-
-```bash
-python3 example_cli.py --url <url> --out <your_dir> --codes <code_file_location> --npis <npi_file_location>
+`codes.csv` looks something like
+```commandline
+CPT,12345
+CPT,12346
+MS-DRG,123
 ```
 
-where the flags are 
+and `npis.csv`
+```commandline
+1234567890
+0123453598
+```
+and so on. To run, first pick an `in-network-rates.json` file, and then do:
 
+```bash
+python3 example_cli.py --url <url> --out <output_dir> --codes <code_file_location> --npis <npi_file_location>
+```
+
+where the flags are
 ```
 --npis <npifile.csv>
 --codes <codesfile.csv>
@@ -27,18 +32,17 @@ where the flags are
 --url <mrf url>
 ```
 
-You can try it on https://mrf.healthsparq.com/bsca-egress.nophi.kyruushsq.com/prd/mrf/BSCA_I/BSCA/2023-01-01/inNetworkRates/2023-01-01_1116-1014-010212546_Blue-Shield-of-California.json.gz
+**Note:** This **will not work** for _index.json_ or _allowed-amounts.json_ file. The script will fail. These files don't contain rates.
 
-## How to use this
-1. Use the given `codes.csv` and `npis.csv` files 
-2. Run the command above on different URLs
-3. Import any tables that are produced. `root.csv` can be imported with `dolt table import -u root root.csv`, and the same for the other files.
+Index files do, however, contain links to files with rates. So you may want to write a program that loops through them and gets those files. `example2.py` shows you how to do that.
 
-## FAQ
-1. You can run the file on any in-network.json file. Some plans are more likely to have rates than others. For example, Dental plans are unlikely to contain the codes <company> is looking for.
+## Example
 
+Pick an _in-network-rates.json_ file from one of the links below
 
-## My open questions/TODOs
-1. Should there be a foreign key relationship between tables?
-2. Don't need root data in in-network table
-3. 
+* https://transparency-in-coverage.uhc.com/
+* https://web.healthsparq.com/healthsparq/public/#/one/insurerCode=BSCA_I&brandCode=BSCA/machine-readable-transparency-in-coverage
+
+(for the second one, you'll need to use the Web Developer Tools to get the URL directly.)
+
+then run the above script.

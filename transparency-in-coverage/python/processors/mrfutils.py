@@ -388,7 +388,7 @@ class MRFWriter:
 
         in_network_hash_key = hashdict(in_network_vals)
         in_network_vals['in_network_hash_key'] = in_network_hash_key
-        in_network_vals['root_hash_key'] = item['root_hash_key']
+        # in_network_vals['root_hash_key'] = item['root_hash_key']
         self._write_rows([in_network_vals], 'in_network')
 
         for neg_rate in item.get('negotiated_rates', []):
@@ -460,8 +460,9 @@ def hashdict(data, n_bytes = 8):
 
     sorted_tups = sorted(data.items())
     data_utf8 = json.dumps(sorted_tups).encode()
-    hash_s = hashlib.sha256(data_utf8).hexdigest()[:2*n_bytes]
-    return int(hash_s, 16)
+    hash_s = hashlib.sha256(data_utf8).digest()[:n_bytes]
+    hash_i = int.from_bytes(hash_s, 'little')
+    return hash_i
 
 
 def flatten_mrf(loc, npi_set, code_set, out_dir):

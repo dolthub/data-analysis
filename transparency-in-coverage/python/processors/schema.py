@@ -12,7 +12,7 @@ SCHEMA = {
         "url",
     ],
     "in_network": [
-        "root_hash_key",
+        # "root_hash_key",
         "in_network_hash_key",
         "negotiation_arrangement",
         # "name",
