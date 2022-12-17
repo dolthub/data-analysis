@@ -1,7 +1,6 @@
 import os
 import csv
 import hashlib
-import base64
 import json
 import ijson
 import requests
@@ -72,10 +71,10 @@ class MRFOpen:
             self.f = self.r.raw
 
         elif self.suffix == '.json.gz':
-            self.f = gzip.open(self.loc, 'r')
+            self.f = gzip.open(self.loc, 'rb')
 
         else:
-            self.f = open(self.loc, 'r')
+            self.f = open(self.loc, 'rb')
 
         log.debug(f'Opened file: {self.loc}')
         return self.f
@@ -229,19 +228,16 @@ class MRFObjectBuilder:
             self,
             npi_set,
             code_set,
-            root_data,
             p_refs_map,
     ):
         """
         Generator that returns a fully-constructed in-network item.
         @param npi_set: set
         @param code_set: set
-        @param root_data: dict
         @param p_refs_map: dict
         @return: dict
         """
         builder = ijson.ObjectBuilder()
-        root_hash_key = hashdict(root_data)
 
         for prefix, event, value in self.parser:
 
@@ -251,7 +247,6 @@ class MRFObjectBuilder:
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Rates found for {billing_code_type} {billing_code}")
                 in_network_item = builder.value.pop()
-                in_network_item['root_hash_key'] = root_hash_key
                 yield in_network_item
 
             elif (
@@ -296,6 +291,7 @@ class MRFObjectBuilder:
                     and (grps := p_refs_map.get(value))
             ):
                 provider_groups.extend(grps)
+
 
             # elif (
             #     not p_refs_map
@@ -371,24 +367,19 @@ class MRFWriter:
             writer.writerows(rows)
 
     def write_root(self, root_data):
-        root_hash_key = hashdict(root_data)
-        root_data['root_hash_key'] = root_hash_key
         self._write_rows([root_data], 'root')
 
-    def write_innet_item(self, item):
+    def write_innet_item(self, item, root_hash_key):
 
         in_network_vals = {
             'negotiation_arrangement':   item['negotiation_arrangement'],
-            # 'name':                      item['name'],
             'billing_code_type':         item['billing_code_type'],
             'billing_code_type_version': item['billing_code_type_version'],
             'billing_code':              item['billing_code'],
-            # 'description':               item['description'],
         }
 
         in_network_hash_key = hashdict(in_network_vals)
         in_network_vals['in_network_hash_key'] = in_network_hash_key
-        # in_network_vals['root_hash_key'] = item['root_hash_key']
         self._write_rows([in_network_vals], 'in_network')
 
         for neg_rate in item.get('negotiated_rates', []):
@@ -403,9 +394,8 @@ class MRFWriter:
                     'tin_value':                 provider_group['tin']['value'],
                     'negotiated_rates_hash_key': neg_rates_hash_key,
                     'in_network_hash_key':       in_network_hash_key,
-                    'root_hash_key':             item['root_hash_key'],
+                    'root_hash_key':             root_hash_key,
                 }
-
 
                 provider_group_rows.append(provider_group_vals)
             self._write_rows(provider_group_rows, 'provider_groups')
@@ -421,11 +411,12 @@ class MRFWriter:
                     'service_code':              None if not (v := neg_price.get('service_code')) else json.dumps(sorted(v)),
                     'additional_information':    neg_price.get('additional_information'),
                     'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else json.dumps(sorted(v)),
-                    'root_hash_key':             item['root_hash_key'],
+                    'root_hash_key':             root_hash_key,
                 }
 
                 neg_price_rows.append(neg_price_vals)
             self._write_rows(neg_price_rows, 'negotiated_prices')
+
 
 def data_import(filename):
     """
@@ -435,11 +426,10 @@ def data_import(filename):
     @return:
     """
     with open(filename, 'r') as f:
-        reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
+        reader = csv.reader(f)
         objs = set()
         for row in reader:
-            objs.add(tuple(row[f] for f in fieldnames))
+            objs.add(tuple(row))
         return objs
 
 
@@ -488,16 +478,17 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
 
         # Get root data from top of file
         root_data = m.collect_root()
-
-        root_data['url'] = loc
+        root_data['url'] = Path(loc).stem.split('.')[0]
+        root_hash_key = hashdict(root_data)
+        root_data['root_hash_key'] = root_hash_key
         writer.write_root(root_data)
 
         # Case 1. The MRF has its provider references at the top
         if m.parser.value == ('', 'map_key', 'provider_references'):
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
-            for item_data in m.gen_innet_items(npi_set, code_set, root_data, p_refs_map):
-                writer.write_innet_item(item_data)
+            for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
+                writer.write_innet_item(item_data,root_hash_key)
             return
 
         # Case 2/3. The MRF has its provider references either at the bottom,
@@ -517,5 +508,5 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
         m.ffwd(('', 'map_key', 'in_network'))
-        for item_data in m.gen_innet_items(npi_set, code_set, root_data, p_refs_map):
-            writer.write_innet_item(item_data)
+        for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
+            writer.write_innet_item(item_data, root_hash_key)
