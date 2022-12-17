@@ -429,7 +429,7 @@ def data_import(filename):
         reader = csv.reader(f)
         objs = set()
         for row in reader:
-            objs.add(tuple(row))
+            objs.add(tuple([x.strip() for x in row]))
         return objs
 
 

@@ -1,17 +1,13 @@
 import unittest
+from pathlib import Path
+from mrfutils import (MRFOpen, MRFObjectBuilder, hashdict)
 
-from mrfutils import (
-                    MRFOpen, 
-                    MRFObjectBuilder, 
-                    MRFWriter)
-
-class TestStringMethods(unittest.TestCase): 
+class TestMRFObjectBuilder(unittest.TestCase):
 
     def test_p_refs_map(self):
 
         loc = 'test/test.json.gz'
         npi_set = {1111111111, 5555555555, 2020202020}
-        code_set = {('TS-TST', '0000')}
 
         with MRFOpen(loc) as f:
             m = MRFObjectBuilder(f)
@@ -23,17 +19,23 @@ class TestStringMethods(unittest.TestCase):
 
 
     def test_npis(self):
+
         loc = 'test/test.json'
         npi_set = {1111111111, 5555555555, 2020202020}
-        code_set = {}
+        code_set = {('TS-TST', '0000')}
 
         with MRFOpen(loc) as f:
             m = MRFObjectBuilder(f)
-            root_data = m.collect_root(loc)
+            root_data = m.collect_root()
+            root_data['url'] = Path(loc).stem.split('.')[0]
+            root_hash_key = hashdict(root_data)
+            root_data['root_hash_key'] = root_hash_key
+
+
             root_data['url'] = loc
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
-            g = m.gen_innet_items(npi_set, code_set, root_data, p_refs_map)
+            g = m.gen_innet_items(npi_set, code_set, p_refs_map)
             item_data = next(g)
 
         negotiated_rates = item_data['negotiated_rates']

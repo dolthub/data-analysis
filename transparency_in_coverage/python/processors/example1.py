@@ -32,5 +32,3 @@ for url in tqdm(urls):
             log.critical(e)
             pass
 
-
-
