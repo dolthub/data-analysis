@@ -20,7 +20,7 @@ class TestMRFObjectBuilder(unittest.TestCase):
 
     def test_npis(self):
 
-        loc = 'test/test.json'
+        loc = 'test/test.json.gz'
         npi_set = {1111111111, 5555555555, 2020202020}
         code_set = {('TS-TST', '0000')}
 
