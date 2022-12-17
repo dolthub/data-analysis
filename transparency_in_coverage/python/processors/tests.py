@@ -17,7 +17,6 @@ class TestMRFObjectBuilder(unittest.TestCase):
         self.assertTrue(p_refs_map[0][0]['npi'] == [1111111111])
         self.assertTrue(p_refs_map[1][0]['npi'] == [2020202020, 1111111111])
 
-
     def test_npis(self):
 
         loc = 'test/test.json.gz'
@@ -31,8 +30,6 @@ class TestMRFObjectBuilder(unittest.TestCase):
             root_hash_key = hashdict(root_data)
             root_data['root_hash_key'] = root_hash_key
 
-
-            root_data['url'] = loc
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
             g = m.gen_innet_items(npi_set, code_set, p_refs_map)
