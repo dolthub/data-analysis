@@ -1,6 +1,6 @@
 SCHEMA = {
     "root": [
-        "root_hash_key",
+        "root_hash",
         "reporting_entity_name",
         "reporting_entity_type",
         "plan_name",
@@ -11,16 +11,16 @@ SCHEMA = {
         "version",
         "url",
     ],
-    "in_network": [
-        # "root_hash_key",
-        "in_network_hash_key",
-        "negotiation_arrangement",
-        # "name",
-        "billing_code_type_version",
-        # "description",
-        "billing_code",
-        "billing_code_type",
-    ],
+    # "in_network": [
+    #     # "root_hash_key",
+    #     "in_network_hash",
+    #     "negotiation_arrangement",
+    #     # "name",
+    #     "billing_code_type_version",
+    #     # "description",
+    #     "billing_code",
+    #     "billing_code_type",
+    # ],
     "negotiated_prices": [
         "root_hash_key",
         "in_network_hash_key",

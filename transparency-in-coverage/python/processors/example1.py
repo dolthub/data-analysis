@@ -23,10 +23,10 @@ for url in tqdm(urls):
     with logging_redirect_tqdm():
         try:
             flatten_mrf(
-                loc = url, 
-                out_dir = 'example1_csvs',
-                code_set=code_set, 
-                npi_set = npi_set
+                loc      = url,
+                out_dir  = 'example1_csvs',
+                code_set = code_set,
+                npi_set  = npi_set
             )
         except InvalidMRF as e:
             log.critical(e)

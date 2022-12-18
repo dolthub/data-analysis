@@ -17,6 +17,40 @@ file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
+from dataclasses import dataclass, asdict
+
+@dataclass(frozen = True)
+class Root:
+    reporting_entity_name: str
+    reporting_entity_type: str
+    plan_name: str
+    plan_id: str
+    plan_id_type: str
+    plan_market_type: str
+    last_updated_on: str
+    version: str
+    url: str
+
+@dataclass(frozen = True)
+class InNetwork:
+    negotiation_arrangement: str
+    billing_code_type: str
+    billing_code_type_version: str
+    billing_code: str
+
+@dataclass(frozen = True)
+class NegotiatedPrice:
+    negotiation_arrangement: str
+    billing_code_type: str
+    billing_code_type_version: str
+    billing_code: str
+
+
+def positive_hash(hash_):
+    h = hash(hash_)
+    h += sys.maxsize + 1
+    return h
+
 class Parser:
     """
     Wrapper for default ijson parser that allows
@@ -340,6 +374,7 @@ class MRFObjectBuilder:
 
             builder.event(event, value)
 
+import sys
 
 class MRFWriter:
     """Class for writing the MRF data to the appropriate
@@ -357,62 +392,54 @@ class MRFWriter:
         fieldnames = self.schema[filename]
         file_loc = f'{self.out_dir}/{filename}.csv'
         file_exists = os.path.exists(file_loc)
+        dict_rows = [asdict(r) for r in rows]
+        for r, dr in zip(rows, dict_rows):
+            dr[filename + '_hash'] = positive_hash(hash(r))
 
         with open(file_loc, 'a') as f:
             writer = csv.DictWriter(f, fieldnames = fieldnames)
             if not file_exists:
                 writer.writeheader()
-            writer.writerows(rows)
+            writer.writerows(dict_rows)
 
     def write_root(self, root_data):
+        return
         self._write_rows([root_data], 'root')
 
-    def write_innet_item(self, item, root_hash_key):
+    def write_innet_item(self, item):
 
-        in_network_vals = {
-            'negotiation_arrangement':   item['negotiation_arrangement'],
-            'billing_code_type':         item['billing_code_type'],
-            'billing_code_type_version': item['billing_code_type_version'],
-            'billing_code':              item['billing_code'],
-        }
+        inv = InNetwork(
+            negotiation_arrangement = item['negotiation_arrangement'],
+            billing_code_type = item['billing_code_type'],
+            billing_code_type_version = item['billing_code_type_version'],
+            billing_code = item['billing_code'],
+        )
 
-        in_network_hash_key = hashdict(in_network_vals)
-        in_network_vals['in_network_hash_key'] = in_network_hash_key
-        self._write_rows([in_network_vals], 'in_network')
+        self._write_rows([inv], 'in_network')
 
         for neg_rate in item.get('negotiated_rates', []):
-            neg_rates_hash_key = hashdict(neg_rate)
-            provider_group_rows = []
             neg_price_rows = []
-
-            for provider_group in neg_rate['provider_groups']:
-                provider_group_vals = {
-                    'npi_numbers':               sorted(provider_group['npi']),
-                    'tin_type':                  provider_group['tin']['type'],
-                    'tin_value':                 provider_group['tin']['value'],
-                    'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'in_network_hash_key':       in_network_hash_key,
-                    'root_hash_key':             root_hash_key,
-                }
-
-                provider_group_rows.append(provider_group_vals)
-            self._write_rows(provider_group_rows, 'provider_groups')
-
+            
             for neg_price in neg_rate['negotiated_prices']:
-                neg_price_vals = {
-                    'billing_class':             neg_price['billing_class'],
-                    'negotiated_type':           neg_price['negotiated_type'],
-                    'expiration_date':           neg_price['expiration_date'],
-                    'negotiated_rate':           neg_price['negotiated_rate'],
-                    'in_network_hash_key':       in_network_hash_key,
-                    'negotiated_rates_hash_key': neg_rates_hash_key,
-                    'service_code':              None if not (v := neg_price.get('service_code')) else json.dumps(sorted(v)),
-                    'additional_information':    neg_price.get('additional_information'),
-                    'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else json.dumps(sorted(v)),
-                    'root_hash_key':             root_hash_key,
-                }
+                for provider_group in neg_rate['provider_groups']:
+                    neg_price_vals = {
+                        'billing_class':             neg_price['billing_class'],
+                        'negotiated_type':           neg_price['negotiated_type'],
+                        'expiration_date':           neg_price['expiration_date'],
+                        'negotiated_rate':           neg_price['negotiated_rate'],
+                        'in_network_hash_key':       in_network_hash_key,
+                        'negotiated_rates_hash_key': neg_rates_hash_key,
+                        'service_code':              None if not (v := neg_price.get('service_code')) else json.dumps(sorted(v)),
+                        'additional_information':    neg_price.get('additional_information'),
+                        'billing_code_modifier':     None if not (v := neg_price.get('billing_code_modifier')) else json.dumps(sorted(v)),
+                        'root_hash_key':             root_hash_key,
+                        'npi_numbers':               json.dumps(sorted(provider_group['npi'])),
+                        'tin_type':                  provider_group['tin']['type'],
+                        'tin_value':                 provider_group['tin']['value'],
+                    }
 
-                neg_price_rows.append(neg_price_vals)
+                    neg_price_rows.append(neg_price_vals)
+
             self._write_rows(neg_price_rows, 'negotiated_prices')
 
 
@@ -486,7 +513,7 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
             for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
-                writer.write_innet_item(item_data,root_hash_key)
+                writer.write_innet_item(item_data)
             return
 
         # Case 2/3. The MRF has its provider references either at the bottom,
