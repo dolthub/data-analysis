@@ -1,12 +1,31 @@
 import unittest
 from pathlib import Path
-from mrfutils import (MRFOpen, MRFObjectBuilder, hashdict)
+from mrfutils import (MRFOpen,
+                      MRFObjectBuilder,
+                      hashdict,
+                      _collect_remote_p_refs)
 
 class TestMRFObjectBuilder(unittest.TestCase):
 
+    def test_remote_ref(self):
+
+        loc = 'test/test.json'
+        npi_set = {1111111111, 5555555555, 2020202020}
+
+        with MRFOpen(loc) as f:
+            m = MRFObjectBuilder(f)
+            m.ffwd(('', 'map_key', 'provider_references'))
+            _, remote_p_refs = m._prepare_provider_refs(npi_set)
+            new_p_refs = _collect_remote_p_refs(remote_p_refs, npi_set)
+
+            new_p_ref = new_p_refs[0]
+
+        self.assertTrue(new_p_ref['provider_groups'][0]['npi'] == [1111111111])
+        self.assertTrue(new_p_ref['provider_groups'][0]['tin']['value'] == '22-2222222')
+
     def test_p_refs_map(self):
 
-        loc = 'test/test.json.gz'
+        loc = 'test/test.json'
         npi_set = {1111111111, 5555555555, 2020202020}
 
         with MRFOpen(loc) as f:
@@ -17,9 +36,12 @@ class TestMRFObjectBuilder(unittest.TestCase):
         self.assertTrue(p_refs_map[0][0]['npi'] == [1111111111])
         self.assertTrue(p_refs_map[1][0]['npi'] == [2020202020, 1111111111])
 
+        # remote case
+        self.assertTrue(p_refs_map[2][0]['npi'] == [1111111111])
+
     def test_npis(self):
 
-        loc = 'test/test.json.gz'
+        loc = 'test/test.json'
         npi_set = {1111111111, 5555555555, 2020202020}
         code_set = {('TS-TST', '0000')}
 

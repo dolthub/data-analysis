@@ -24,7 +24,7 @@ for url in tqdm(urls):
         try:
             flatten_mrf(
                 loc = url, 
-                out_dir = 'debug', 
+                out_dir = 'example1_csvs',
                 code_set=code_set, 
                 npi_set = npi_set
             )

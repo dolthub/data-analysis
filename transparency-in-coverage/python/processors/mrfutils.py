@@ -87,6 +87,59 @@ class MRFOpen:
         self.f.close()
 
 
+def _collect_remote_reference(loc, npi_set):
+    """
+    Given a remote reference location 'loc', collect
+    the provider references at that location, filtering
+    them so that it only collects those with NPI numbers
+    in npi_set
+    """
+    with MRFOpen(loc) as f:
+        builder = ijson.ObjectBuilder()
+        parser = ijson.parse(f, use_float = True)
+
+        for prefix, event, value in parser:
+
+            if (
+                prefix.endswith('npi.item')
+                and npi_set
+                and value not in npi_set
+            ):
+                continue
+
+            elif (
+                prefix.endswith('provider_groups.item')
+                and event == 'end_map'
+            ):
+                if not builder.value['provider_groups'][-1]['npi']:
+                    builder.value['provider_groups'].pop()
+
+            builder.event(event, value)
+
+    return builder.value
+
+
+def _collect_remote_p_refs(remote_p_refs, npi_set):
+    """
+    Given a list of remote provider references, fetch
+    them individually and build them. Return them as local
+    provider references
+    """
+    new_local_p_prefs = []
+
+    for pref in remote_p_refs:
+        loc = pref.get('location')
+        try:
+            remote_reference = _collect_remote_reference(loc, npi_set)
+            remote_reference['provider_group_id'] = pref['provider_group_id']
+            new_local_p_prefs.append(remote_reference)
+        except Exception as e:
+            log.warning(f'Error building remote provider references from {loc}')
+            log.warning(e)
+
+    return new_local_p_prefs
+
+
 class MRFObjectBuilder:
     """
     Takes a parser and returns necessary objects
@@ -131,18 +184,17 @@ class MRFObjectBuilder:
         @param npi_set: set
         @return: dict
         """
+        local_p_refs, remote_p_refs = self._prepare_provider_refs(npi_set)
 
-        p_refs, remote_p_refs = self._collect_p_refs(npi_set)
-        new_p_refs = self._collect_remote_p_refs(remote_p_refs, npi_set)
-
-        if new_p_refs:
-            p_refs.extend(new_p_refs)
+        local_p_refs.extend(
+            _collect_remote_p_refs(remote_p_refs, npi_set)
+        )
 
         return {
-            p_ref['provider_group_id']: p_ref['provider_groups'] for p_ref in p_refs
+            p['provider_group_id']: p['provider_groups'] for p in local_p_refs
         }
 
-    def _collect_p_refs(self, npi_set):
+    def _prepare_provider_refs(self, npi_set):
         remote_p_refs = []
         builder = ijson.ObjectBuilder()
 
@@ -156,7 +208,7 @@ class MRFObjectBuilder:
             elif (
                 prefix.endswith('npi.item')
                 and npi_set
-                and not value in npi_set
+                and value not in npi_set
             ):
                 continue
 
@@ -177,52 +229,7 @@ class MRFObjectBuilder:
                 elif not builder.value[-1].get('provider_groups'):
                     builder.value.pop()
 
-
             builder.event(event, value)
-
-    def _collect_remote_reference(self, loc, npi_set):
-
-        with MRFOpen(loc) as f:
-            builder = ijson.ObjectBuilder()
-
-            parser = ijson.parse(f, use_float = True)
-            for prefix, event, value in parser:
-
-                if (
-                    prefix.endswith('npi.item') 
-                    and npi_set
-                    and not value in npi_set
-                ):
-                    continue
-
-                elif (
-                    prefix.endswith('provider_groups.item') 
-                    and event == 'end_map'
-                ):
-                    if not builder.value['provider_groups'][-1]['npi']:
-                        builder.value['provider_groups'].pop()
-
-                builder.event(event, value)
-
-        return builder.value
-
-    def _collect_remote_p_refs(
-        self, 
-        remote_p_refs, 
-        npi_set
-    ):
-
-        new_p_refs = []
-
-        for pref in remote_p_refs:
-            loc = pref.get('location')
-            try:
-                remote_reference = self._collect_remote_reference(loc, npi_set)
-                remote_reference['provider_group_id'] = pref['provider_group_id']
-                new_p_refs.append(remote_reference)
-            except Exception as e:
-                log.warning(f'Error building remote provider references from {loc}')
-                log.warning(e)
 
     def gen_innet_items(
             self,
@@ -250,8 +257,7 @@ class MRFObjectBuilder:
                 yield in_network_item
 
             elif (
-                    (prefix, event) == (
-            'in_network.item.negotiated_rates', 'start_array')
+                    (prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
             ):
                 billing_code_type = builder.value[-1]['billing_code_type']
                 billing_code = str(builder.value[-1]['billing_code'])
@@ -268,8 +274,7 @@ class MRFObjectBuilder:
                     continue
 
             elif (
-                    (prefix, event) == (
-            'in_network.item.negotiated_rates', 'end_array')
+                    (prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
                     and not builder.value[-1]['negotiated_rates']
             ):
                 log.debug(f"Skipping {billing_code_type} {billing_code}: no providers")
@@ -291,13 +296,6 @@ class MRFObjectBuilder:
                     and (grps := p_refs_map.get(value))
             ):
                 provider_groups.extend(grps)
-
-
-            # elif (
-            #     not p_refs_map
-            #     and prefix.endswith('provider_references.item')
-            # ):
-            #     raise Exception
 
             elif (
                     prefix.endswith('negotiated_rates.item')
