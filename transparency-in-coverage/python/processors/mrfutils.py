@@ -17,6 +17,7 @@ file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
+
 class Parser:
     """
     Wrapper for default ijson parser that allows
@@ -147,13 +148,6 @@ class MRFObjectBuilder:
     """
     def __init__(self, f):
         self.parser = Parser(f)
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        self.row = next(self.__p)
-        return self.row
 
     def ffwd(self, to_row):
         """
