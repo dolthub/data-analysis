@@ -4,11 +4,13 @@ import hashlib
 import json
 import ijson
 import requests
+import sys
 import gzip
 import logging
 from urllib.parse import urlparse
-from pathlib import Path
-from schema import SCHEMA
+from pathlib      import Path
+from schema       import SCHEMA
+from dataclasses  import dataclass, asdict, astuple
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -17,39 +19,12 @@ file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
-from dataclasses import dataclass, asdict
-
-@dataclass(frozen = True)
-class Root:
-    reporting_entity_name: str
-    reporting_entity_type: str
-    plan_name: str
-    plan_id: str
-    plan_id_type: str
-    plan_market_type: str
-    last_updated_on: str
-    version: str
-    url: str
-
-@dataclass(frozen = True)
-class InNetwork:
-    negotiation_arrangement: str
-    billing_code_type: str
-    billing_code_type_version: str
-    billing_code: str
-
-@dataclass(frozen = True)
-class NegotiatedPrice:
-    negotiation_arrangement: str
-    billing_code_type: str
-    billing_code_type_version: str
-    billing_code: str
-
 
 def positive_hash(hash_):
     h = hash(hash_)
     h += sys.maxsize + 1
     return h
+
 
 class Parser:
     """
@@ -374,7 +349,69 @@ class MRFObjectBuilder:
 
             builder.event(event, value)
 
-import sys
+
+def hash_(tuple_, n_bytes = 8):
+    h = hashlib.sha256()
+    for v in tuple_:
+        print(v)
+        if type(v) == int:
+            h.update(bytes(v))
+        elif type(v) == str:
+            h.update(bytes(v.encode('utf-8')))
+    hash_s = h.digest()[:n_bytes]
+    hash_i = int.from_bytes(hash_s, 'little')
+    return hash_i
+
+
+@dataclass(frozen = True)
+class Root:
+    reporting_entity_name: str
+    reporting_entity_type: str
+    plan_name: str
+    plan_id: str
+    plan_id_type: str
+    plan_market_type: str
+    last_updated_on: str
+    version: str
+    url: str
+
+    def __hash__(self):
+        return hash_(astuple(self))
+
+
+@dataclass(frozen = True)
+class InNetwork:
+    negotiation_arrangement: str
+    billing_code_type: str
+    billing_code_type_version: str
+    billing_code: str
+
+    def __hash__(self):
+        return hash_(astuple(self))
+
+
+@dataclass(frozen=True)
+class ProviderGroup:
+    tin_value: int
+    npi_numbers: str # json.loads(list[int]))
+
+    def __hash__(self):
+        return hash_(astuple(self))
+
+
+@dataclass(frozen = True)
+class NegotiatedPrice:
+    negotiation_arrangement: str
+    billing_code_type: str
+    billing_code_type_version: str
+    billing_code: str
+    in_network_hash: int
+    provider_group_hash: int
+    root_hash: int
+
+    def __hash__(self):
+        return hash_(astuple(self))
+
 
 class MRFWriter:
     """Class for writing the MRF data to the appropriate
@@ -392,6 +429,7 @@ class MRFWriter:
         fieldnames = self.schema[filename]
         file_loc = f'{self.out_dir}/{filename}.csv'
         file_exists = os.path.exists(file_loc)
+
         dict_rows = [asdict(r) for r in rows]
         for r, dr in zip(rows, dict_rows):
             dr[filename + '_hash'] = positive_hash(hash(r))
@@ -408,14 +446,14 @@ class MRFWriter:
 
     def write_innet_item(self, item):
 
-        inv = InNetwork(
+        i = InNetwork(
             negotiation_arrangement = item['negotiation_arrangement'],
             billing_code_type = item['billing_code_type'],
             billing_code_type_version = item['billing_code_type_version'],
             billing_code = item['billing_code'],
         )
 
-        self._write_rows([inv], 'in_network')
+        self._write_rows([i], 'in_network')
 
         for neg_rate in item.get('negotiated_rates', []):
             neg_price_rows = []
