@@ -1,8 +1,12 @@
+#!/usr/bin/python3
+
 import requests
 import time
 import ijson
 from urllib.parse import urlparse
-from helpers import MRFOpen
+import sys
+
+from mrfutils import MRFOpen
 
 def mrfs_from_idx(idx_url):
     '''
@@ -31,6 +35,13 @@ def mrfs_from_idx(idx_url):
 
     return in_network_file_urls
 
-idx_url = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
+def main():
+    if len(sys.argv) == 2:
+        idx_url = sys.argv[1]
+    else:
+        idx_url = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
 
-mrfs_from_idx(idx_url)
+    mrfs_from_idx(idx_url)
+
+if __name__ == "__main__":
+    main()
