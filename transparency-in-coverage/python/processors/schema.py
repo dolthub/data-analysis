@@ -11,21 +11,17 @@ SCHEMA = {
         "version",
         "url",
     ],
-    "in_network": [
-        # "root_hash_key",
-        "in_network_hash",
+    "codes": [
+        "code_hash",
         "negotiation_arrangement",
-        # "name",
         "billing_code_type_version",
-        # "description",
         "billing_code",
         "billing_code_type",
     ],
     "negotiated_prices": [
         "root_hash",
         "in_network_hash",
-        # "negotiated_rates_hash_key",
-        "negotiated_prices_hash",
+        "negotiated_price_hash",
         "billing_class",
         "negotiated_type",
         "service_code",
@@ -35,14 +31,15 @@ SCHEMA = {
         "negotiated_rate",
     ],
     "provider_groups": [
-        # "root_hash_key",
-        # "in_network_hash_key",
-        # "negotiated_rates_hash_key",
-        "provider_groups_hash",
+        "provider_group_hash",
         "tin_type",
         "tin_value",
         "npi_numbers",
     ],
+    "provider_groups_negotiated_prices_link": [
+        "provider_group_hash",
+        "negotiated_price_hash",
+    ]
     # "covered_services": [
     #     "root_hash_key",
     #     "in_network_hash_key",

@@ -256,6 +256,7 @@ class MRFObjectBuilder:
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Rates found for {billing_code_type} {billing_code}")
                 in_network_item = builder.value.pop()
+
                 yield in_network_item
 
             elif (
@@ -343,71 +344,6 @@ class MRFObjectBuilder:
             builder.event(event, value)
 
 
-
-
-def _hash_tup(tuple_, n_bytes = 8):
-    h = hashlib.sha256()
-    for t in tuple_:
-        h.update(bytes(str(t).encode('utf-8')))
-    hash_s = h.digest()[:n_bytes]
-    hash_i = int.from_bytes(hash_s, 'little')
-    return hash_i
-
-
-@dataclass
-class Root:
-    reporting_entity_name: str = None
-    reporting_entity_type: str = None
-    plan_name: str = None
-    plan_id: str = None
-    plan_id_type: str = None
-    plan_market_type: str = None
-    last_updated_on: str = None
-    version: str = None
-    url: str = None
-    # filename: str = None
-
-    def __hash__(self):
-        return _hash_tup(astuple(self))
-
-
-@dataclass
-class InNetwork:
-    negotiation_arrangement: str
-    billing_code_type: str
-    billing_code_type_version: str
-    billing_code: str
-
-    def __hash__(self):
-        return _hash_tup(astuple(self))
-
-
-@dataclass
-class ProviderGroup:
-    tin_value: int
-    tin_type: str
-    npi_numbers: str # json.loads(list[int]))
-
-    def __hash__(self):
-        return _hash_tup(astuple(self))
-
-
-@dataclass
-class NegotiatedPrice:
-    billing_class: str
-    negotiated_type: str
-    expiration_date: str
-    negotiated_rate: str
-    service_code: str
-    additional_information: str
-    billing_code_modifier: str
-    in_network_hash: int
-    root_hash: int
-
-    def __hash__(self):
-        return _hash_tup(astuple(self))
-
-
 class MRFWriter:
     """Class for writing the MRF data to the appropriate
     files in the specified schema"""
@@ -421,100 +357,83 @@ class MRFWriter:
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
 
-    def _write_table(self, rows, filename, **static_hashes):
+    def _write_table(self, rows, filename):
         fieldnames = self.schema[filename]
         file_loc = f'{self.out_dir}/{filename}.csv'
         file_exists = os.path.exists(file_loc)
-
-        dict_rows = [asdict(r) for r in rows]
-        for r, dr in zip(rows, dict_rows):
-            dr[filename + '_hash'] = hash(r)
-            for sh in static_hashes:
-                dr[sh] = static_hashes[sh]
 
         with open(file_loc, 'a') as f:
             writer = csv.DictWriter(f, fieldnames = fieldnames)
             if not file_exists:
                 writer.writeheader()
-            writer.writerows(dict_rows)
+            writer.writerows(rows)
 
-    def _write_rows(self, rows, filename, **static_hashes):
+    def write_in_network_item(self, item, root_hash):
 
-        fieldnames = self.schema[filename]
-        file_loc = f'{self.out_dir}/{filename}.csv'
-        file_exists = os.path.exists(file_loc)
+        code_row = {
+            'negotiation_arrangement': item['negotiation_arrangement'],
+            'billing_code_type': item['billing_code_type'],
+            'billing_code_type_version': item['billing_code_type_version'],
+            'billing_code': item['billing_code'],
+        }
 
-        dict_rows = [asdict(r) for r in rows]
-        for r, dr in zip(rows, dict_rows):
-            dr[filename + '_hash'] = hash(r)
-            # for static_hash in static_hashes:
+        code_hash = hashdict(code_row)
+        code_row['code_hash'] = code_hash
+        self._write_table([code_row], 'codes')
 
-        with open(file_loc, 'a') as f:
-            writer = csv.DictWriter(f, fieldnames = fieldnames)
-            if not file_exists:
-                writer.writeheader()
-            writer.writerows(dict_rows)
+        for rate in item.get('negotiated_rates', []):
+            price_rows = []
+            for price in rate['negotiated_prices']:
 
-    def write_root(self, root_data):
-        self._write_table([root_data], 'root')
+                if sc := price.get('service_code'):
+                    price['service_code'] = json.dumps(sorted(sc))
+                else:
+                    price['service_code'] = None
 
-    def write_innet_item(self, item, root_hash):
+                if bcm := price.get('billing_code_modifier'):
+                    price['billing_code_modifier'] = json.dumps(sorted(bcm))
+                else:
+                    price['billing_code_modifier'] = None
 
-        innet = InNetwork(
-            negotiation_arrangement = item['negotiation_arrangement'],
-            billing_code_type = item['billing_code_type'],
-            billing_code_type_version = item['billing_code_type_version'],
-            billing_code = item['billing_code'],
-        )
+                price_row = {
+                    'billing_class': price['billing_class'],
+                    'negotiated_type': price['negotiated_type'],
+                    'expiration_date': price['expiration_date'],
+                    'negotiated_rate': price['negotiated_rate'],
+                    'service_code': price['service_code'],
+                    'additional_information': price.get('additional_information'),
+                    'billing_code_modifier': price['billing_code_modifier'],
+                    'in_network_hash': code_hash,
+                    'root_hash': root_hash,
+                }
 
-        self._write_rows([innet], 'in_network')
-        in_network_hash = hash(innet)
+                price_row['negotiated_price_hash'] = hashdict(price_row)
+                price_rows.append(price_row)
+                self._write_table(price_rows, 'negotiated_prices')
 
-        for neg_rate in item.get('negotiated_rates', []):
+            group_rows = []
+            for group in rate['provider_groups']:
+                group_row = {
+                    'npi_numbers': json.dumps(sorted(group['npi'])),
+                    'tin_type': group['tin']['type'],
+                    'tin_value': group['tin']['value'],
+                }
 
-            neg_price_rows = []
-            for neg_price in neg_rate['negotiated_prices']:
-                n = NegotiatedPrice(
-                    billing_class =           neg_price['billing_class'],
-                    negotiated_type =         neg_price['negotiated_type'],
-                    expiration_date =         neg_price['expiration_date'],
-                    negotiated_rate =         neg_price['negotiated_rate'],
-                    service_code =            None if not (v := neg_price.get('service_code')) else json.dumps(sorted(v)),
-                    additional_information =  neg_price.get('additional_information'),
-                    billing_code_modifier =   None if not (v := neg_price.get('billing_code_modifier')) else json.dumps(sorted(v)),
-                    in_network_hash =         in_network_hash,
-                    root_hash =               root_hash,
-                )
-                neg_price_rows.append(n)
-            self._write_table(neg_price_rows, 'negotiated_prices')
-
-            provider_group_rows = []
-            for provider_group in neg_rate['provider_groups']:
-                p = ProviderGroup(
-                    npi_numbers = json.dumps(sorted(provider_group['npi'])),
-                    tin_type    =    provider_group['tin']['type'],
-                    tin_value   =   provider_group['tin']['value'],
-                )
-                provider_group_rows.append(p)
-            self._write_table(provider_group_rows, 'provider_groups')
+                group_row['provider_group_hash'] = hashdict(group_row)
+                group_rows.append(group_row)
+            self._write_table(group_rows, 'provider_groups')
 
             # Write the linking table
-            file_loc = f'{self.out_dir}/group_price_link.csv'
-            file_exists = os.path.exists(file_loc)
-
             links = []
-            for neg_price in neg_price_rows:
-                for provider_group in provider_group_rows:
-                    links.append({'provider_group_hash': hash(provider_group),
-                                  'negotiated_price_hash': hash(neg_price)})
+            for price in price_rows:
+                for group in group_rows:
+                    link = {
+                        'provider_group_hash': group['provider_group_hash'],
+                        'negotiated_price_hash': price['negotiated_price_hash'],
+                    }
+                    links.append(link)
 
-            with open(file_loc, 'a') as f:
-                writer = csv.DictWriter(f, fieldnames=['provider_group_hash', 'negotiated_price_hash'])
-                if not file_exists:
-                    writer.writeheader()
-                writer.writerows(links)
-
-
+            self._write_table(links, 'provider_groups_negotiated_prices_link')
 
 
 def data_import(filename):
@@ -578,18 +497,16 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         # Get root data from top of file
         root_data = m.collect_root()
         root_data['url'] = Path(loc).stem.split('.')[0]
-        r = Root(**root_data)
-        root_hash = hash(r)
-        static_hashes = {'root_hash': root_hash}
+        root_hash = hashdict(root_data)
 
-        writer._write_table([r], 'root', **static_hashes)
+        writer._write_table([root_data], 'root')
 
         # Case 1. The MRF has its provider references at the top
         if m.parser.value == ('', 'map_key', 'provider_references'):
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
             for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
-                writer.write_innet_item(item_data, root_hash)
+                writer.write_in_network_item(item_data, root_hash)
             return
 
         # Case 2/3. The MRF has its provider references either at the bottom,
@@ -610,4 +527,4 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         m = MRFObjectBuilder(f)
         m.ffwd(('', 'map_key', 'in_network'))
         for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
-            writer.write_innet_item(item_data, root_hash_key)
+            writer.write_in_network_item(item_data, root_hash)
