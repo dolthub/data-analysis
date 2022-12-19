@@ -5,10 +5,10 @@ from mrfutils import (MRFOpen,
                       hashdict,
                       _collect_remote_p_refs)
 
+
 class TestMRFObjectBuilder(unittest.TestCase):
 
     def test_remote_ref(self):
-
         loc = 'test/test.json'
         npi_set = {1111111111, 5555555555, 2020202020}
 
@@ -21,10 +21,10 @@ class TestMRFObjectBuilder(unittest.TestCase):
             new_p_ref = new_p_refs[0]
 
         self.assertTrue(new_p_ref['provider_groups'][0]['npi'] == [1111111111])
-        self.assertTrue(new_p_ref['provider_groups'][0]['tin']['value'] == '22-2222222')
+        self.assertTrue(
+            new_p_ref['provider_groups'][0]['tin']['value'] == '22-2222222')
 
     def test_p_refs_map(self):
-
         loc = 'test/test.json'
         npi_set = {1111111111, 5555555555, 2020202020}
 
@@ -40,7 +40,6 @@ class TestMRFObjectBuilder(unittest.TestCase):
         self.assertTrue(p_refs_map[2][0]['npi'] == [1111111111])
 
     def test_npis(self):
-
         loc = 'test/test.json'
         npi_set = {1111111111, 5555555555, 2020202020}
         code_set = {('TS-TST', '0000')}
@@ -59,12 +58,14 @@ class TestMRFObjectBuilder(unittest.TestCase):
 
         negotiated_rates = item_data['negotiated_rates']
 
-        self.assertTrue(negotiated_rates[0]['provider_groups'][0]['npi'] == [5555555555])
-        self.assertTrue(negotiated_rates[0]['provider_groups'][1]['npi'] == [1111111111])
-        self.assertTrue(negotiated_rates[0]['provider_groups'][2]['npi'] == [2020202020, 1111111111])
+        self.assertTrue(
+            negotiated_rates[0]['provider_groups'][0]['npi'] == [5555555555])
+        self.assertTrue(
+            negotiated_rates[0]['provider_groups'][1]['npi'] == [1111111111])
+        self.assertTrue(
+            negotiated_rates[0]['provider_groups'][2]['npi'] == [2020202020,
+                                                                 1111111111])
 
 
 if __name__ == '__main__':
     unittest.main()
-
-    
