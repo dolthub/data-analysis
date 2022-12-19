@@ -4,13 +4,11 @@ import hashlib
 import json
 import ijson
 import requests
-import sys
 import gzip
 import logging
 from urllib.parse import urlparse
 from pathlib      import Path
 from schema       import SCHEMA
-from dataclasses  import dataclass, asdict, astuple
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -357,7 +355,7 @@ class MRFWriter:
         if not os.path.exists(self.out_dir):
             os.mkdir(self.out_dir)
 
-    def _write_table(self, rows, filename):
+    def write_table(self, rows, filename):
         fieldnames = self.schema[filename]
         file_loc = f'{self.out_dir}/{filename}.csv'
         file_exists = os.path.exists(file_loc)
@@ -376,12 +374,12 @@ class MRFWriter:
             'billing_code_type_version': item['billing_code_type_version'],
             'billing_code': item['billing_code'],
         }
-
         code_hash = hashdict(code_row)
         code_row['code_hash'] = code_hash
-        self._write_table([code_row], 'codes')
+        self.write_table([code_row], 'codes')
 
         for rate in item.get('negotiated_rates', []):
+
             price_rows = []
             for price in rate['negotiated_prices']:
 
@@ -406,10 +404,9 @@ class MRFWriter:
                     'in_network_hash': code_hash,
                     'root_hash': root_hash,
                 }
-
                 price_row['negotiated_price_hash'] = hashdict(price_row)
                 price_rows.append(price_row)
-                self._write_table(price_rows, 'negotiated_prices')
+                self.write_table(price_rows, 'negotiated_prices')
 
             group_rows = []
             for group in rate['provider_groups']:
@@ -418,10 +415,9 @@ class MRFWriter:
                     'tin_type': group['tin']['type'],
                     'tin_value': group['tin']['value'],
                 }
-
                 group_row['provider_group_hash'] = hashdict(group_row)
                 group_rows.append(group_row)
-            self._write_table(group_rows, 'provider_groups')
+            self.write_table(group_rows, 'provider_groups')
 
             # Write the linking table
             links = []
@@ -433,7 +429,7 @@ class MRFWriter:
                     }
                     links.append(link)
 
-            self._write_table(links, 'provider_groups_negotiated_prices_link')
+            self.write_table(links, 'provider_groups_negotiated_prices_link')
 
 
 def data_import(filename):
@@ -499,7 +495,7 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         root_data['url'] = Path(loc).stem.split('.')[0]
         root_hash = hashdict(root_data)
 
-        writer._write_table([root_data], 'root')
+        writer.write_table([root_data], 'root')
 
         # Case 1. The MRF has its provider references at the top
         if m.parser.value == ('', 'map_key', 'provider_references'):
