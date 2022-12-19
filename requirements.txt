@@ -1,3 +1,0 @@
-ijson
-requests
-tqdm
