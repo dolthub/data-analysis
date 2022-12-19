@@ -20,7 +20,7 @@ SCHEMA = {
     ],
     "negotiated_prices": [
         "root_hash",
-        "in_network_hash",
+        "code_hash",
         "negotiated_price_hash",
         "billing_class",
         "negotiated_type",

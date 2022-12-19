@@ -401,7 +401,7 @@ class MRFWriter:
                     'service_code': price['service_code'],
                     'additional_information': price.get('additional_information'),
                     'billing_code_modifier': price['billing_code_modifier'],
-                    'in_network_hash': code_hash,
+                    'code_hash': code_hash,
                     'root_hash': root_hash,
                 }
                 price_row['negotiated_price_hash'] = hashdict(price_row)
@@ -492,8 +492,12 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
 
         # Get root data from top of file
         root_data = m.collect_root()
-        root_data['url'] = Path(loc).stem.split('.')[0]
+        root_data['filename'] = Path(loc).stem.split('.')[0]
         root_hash = hashdict(root_data)
+        root_data['root_hash'] = root_hash
+
+        # Importantly the URL stays OUTSIDE OF THE HASH!
+        root_data['url'] = loc
 
         writer.write_table([root_data], 'root')
 

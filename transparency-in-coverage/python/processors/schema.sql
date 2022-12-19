@@ -22,16 +22,17 @@ CREATE TABLE IF NOT EXISTS codes (
 );
 
 CREATE TABLE IF NOT EXISTS negotiated_prices (
-    root_hash BIGINT UNSIGNED,
-    code_hash BIGINT UNSIGNED,
-    negotiated_price_hash BIGINT UNSIGNED,
+    root_hash BIGINT UNSIGNED NOT NULL,
+    code_hash BIGINT UNSIGNED NOT NULL,
+    negotiated_price_hash BIGINT UNSIGNED NOT NULL,
     billing_class ENUM("professional", "institutional") COLLATE utf8_general_ci,
     service_code JSON,
     expiration_date VARCHAR(20),
     additional_information TEXT,
     billing_code_modifier JSON,
     negotiated_rate DECIMAL(9,2),
-    PRIMARY KEY (root_hash, code_hash, negotiated_price_hash),
+    CONSTRAINT unique_row UNIQUE (root_hash, code_hash, negotiated_price_hash),
+    PRIMARY KEY (negotiated_price_hash),
     FOREIGN KEY (code_hash) REFERENCES codes(code_hash),
     FOREIGN KEY (root_hash) REFERENCES root(root_hash)
 );
