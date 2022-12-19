@@ -18,10 +18,16 @@ file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
 
+class InvalidMRF(Exception):
+    """Returned when we hit an invalid MRF."""
+    def __init__(self, value):
+        self.value = value
+
+
 class Parser:
     """
-    Wrapper for default ijson parser that allows
-    access to the current value
+    Wrapper for the default ijson parser.
+    Preserves the current value in a variable "current".
     """
     def __init__(self, f):
         self.__p = ijson.parse(f, use_float = True)
@@ -30,17 +36,16 @@ class Parser:
         return self
 
     def __next__(self):
-        self.value = next(self.__p)
-        return self.value
-
-
-class InvalidMRF(Exception):
-    def __init__(self, value):
-        self.value = value
+        self.current = next(self.__p)
+        return self.current
 
 
 class MRFOpen:
-    "Context manager for opening JSON(.gz) MRFs"
+    """
+    Context manager for opening JSON(.gz) MRFs.
+    Handles local and remote gzipped and unzipped
+    JSON files.
+    """
     def __init__(self, loc):
         self.loc = loc
         self.f = None
@@ -55,7 +60,6 @@ class MRFOpen:
         self.is_remote = parsed_url.scheme in ('http', 'https')
 
     def __enter__(self):
-        log.info(f'Opening {self.loc}')
         if (
             self.is_remote 
             and self.suffix == '.json.gz'
@@ -77,27 +81,26 @@ class MRFOpen:
         else:
             self.f = open(self.loc, 'rb')
 
-        log.debug(f'Opened file: {self.loc}')
+        log.info(f'Successfully opened file: {self.loc}')
         return self.f
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        log.info(f'Closing {self.loc}')
         if self.is_remote:
             self.r.close()
 
         self.f.close()
 
 
-def _collect_remote_reference(loc, npi_set):
+def _fetch_remote_p_ref(loc, npi_set):
     """
     Given a remote reference location 'loc', collect
     the provider references at that location, filtering
     them so that it only collects those with NPI numbers
-    in npi_set
+    in npi_set.
     """
     with MRFOpen(loc) as f:
         builder = ijson.ObjectBuilder()
-        parser = ijson.parse(f, use_float = True)
+        parser = Parser(f)
 
         for prefix, event, value in parser:
 
@@ -124,34 +127,31 @@ def _collect_remote_p_refs(remote_p_refs, npi_set):
     """
     Given a list of remote provider references, fetch
     them individually and build them. Return them as local
-    provider references
+    provider references.
     """
-    new_local_p_prefs = []
+    p_refs = []
 
-    for pref in remote_p_refs:
-        loc = pref.get('location')
-        try:
-            remote_reference = _collect_remote_reference(loc, npi_set)
-            remote_reference['provider_group_id'] = pref['provider_group_id']
-            new_local_p_prefs.append(remote_reference)
-        except Exception as e:
-            log.warning(f'Error building remote provider references from {loc}')
-            log.warning(e)
+    for p_ref in remote_p_refs:
+        loc = p_ref.get('location')
+        provider_group_id = p_ref['provider_group_id']
+        remote_p_ref = _fetch_remote_p_ref(loc, npi_set)
+        remote_p_ref['provider_group_id'] = provider_group_id
+        p_refs.append(remote_p_ref)
 
-    return new_local_p_prefs
+    return p_refs
 
 
 class MRFObjectBuilder:
     """
     Takes a parser and returns necessary objects
-    for parsing and flattening MRFs
+    for parsing and flattening MRFs.
     """
     def __init__(self, f):
         self.parser = Parser(f)
 
     def ffwd(self, to_row):
         """
-        @param to_row: the row to fast-forward to
+        :param to_row: the row to fast-forward to
         """
         for current_row in self.parser:
             if current_row == to_row:
@@ -169,24 +169,7 @@ class MRFObjectBuilder:
                 return builder.value
             builder.event(event, value)
         else:
-            raise InvalidMRF("Read to EOF without finding root data")
-
-    def collect_p_refs(self, npi_set):
-        """
-        Collects the provider references into a map. This replaces
-        "provider_group_id" with provider groups
-        @param npi_set: set
-        @return: dict
-        """
-        local_p_refs, remote_p_refs = self._prepare_provider_refs(npi_set)
-
-        local_p_refs.extend(
-            _collect_remote_p_refs(remote_p_refs, npi_set)
-        )
-
-        return {
-            p['provider_group_id']: p['provider_groups'] for p in local_p_refs
-        }
+            raise InvalidMRF('Read to EOF without finding root data')
 
     def _prepare_provider_refs(self, npi_set):
         remote_p_refs = []
@@ -214,7 +197,7 @@ class MRFObjectBuilder:
                     builder.value[-1]['provider_groups'].pop()
 
             elif (
-                prefix.endswith('provider_references.item') 
+                prefix.endswith('provider_references.item')
                 and event == 'end_map'
             ):
                 if builder.value and builder.value[-1].get('location'):
@@ -225,7 +208,24 @@ class MRFObjectBuilder:
 
             builder.event(event, value)
 
-    def gen_innet_items(
+    def collect_p_refs(self, npi_set):
+        """
+        Collects the provider references into a map. This replaces
+        "provider_group_id" with provider groups
+        :param npi_set: set
+        :return: dict
+        """
+        local_p_refs, remote_p_refs = self._prepare_provider_refs(npi_set)
+
+        local_p_refs.extend(
+            _collect_remote_p_refs(remote_p_refs, npi_set)
+        )
+
+        return {
+            p['provider_group_id']: p['provider_groups'] for p in local_p_refs
+        }
+
+    def in_network_items(
             self,
             npi_set,
             code_set,
@@ -233,10 +233,14 @@ class MRFObjectBuilder:
     ):
         """
         Generator that returns a fully-constructed in-network item.
-        @param npi_set: set
-        @param code_set: set
-        @param p_refs_map: dict
-        @return: dict
+
+        Note: if there's a bug in this program -- it's probably in
+        this part.
+
+        :param npi_set: set
+        :param code_set: set
+        :param p_refs_map: dict
+        :return: dict
         """
         builder = ijson.ObjectBuilder()
 
@@ -248,7 +252,6 @@ class MRFObjectBuilder:
             elif (prefix, event, value) == ('in_network.item', 'end_map', None):
                 log.info(f"Rates found for {billing_code_type} {billing_code}")
                 in_network_item = builder.value.pop()
-
                 yield in_network_item
 
             elif (
@@ -288,9 +291,9 @@ class MRFObjectBuilder:
             elif (
                     p_refs_map
                     and prefix.endswith('provider_references.item')
-                    and (grps := p_refs_map.get(value))
+                    and (groups := p_refs_map.get(value))
             ):
-                provider_groups.extend(grps)
+                provider_groups.extend(groups)
 
             elif (
                     prefix.endswith('negotiated_rates.item')
@@ -413,7 +416,6 @@ class MRFWriter:
                 group_rows.append(group_row)
             self.write_table(group_rows, 'provider_groups')
 
-            # Write the linking table
             links = []
             for price in price_rows:
                 for group in group_rows:
@@ -430,8 +432,8 @@ def data_import(filename):
     """
     Imports data as tuples from a given file.
     Iterates over rows
-    @param filename: filename
-    @return:
+    :param filename: filename
+    :return:
     """
     with open(filename, 'r') as f:
         reader = csv.reader(f)
@@ -442,23 +444,16 @@ def data_import(filename):
 
 
 def hashdict(data, n_bytes = 8):
-    """
-    We use a SHA256 256-bit hash.
-
-    A little math:
-        * the hexadecimal representation is 64 chars long
-        * each hexadecimal (2 chars) is a byte of information
-
-    @param data: dict
-    @param length: number of bits
-    @return: hash as a UINT
-    """
     if not data:
-        raise ValueError
+        raise Exception("Hashed dictionary can't be empty")
 
-    sorted_tups = sorted(data.items())
-    data_utf8 = json.dumps(sorted_tups).encode()
-    hash_s = hashlib.sha256(data_utf8).digest()[:n_bytes]
+    data = sorted(data.items())
+    data = json.dumps(data).encode()
+
+    # A little nicer would be:
+    # >> data = json.dumps(data, sort_keys = True).encode('utf-8')
+
+    hash_s = hashlib.sha256(data).digest()[:n_bytes]
     hash_i = int.from_bytes(hash_s, 'little')
     return hash_i
 
@@ -473,11 +468,11 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
     2. The MRF has its provider references at the bottom
     3. The MRF doesn't have provider references
 
-    @param loc: remote or local file location
-    @param npi_set: set of NPI numbers
-    @param code_set: set of (CODE_TYPE, CODE) tuples (str, str)
-    @param out_dir: output directry
-    @return: returns nothing
+    :param loc: remote or local file location
+    :param npi_set: set of NPI numbers
+    :param code_set: set of (CODE_TYPE, CODE) tuples (str, str)
+    :param out_dir: output directory
+    :return: returns nothing
     """
     with MRFOpen(loc) as f:
 
@@ -490,17 +485,14 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         root_hash = hashdict(root_data)
         root_data['root_hash'] = root_hash
 
-        # Importantly the URL stays OUTSIDE OF THE HASH!
-        root_data['url'] = loc
-
         writer.write_table([root_data], 'root')
 
         # Case 1. The MRF has its provider references at the top
-        if m.parser.value == ('', 'map_key', 'provider_references'):
+        if m.parser.current == ('', 'map_key', 'provider_references'):
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
-            for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
-                writer.write_in_network_item(item_data, root_hash)
+            for item in m.in_network_items(npi_set, code_set, p_refs_map):
+                writer.write_in_network_item(item, root_hash)
             return
 
         # Case 2/3. The MRF has its provider references either at the bottom,
@@ -508,7 +500,7 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         # We try to find them by fast-forwarding to the end and collecting
         # the provider references. If we do find them, we make a map.
         # Then read the file again.
-        elif m.parser.value == ('', 'map_key', 'in_network'):
+        elif m.parser.current == ('', 'map_key', 'in_network'):
             log.info('No provider references found\n'
                      'Checking at end of file')
             try:
@@ -520,5 +512,6 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
     with MRFOpen(loc) as f:
         m = MRFObjectBuilder(f)
         m.ffwd(('', 'map_key', 'in_network'))
-        for item_data in m.gen_innet_items(npi_set, code_set, p_refs_map):
-            writer.write_in_network_item(item_data, root_hash)
+        for item in m.in_network_items(npi_set, code_set, p_refs_map):
+            writer.write_in_network_item(item, root_hash)
+

@@ -53,7 +53,7 @@ class TestMRFObjectBuilder(unittest.TestCase):
 
             p_refs_map = m.collect_p_refs(npi_set)
             m.ffwd(('', 'map_key', 'in_network'))
-            g = m.gen_innet_items(npi_set, code_set, p_refs_map)
+            g = m.in_network_items(npi_set, code_set, p_refs_map)
             item_data = next(g)
 
         negotiated_rates = item_data['negotiated_rates']
