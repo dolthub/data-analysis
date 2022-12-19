@@ -1,0 +1,146 @@
+{
+    "reporting_entity_name": "TEST ENTITY",
+    "reporting_entity_type": "TEST ENTITY TYPE",
+    "last_updated_on": "9999-99-99",
+    "version": "0.0.0",
+    "provider_references":
+    [
+        {
+            "provider_group_id": 2,
+            "location": "https://raw.githubusercontent.com/CMSgov/price-transparency-guide/master/examples/provider-reference/provider-reference.json"
+        },
+        {
+            "provider_groups":
+            [
+                {
+                    "npi":
+                    [
+                        1111111111,
+                        1234567890
+                    ],
+                    "tin":
+                    {
+                        "type": "ein",
+                        "value": "9999999999"
+                    }
+                }
+            ],
+            "provider_group_id": 0
+        },
+        {
+            "provider_groups":
+            [
+                {
+                    "npi":
+                    [
+                        2020202020,
+                        3030303030,
+                        1111111111
+                    ],
+                    "tin":
+                    {
+                        "type": "ein",
+                        "value": "88-8888888"
+                    }
+                }
+            ],
+            "provider_group_id": 1
+        }
+    ],
+    "in_network":
+    [
+        {
+            "negotiation_arrangement": "ffs",
+            "name": "TEST NAME 1",
+            "billing_code_type": "TS-TST",
+            "billing_code_type_version": "9999",
+            "billing_code": "0000",
+            "description": "TEST DESCRIPTION",
+            "negotiated_rates":
+            [
+                {
+                    "provider_references":
+                    [
+                        0,
+                        1
+                    ],
+                    "provider_groups":
+                    [
+                        {
+                            "npi":
+                            [
+                                4444444444,
+                                5555555555
+                            ],
+                            "tin":
+                            {
+                                "type": "ein",
+                                "value": "11-1111111"
+                            }
+                        }
+                    ],
+                    "negotiated_prices":
+                    [
+                        {
+                            "negotiated_rate": 9999999.99,
+                            "service_code":
+                            [],
+                            "negotiated_type": "negotiated",
+                            "expiration_date": "9999-12-31",
+                            "billing_class": "institutional",
+                            "billing_code_modifier":
+                            [],
+                            "additional_information": ""
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "negotiation_arrangement": "ffs",
+            "name": "TEST NAME 2",
+            "billing_code_type": "TST",
+            "billing_code_type_version": "9999",
+            "billing_code": "1111",
+            "description": "TEST DESCRIPTION",
+            "negotiated_rates":
+            [
+                {
+                    "provider_references":
+                    [
+                        1
+                    ],
+                    "provider_groups":
+                    [
+                        {
+                            "npi":
+                            [
+                                4444444444,
+                                5555555555
+                            ],
+                            "tin":
+                            {
+                                "type": "ein",
+                                "value": "11-1111111"
+                            }
+                        }
+                    ],
+                    "negotiated_prices":
+                    [
+                        {
+                            "negotiated_rate": 9999999.99,
+                            "service_code":
+                            [],
+                            "negotiated_type": "negotiated",
+                            "expiration_date": "9999-12-31",
+                            "billing_class": "institutional",
+                            "billing_code_modifier":
+                            [],
+                            "additional_information": ""
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
