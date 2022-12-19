@@ -9,6 +9,7 @@ SCHEMA = {
         "plan_market_type",
         "last_updated_on",
         "version",
+        "filename",
         "url",
     ],
     "codes": [
