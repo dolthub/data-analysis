@@ -447,12 +447,12 @@ def hashdict(data, n_bytes = 8):
     if not data:
         raise Exception("Hashed dictionary can't be empty")
 
-    data = sorted(data.items())
-    data = json.dumps(data).encode()
+    # Old way
+    # data = sorted(data.items())
+    # data = json.dumps(data).encode()
 
-    # A little nicer would be:
-    # >> data = json.dumps(data, sort_keys = True).encode('utf-8')
-
+    # New way
+    data = json.dumps(data, sort_keys = True).encode('utf-8')
     hash_s = hashlib.sha256(data).digest()[:n_bytes]
     hash_i = int.from_bytes(hash_s, 'little')
     return hash_i
