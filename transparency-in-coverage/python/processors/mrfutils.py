@@ -2,7 +2,6 @@ import os
 import csv
 import hashlib
 import json
-# import ijson.backends.yajl2_c as ijson
 import ijson
 import requests
 import gzip
