@@ -1,16 +1,3 @@
-#!/usr/bin/env python
-import argparse
-import logging
-import sys
-import time
-
-#!/usr/bin/env python
-import argparse
-import logging
-import sys
-import time
-
-import ijson
 """
 Examples:
     >>> python example2.py
@@ -26,27 +13,9 @@ Examples:
 import logging
 import sys
 from idxutils import gen_in_network_links
-from mrfutils import MRFOpen
-
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
-
-
-
-def save_urls(input_list, save_file='in_network_urls.txt'):
-    """ Input a list of URLs and save them to simple txt file. """
-    if not input_list:
-        return
-    with open(save_file, 'w') as f:
-        for line in input_list:
-            f.write(f"{line.strip()}\n")
-    log.info(f"in-network file successfully saved to: {save_file}")
-    return
-
-
-logging.basicConfig()
-log = logging.getLogger('idxutils')
 log.setLevel(logging.DEBUG)
 
 # @rl1987
