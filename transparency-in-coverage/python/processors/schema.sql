@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS root (
     plan_market_type ENUM("group", "individual") COLLATE utf8_general_ci,
     last_updated_on VARCHAR(20),
     version VARCHAR(20),
-    url VARCHAR(2000),
     filename VARCHAR(2000),
+    url VARCHAR(2000),
     PRIMARY KEY (root_hash)
 );
 
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS negotiated_prices (
     additional_information TEXT,
     billing_code_modifier JSON,
     negotiated_rate DECIMAL(9,2),
-    CONSTRAINT unique_row UNIQUE (root_hash, code_hash, negotiated_price_hash),
+    PRIMARY KEY (negotiated_price_hash, root_hash, code_hash),
     PRIMARY KEY (negotiated_price_hash),
     FOREIGN KEY (code_hash) REFERENCES codes(code_hash),
     FOREIGN KEY (root_hash) REFERENCES root(root_hash)

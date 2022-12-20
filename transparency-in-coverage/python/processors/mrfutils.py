@@ -458,7 +458,13 @@ def hashdict(data, n_bytes = 8):
     return hash_i
 
 
-def flatten_mrf(loc, npi_set, code_set, out_dir):
+def flatten_mrf(
+        loc: str,
+        npi_set: set,
+        code_set: set,
+        out_dir: str,
+        url: str = None,
+    ):
     """
     Main function for flattening MRFs.
 
@@ -472,6 +478,8 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
     :param npi_set: set of NPI numbers
     :param code_set: set of (CODE_TYPE, CODE) tuples (str, str)
     :param out_dir: output directory
+    :param url: complete, clickable file remote URL. Assumed to be loc unless
+    specified
     :return: returns nothing
     """
     with MRFOpen(loc) as f:
@@ -484,6 +492,12 @@ def flatten_mrf(loc, npi_set, code_set, out_dir):
         root_data['filename'] = Path(loc).stem.split('.')[0]
         root_hash = hashdict(root_data)
         root_data['root_hash'] = root_hash
+
+        # Importantly, URL stays outside the hash
+        if url:
+            root_data['url'] = url
+        else:
+            root_data['url'] = loc
 
         writer.write_table([root_data], 'root')
 
