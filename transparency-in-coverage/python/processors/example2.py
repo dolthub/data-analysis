@@ -4,6 +4,12 @@ import logging
 import sys
 import time
 
+#!/usr/bin/env python
+import argparse
+import logging
+import sys
+import time
+
 import ijson
 import logging
 from idxutils import gen_in_network_links
