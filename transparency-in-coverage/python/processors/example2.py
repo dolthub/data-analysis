@@ -15,7 +15,7 @@ import sys
 from idxutils import gen_in_network_links
 
 logging.basicConfig()
-log = logging.getLogger('mrfutils')
+log = logging.getLogger('idxutils')
 log.setLevel(logging.DEBUG)
 
 # @rl1987
