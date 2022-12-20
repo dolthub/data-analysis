@@ -1,28 +1,16 @@
 import ijson
-from urllib.parse import urlparse
+import logging
+from idxutils import gen_in_network_links
 from mrfutils import MRFOpen
 
 
-def mrfs_from_idx(index_loc):
-    """
-    Gets in-network files from index.json files
-    :param idx_url:
-    :return: list of in-network file URLS
-    """
-    in_network_file_urls = []
-    with MRFOpen(index_loc) as f:
-        parser = ijson.parse(f, use_float=True)
-        for prefix, event, value in parser:
-            if (
-                prefix.endswith('location')
-                and event == 'string'
-                and 'in-network' in value
-            ):
-                in_network_file_urls.append(value)
-
-    print(f'Found: {len(in_network_file_urls)} in-network files.')
-    print(in_network_file_urls)
-    return in_network_file_urls
+logging.basicConfig()
+log = logging.getLogger('idxutils')
+log.setLevel(logging.DEBUG)
 
 index_loc = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
-mrfs_from_idx(index_loc)
+filename = 'extracted_links.csv'
+with open(filename, 'a+') as f:
+    for in_network_file in gen_in_network_links(index_loc):
+        f.write(f'{in_network_file},\n')
+        log.info(f'Wrote {in_network_file} to {filename}')

@@ -1,9 +1,10 @@
-from mrfutils import data_import, flatten_mrf, InvalidMRF
 import argparse
-
 import logging
+from mrfutils import data_import, flatten_mrf, InvalidMRF
+
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
+log.setLevel(logging.DEBUG)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-u', '--url')
