@@ -2,16 +2,9 @@
 
 # Purpose:
 #   - Based on example2.py
-#   - Process URL *or* a file of URLs
-#   - 
+#   - Process URL *or* a file of URLs to extract in_network URLs from an index file
+# 
 #
-#
-#
-#
-
-
-
-
 import argparse
 import logging
 import sys
@@ -25,7 +18,7 @@ from mrfutils import InvalidMRF, MRFOpen, MRFObjectBuilder
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
-
+log.setLevel(logging.INFO)
 
 
 def save_urls(input_list, save_file='in_network_urls_full.txt'):
@@ -83,9 +76,9 @@ def main():
         # parser.print_help()
         # sys.exit(1)
         log.info("Did not pass URL or input file, processing example data")
-        #idx_url = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
+        idx_url = 'https://www.allegiancecosttransparency.com/2022-07-01_LOGAN_HEALTH_index.json'
         # anthem index url: 
-        idx_url = 'https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-12-01_anthem_index.json.gz'
+        # idx_url = 'https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-12-01_anthem_index.json.gz'
         targets_list.append(idx_url)
     
     rates_urls = []
