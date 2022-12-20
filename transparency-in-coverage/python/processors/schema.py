@@ -10,7 +10,7 @@ SCHEMA = {
         "last_updated_on",
         "version",
         "filename",
-        # "url",
+        "url",
     ],
     "codes": [
         "code_hash",
