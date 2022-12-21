@@ -16,12 +16,14 @@ args = parser.parse_args()
 
 url = args.url
 out_dir = args.out
+
 if args.codes:
     code_set = data_import(args.codes)
 else:
     code_set = None
+
 if args.npis:
-    npi_set = {int(x[0]) for x in data_import(args.npis)}
+    npi_set = data_import(args.npis)
 else:
     npi_set = None
 
@@ -30,7 +32,8 @@ try:
         loc = url,
         out_dir = out_dir,
         code_set = code_set,
-        npi_set = npi_set
+        npi_set = npi_set,
+        url = url # optional, see docstring
     )
 except InvalidMRF as e:
     log.critical(e)

@@ -276,8 +276,10 @@ class MRFObjectBuilder:
 
 			elif (prefix, event, value) == ('in_network.item', 'end_map', None):
 				log.info(f"Rates found for {bct} {bc}")
+				in_network_item = builder.value.pop()
 
-				yield builder.value.pop()
+				yield in_network_item
+
 				del bct, bc
 
 			elif (
@@ -302,7 +304,8 @@ class MRFObjectBuilder:
 				(prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
 				and not builder.value[-1]['negotiated_rates']
 			):
-				log.debug(f"Skipping {bct} {bc}: no providers")
+				print(builder.value)
+				log.info(f"Skipping {bct} {bc}: no providers")
 
 				builder.value.pop()
 				builder.containers.pop()
