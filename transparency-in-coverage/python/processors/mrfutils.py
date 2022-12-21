@@ -104,12 +104,15 @@ def _fetch_remote_p_ref(loc, npi_set):
 
         for prefix, event, value in parser:
 
-            if (
-                prefix.endswith('npi.item')
-                and npi_set
-                and value not in npi_set
-            ):
-                continue
+            if prefix.endswith('npi.item'):
+
+                value = int(value)
+
+                if (
+                    npi_set and
+                    value not in npi_set
+                ):
+                    continue
 
             elif (
                 prefix.endswith('provider_groups.item')
@@ -182,12 +185,15 @@ class MRFObjectBuilder:
             ):
                 return builder.value, remote_p_refs
 
-            elif (
-                prefix.endswith('npi.item')
-                and npi_set
-                and value not in npi_set
-            ):
-                continue
+            elif prefix.endswith('npi.item'):
+
+                value = int(value)
+
+                if (
+                    npi_set and
+                    value not in npi_set
+                ):
+                    continue
 
             elif (
                 prefix.endswith('provider_groups.item')
@@ -324,9 +330,12 @@ class MRFObjectBuilder:
                     'provider_groups'].pop()
 
             elif prefix.endswith('npi.item'):
+
+                value = int(value)
+
                 if (
-                        npi_set
-                        and value not in npi_set
+                    npi_set and
+                    value not in npi_set
                 ):
                     continue
 
