@@ -330,9 +330,7 @@ class MRFObjectBuilder:
                     'provider_groups'].pop()
 
             elif prefix.endswith('npi.item'):
-
                 value = int(value)
-
                 if (
                     npi_set and
                     value not in npi_set
