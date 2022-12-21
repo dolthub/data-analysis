@@ -7,7 +7,7 @@ import logging
 log = logging.getLogger('mrfutils')
 
 code_set = data_import('test/codes.csv')
-npi_set = {int(x[0]) for x in data_import('test/npis.csv')}
+npi_set = data_import('test/npis.csv')
 
 p = Path(__file__).parent.absolute()
 

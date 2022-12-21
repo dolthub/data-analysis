@@ -102,11 +102,10 @@ def _fetch_remote_p_ref(loc, npi_set):
 	memory all at once. There's no need to stream them.
 	"""
 	with MRFOpen(loc) as f:
-
-		data = json.loads(f.decode('utf-8'))
+		data = json.load(f)
 
 		for g in data['provider_groups']:
-			g['npi'] = [int(n) for n in g['npi']]
+			g['npi'] = [str(n) for n in g['npi']]
 			g['npi'] = [n for n in g['npi'] if n in npi_set]
 
 		data['provider_groups'] = [
@@ -183,7 +182,7 @@ class MRFObjectBuilder:
 				return builder.value, remote_p_refs
 
 			elif prefix.endswith('npi.item'):
-				value = int(value)
+				value = str(value)
 				if (
 					npi_set and
 					value not in npi_set
@@ -326,9 +325,7 @@ class MRFObjectBuilder:
 					'provider_groups'].pop()
 
 			elif prefix.endswith('npi.item'):
-
-				value = int(value)
-
+				value = str(value)
 				if (
 					npi_set and
 					value not in npi_set

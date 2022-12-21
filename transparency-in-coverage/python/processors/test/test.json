@@ -77,19 +77,30 @@
                                 "type": "ein",
                                 "value": "11-1111111"
                             }
+                        },
+                        {
+                            "npi":
+                            [
+                                4444444444,
+                                5555555555,
+                                9999999998
+                            ],
+                            "tin":
+                            {
+                                "type": "ein",
+                                "value": "12-1111111"
+                            }
                         }
                     ],
                     "negotiated_prices":
                     [
                         {
                             "negotiated_rate": 9999999.99,
-                            "service_code":
-                            [],
+                            "service_code": [],
                             "negotiated_type": "negotiated",
                             "expiration_date": "9999-12-31",
                             "billing_class": "institutional",
-                            "billing_code_modifier":
-                            [],
+                            "billing_code_modifier": [],
                             "additional_information": ""
                         }
                     ]
@@ -129,13 +140,11 @@
                     [
                         {
                             "negotiated_rate": 9999999.99,
-                            "service_code":
-                            [],
+                            "service_code": [],
                             "negotiated_type": "negotiated",
                             "expiration_date": "9999-12-31",
                             "billing_class": "institutional",
-                            "billing_code_modifier":
-                            [],
+                            "billing_code_modifier": [],
                             "additional_information": ""
                         }
                     ]
