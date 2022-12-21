@@ -18,6 +18,30 @@ file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
 
+def data_import(filename):
+	"""
+	Imports data as tuples from a given file.
+	Iterates over rows
+	:param filename: filename
+	:return:
+	"""
+	with open(filename, 'r') as f:
+		reader = csv.reader(f)
+		objs = set()
+		for row in reader:
+			objs.add(tuple([x.strip() for x in row]))
+		return objs
+
+
+def dicthasher(data, n_bytes = 8):
+	if not data:
+		raise Exception("Hashed dictionary can't be empty")
+	data = json.dumps(data, sort_keys = True).encode('utf-8')
+	hash_s = hashlib.sha256(data).digest()[:n_bytes]
+	hash_i = int.from_bytes(hash_s, 'little')
+	return hash_i
+
+
 class InvalidMRF(Exception):
 	"""Returned when we hit an invalid MRF."""
 	def __init__(self, value):
@@ -373,7 +397,7 @@ class MRFWriter:
 			'billing_code_type_version': item['billing_code_type_version'],
 			'billing_code': item['billing_code'],
 		}
-		code_hash = hashdict(code_row)
+		code_hash = dicthasher(code_row)
 		code_row['code_hash'] = code_hash
 		self.write_table([code_row], 'codes')
 
@@ -403,7 +427,7 @@ class MRFWriter:
 					'code_hash': code_hash,
 					'root_hash': root_hash,
 				}
-				price_row['negotiated_price_hash'] = hashdict(price_row)
+				price_row['negotiated_price_hash'] = dicthasher(price_row)
 				price_rows.append(price_row)
 				self.write_table(price_rows, 'negotiated_prices')
 
@@ -414,7 +438,7 @@ class MRFWriter:
 					'tin_type': group['tin']['type'],
 					'tin_value': group['tin']['value'],
 				}
-				group_row['provider_group_hash'] = hashdict(group_row)
+				group_row['provider_group_hash'] = dicthasher(group_row)
 				group_rows.append(group_row)
 			self.write_table(group_rows, 'provider_groups')
 
@@ -428,36 +452,6 @@ class MRFWriter:
 					links.append(link)
 
 			self.write_table(links, 'provider_groups_negotiated_prices_link')
-
-
-def data_import(filename):
-	"""
-	Imports data as tuples from a given file.
-	Iterates over rows
-	:param filename: filename
-	:return:
-	"""
-	with open(filename, 'r') as f:
-		reader = csv.reader(f)
-		objs = set()
-		for row in reader:
-			objs.add(tuple([x.strip() for x in row]))
-		return objs
-
-
-def hashdict(data, n_bytes = 8):
-	if not data:
-		raise Exception("Hashed dictionary can't be empty")
-
-	# Old way
-	# data = sorted(data.items())
-	# data = json.dumps(data).encode()
-
-	# New way
-	data = json.dumps(data, sort_keys = True).encode('utf-8')
-	hash_s = hashlib.sha256(data).digest()[:n_bytes]
-	hash_i = int.from_bytes(hash_s, 'little')
-	return hash_i
 
 
 def flatten_mrf(
@@ -492,7 +486,7 @@ def flatten_mrf(
 		# Get root data from top of file
 		root_data = m.collect_root()
 		root_data['filename'] = Path(loc).stem.split('.')[0]
-		root_hash = hashdict(root_data)
+		root_hash = dicthasher(root_data)
 		root_data['root_hash'] = root_hash
 
 		# Importantly, URL stays outside the hash
@@ -522,7 +516,7 @@ def flatten_mrf(
 			try:
 				m.ffwd(('', 'map_key', 'provider_references'))
 				p_refs_map = m.collect_p_refs(npi_set)
-			except:
+			except Exception:
 				p_refs_map = None
 
 	with MRFOpen(loc) as f:

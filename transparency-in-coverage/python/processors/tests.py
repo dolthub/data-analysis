@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 from mrfutils import (MRFOpen,
                       MRFObjectBuilder,
-                      hashdict,
+                      dicthasher,
                       _collect_remote_p_refs)
 
 
@@ -49,7 +49,7 @@ class TestMRFObjectBuilder(unittest.TestCase):
             root_data = m.collect_root()
 
             root_data['filename'] = Path(self.loc).stem.split('.')[0]
-            root_hash_key = hashdict(root_data)
+            root_hash_key = dicthasher(root_data)
             root_data['root_hash_key'] = root_hash_key
 
             root_data['url'] = Path(self.loc).stem.split('.')[0]
