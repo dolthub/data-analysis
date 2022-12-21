@@ -126,6 +126,7 @@ def _fetch_remote_p_ref(loc, npi_set):
 	memory all at once. There's no need to stream them.
 	"""
 	with MRFOpen(loc) as f:
+
 		data = json.load(f)
 
 		for g in data['provider_groups']:
@@ -134,8 +135,7 @@ def _fetch_remote_p_ref(loc, npi_set):
 
 		data['provider_groups'] = [
 			g for g in data['provider_groups']
-			if g['npi']
-		]
+			if g['npi']]
 
 	if not data['provider_groups']:
 		return
@@ -230,9 +230,6 @@ class MRFObjectBuilder:
 				elif not builder.value[-1].get('provider_groups'):
 						builder.value.pop()
 
-				if builder.value:
-					log.debug(f"Keeping group ID: {builder.value[-1]['provider_group_id']}")
-
 			builder.event(event, value)
 
 
@@ -278,36 +275,40 @@ class MRFObjectBuilder:
 				return
 
 			elif (prefix, event, value) == ('in_network.item', 'end_map', None):
-				log.info(f"Rates found for {billing_code_type} {billing_code}")
-				in_network_item = builder.value.pop()
-				yield in_network_item
+				log.info(f"Rates found for {bct} {bc}")
+
+				yield builder.value.pop()
+				del bct, bc
 
 			elif (
 				(prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
 			):
-				billing_code_type = builder.value[-1]['billing_code_type']
-				billing_code = str(builder.value[-1]['billing_code'])
-				billing_code_tup = billing_code_type, billing_code
+				bct = builder.value[-1]['billing_code_type']
+				bc = str(builder.value[-1]['billing_code'])
 
 				if (
 					code_set
-					and billing_code_tup not in code_set
+					and (bct, bc) not in code_set
 				):
-					log.debug(f"Skipping {billing_code_type} {billing_code}: not in list")
-					self.ffwd(('in_network.item', 'end_map', None))
+					log.debug(f"Skipping {bct} {bc}: not in list")
+
 					builder.value.pop()
 					builder.containers.pop()
+
+					self.ffwd(('in_network.item', 'end_map', None))
 					continue
 
 			elif (
 				(prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
 				and not builder.value[-1]['negotiated_rates']
 			):
-				log.debug(f"Skipping {billing_code_type} {billing_code}: no providers")
-				self.ffwd(('in_network.item', 'end_map', None))
+				log.debug(f"Skipping {bct} {bc}: no providers")
+
 				builder.value.pop()
 				builder.containers.pop()
 				builder.containers.pop()
+
+				self.ffwd(('in_network.item', 'end_map', None))
 				continue
 
 			elif (
