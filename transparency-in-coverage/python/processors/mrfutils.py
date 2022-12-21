@@ -228,7 +228,10 @@ class MRFObjectBuilder:
 					remote_p_refs.append(builder.value.pop())
 
 				elif not builder.value[-1].get('provider_groups'):
-					builder.value.pop()
+						builder.value.pop()
+
+				if builder.value:
+					log.debug(f"Keeping group ID: {builder.value[-1]['provider_group_id']}")
 
 			builder.event(event, value)
 
@@ -495,14 +498,14 @@ def flatten_mrf(
 		else:
 			root_data['url'] = loc
 
-		writer.write_table([root_data], 'root')
-
 		# Case 1. The MRF has its provider references at the top
 		if m.parser.current == ('', 'map_key', 'provider_references'):
 			p_refs_map = m.collect_p_refs(npi_set)
 			m.ffwd(('', 'map_key', 'in_network'))
 			for item in m.in_network_items(npi_set, code_set, p_refs_map):
 				writer.write_in_network_item(item, root_hash)
+
+			writer.write_table([root_data], 'root')
 			return
 
 		# Case 2/3. The MRF has its provider references either at the bottom,
@@ -524,4 +527,6 @@ def flatten_mrf(
 		m.ffwd(('', 'map_key', 'in_network'))
 		for item in m.in_network_items(npi_set, code_set, p_refs_map):
 			writer.write_in_network_item(item, root_hash)
+
+		writer.write_table([root_data], 'root')
 

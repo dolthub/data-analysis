@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS root (
     root_hash BIGINT UNSIGNED,
+    reporting_entity_name VARCHAR(500),
     reporting_entity_type VARCHAR(200),
     plan_name VARCHAR(200),
     plan_id VARCHAR(10),
