@@ -126,6 +126,13 @@ async def fetch_remote_p_ref(
 	p_ref_url,
 	npi_set,
 ):
+	'''
+	:param session: aiohttp.ClientSession()
+	:param p_ref_id: provider_group_id
+	:param p_ref_url: location of remote reference
+	:param npi_set: NPI filter
+	:return: json
+	'''
 	async with session.get(p_ref_url) as response:
 		log.info(f'Opened remote provider reference url:{p_ref_url}')
 
@@ -147,7 +154,6 @@ async def fetch_remote_p_ref(
 			g for g in data['provider_groups']
 			if g['npi']]
 
-
 		if not data['provider_groups']:
 			return
 
@@ -158,6 +164,11 @@ async def _collect_remote_p_refs(
 	remote_p_refs,
 	npi_set,
 ):
+	'''
+	:param remote_p_refs: list of remote references to fetch
+	:param npi_set: NPI filter
+	:return: non-None p_refs
+	'''
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
 		for p in remote_p_refs:
