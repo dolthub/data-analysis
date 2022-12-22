@@ -124,13 +124,13 @@ async def fetch_remote_p_ref(
 	session,
 	p_ref_id,
 	p_ref_url,
-	npi_set,
+	npi_filter = None,
 ):
 	'''
 	:param session: aiohttp.ClientSession()
 	:param p_ref_id: provider_group_id
 	:param p_ref_url: location of remote reference
-	:param npi_set: NPI filter
+	:param npi_filter: NPI filter
 	:return: json
 	'''
 	async with session.get(p_ref_url) as response:
@@ -148,7 +148,9 @@ async def fetch_remote_p_ref(
 
 		for g in data['provider_groups']:
 			g['npi'] = [str(n) for n in g['npi']]
-			g['npi'] = [n for n in g['npi'] if n in npi_set]
+
+			if npi_filter is not None:
+				g['npi'] = [n for n in g['npi'] if n in npi_filter]
 
 		data['provider_groups'] = [
 			g for g in data['provider_groups']
@@ -160,18 +162,18 @@ async def fetch_remote_p_ref(
 		return data
 
 
-async def _collect_remote_p_refs(
-	remote_p_refs,
+async def fetch_remote_p_refs(
+	unfetched_p_refs,
 	npi_set,
 ):
 	'''
-	:param remote_p_refs: list of remote references to fetch
+	:param unfetched_p_refs: list of remote references to fetch
 	:param npi_set: NPI filter
 	:return: non-None p_refs
 	'''
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
-		for p in remote_p_refs:
+		for p in unfetched_p_refs:
 			p_ref_id = p['provider_group_id']
 			p_ref_loc = p['location']
 
@@ -270,29 +272,30 @@ class MRFObjectBuilder:
 
 			builder.event(event, value)
 
-	def collect_p_refs(self, npi_set):
+	def _combine_local_remote_p_refs(self, npi_set):
 		"""
 		Collects the provider references into a map. This replaces
 		"provider_group_id" with provider groups
 		:param npi_set: set
 		:return: dict
 		"""
-		local_p_refs, remote_p_refs = self._prepare_provider_refs(npi_set)
+		local_p_refs, unfetched_remote_p_refs = self._prepare_provider_refs(npi_set)
 
 		loop = asyncio.get_event_loop()
-		new_p_refs = loop.run_until_complete(
-			_collect_remote_p_refs(remote_p_refs, npi_set)
+		fetched_p_refs = loop.run_until_complete(
+			fetch_remote_p_refs(unfetched_remote_p_refs, npi_set)
 		)
+
 		local_p_refs.extend(
-			new_p_refs
+			fetched_p_refs
 		)
 		return {p['provider_group_id']: p['provider_groups']
 			for p in local_p_refs}
 
 	def in_network_items(
 		self,
-		npi_set,
-		code_set,
+		npi_filter,
+		code_filter,
 		p_refs_map,
 	):
 		"""
@@ -301,8 +304,8 @@ class MRFObjectBuilder:
 		Note: if there's a bug in this program -- it's probably in
 		this part.
 
-		:param npi_set: set
-		:param code_set: set
+		:param npi_filter: set
+		:param code_filter: set
 		:param p_refs_map: dict
 		:return: dict
 		"""
@@ -314,8 +317,7 @@ class MRFObjectBuilder:
 			'in_network', 'end_array', None):
 				return
 
-			elif (prefix, event, value) == (
-			'in_network.item', 'end_map', None):
+			elif (prefix, event, value) == ('in_network.item', 'end_map', None):
 				log.info(f"Rates found for {bct} {bc}")
 				in_network_item = builder.value.pop()
 
@@ -324,18 +326,16 @@ class MRFObjectBuilder:
 				del bct, bc
 
 			elif (
-				(prefix, event) == (
-			'in_network.item.negotiated_rates', 'start_array')
+				(prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
 			):
 				bct = builder.value[-1]['billing_code_type']
 				bc = str(builder.value[-1]['billing_code'])
 
 				if (
-					code_set
-					and (bct, bc) not in code_set
+					code_filter
+					and (bct, bc) not in code_filter
 				):
-					log.debug(
-						f"Skipping {bct} {bc}: not in list")
+					log.debug(f"Skipping {bct} {bc}: not in list")
 
 					builder.value.pop()
 					builder.containers.pop()
@@ -407,8 +407,8 @@ class MRFObjectBuilder:
 			elif prefix.endswith('npi.item'):
 				value = str(value)
 				if (
-					npi_set and
-					value not in npi_set
+					npi_filter and
+					value not in npi_filter
 				):
 					continue
 
@@ -440,7 +440,7 @@ class MRFWriter:
 		file_exists = os.path.exists(file_loc)
 
 		with open(file_loc, 'a') as f:
-			writer = csv.DictWriter(f, fieldnames=fieldnames)
+			writer = csv.DictWriter(f, fieldnames = fieldnames)
 			if not file_exists:
 				writer.writeheader()
 			writer.writerows(rows)
@@ -465,15 +465,13 @@ class MRFWriter:
 			for price in rate['negotiated_prices']:
 
 				if sc := price.get('service_code'):
-					price['service_code'] = json.dumps(
-						sorted(sc))
+					price['service_code'] = json.dumps(sorted(sc))
 				else:
 					price['service_code'] = None
 
 				if bcm := price.get('billing_code_modifier'):
 					price[
-						'billing_code_modifier'] = json.dumps(
-						sorted(bcm))
+						'billing_code_modifier'] = json.dumps(sorted(bcm))
 				else:
 					price['billing_code_modifier'] = None
 
@@ -530,7 +528,7 @@ class MRFWriter:
 def flatten_mrf(
 	loc: str,
 	npi_set: set,
-	code_set: set,
+	code_filter: set,
 	out_dir: str,
 	url: str = None,
 ):
@@ -545,7 +543,7 @@ def flatten_mrf(
 
 	:param loc: remote or local file location
 	:param npi_set: set of NPI numbers
-	:param code_set: set of (CODE_TYPE, CODE) tuples (str, str)
+	:param code_filter: set of (CODE_TYPE, CODE) tuples (str, str)
 	:param out_dir: output directory
 	:param url: complete, clickable file remote URL. Assumed to be loc unless
 	specified
@@ -570,9 +568,9 @@ def flatten_mrf(
 
 		# Case 1. The MRF has its provider references at the top
 		if m.parser.current == ('', 'map_key', 'provider_references'):
-			p_refs_map = m.collect_p_refs(npi_set)
+			p_refs_map = m._combine_local_remote_p_refs(npi_set)
 			m.ffwd(('', 'map_key', 'in_network'))
-			for item in m.in_network_items(npi_set, code_set, p_refs_map):
+			for item in m.in_network_items(npi_set, code_filter, p_refs_map):
 				writer.write_in_network_item(item, root_hash)
 				log.warn('WROTE ITEM!!!!')
 			writer.write_table([root_data], 'root')
@@ -588,7 +586,7 @@ def flatten_mrf(
 			log.info('Checking end of file')
 			try:
 				m.ffwd(('', 'map_key', 'provider_references'))
-				p_refs_map = m.collect_p_refs(npi_set)
+				p_refs_map = m._combine_local_remote_p_refs(npi_set)
 			except Exception:
 				log.info('No provider references in this file')
 				p_refs_map = None
@@ -596,6 +594,6 @@ def flatten_mrf(
 	with MRFOpen(loc) as f:
 		m = MRFObjectBuilder(f)
 		m.ffwd(('', 'map_key', 'in_network'))
-		for item in m.in_network_items(npi_set, code_set, p_refs_map):
+		for item in m.in_network_items(npi_set, code_filter, p_refs_map):
 			writer.write_in_network_item(item, root_hash)
 		writer.write_table([root_data], 'root')

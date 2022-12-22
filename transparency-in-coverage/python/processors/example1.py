@@ -6,8 +6,8 @@ import logging
 
 log = logging.getLogger('mrfutils')
 
-code_set = data_import('test/codes.csv')
-npi_set = data_import('test/npis.csv')
+code_filter = data_import('test/codes.csv')
+npi_filter = data_import('test/npis.csv')
 
 p = Path(__file__).parent.absolute()
 
@@ -25,7 +25,7 @@ for url in tqdm(urls):
             flatten_mrf(
                 loc      = url,
                 out_dir  = 'example1_csvs',
-                code_set = code_set,
+                code_filter= code_filter,
                 npi_set  = npi_set
             )
         except InvalidMRF as e:
