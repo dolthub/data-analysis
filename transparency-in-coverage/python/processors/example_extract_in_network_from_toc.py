@@ -14,7 +14,7 @@ con = sqlite3.connect(dbname)
 cur = con.cursor()
 
 cur.execute("CREATE TABLE IF NOT EXISTS urls (id INTEGER PRIMARY KEY, url UNIQUE)")
-cur.execute("CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY, name UNIQUE)")
+cur.execute("CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY, name, description)")
 cur.execute(
     """
     CREATE TABLE IF NOT EXISTS plan_url (
@@ -27,14 +27,14 @@ cur.execute(
 
 con.commit()
 
-def insert_plan_url(plan_name, url):
+def insert_plan_url(plan_name, description, url):
     """
     :param plan_name: str
     :param url: str
     """
-    cur.execute('SELECT id FROM plans WHERE name = ?', (plan_name,))
+    cur.execute('SELECT id FROM plans WHERE (name, description) = (?, ?)', (plan_name, description))
     if (res := cur.fetchone()) is None:
-        cur.execute('INSERT INTO plans (name) VALUES (?)', (plan_name,))
+        cur.execute('INSERT INTO plans (name, description) VALUES (?, ?)', (plan_name, description))
         plan_id = cur.lastrowid
     else:
         plan_id = res[0]
@@ -50,15 +50,18 @@ def insert_plan_url(plan_name, url):
 
 # Regular expression for capturing plan and location information
 # in the bytestrings returned by f.readlines()
-pat = "\"description\":\"(.+?)\",\"location\":\"(.+?)\""
+desc_loc_pat = "\"description\":\"(.+?)\",\"location\":\"(.+?)\""
+plan_pat = r'"plan_name":"(.+?)"'
 
 with MRFOpen(anthem_toc_url) as f:
     for line in f:
         line = str(line)
         if 'in-network' in line:
-            g = re.findall(pat, line)
-            for plan_name, url in g:
-                insert_plan_url(plan_name, url)
+            g = re.findall(desc_loc_pat, line)
+            match = re.search(plan_pat, line)
+            plan_name = match.group(1)
+            for description, url in g:
+                insert_plan_url(plan_name, description, url)
                 con.commit()
 
 con.close()
