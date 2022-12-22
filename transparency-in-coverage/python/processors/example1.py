@@ -26,7 +26,7 @@ for url in tqdm(urls):
                 loc      = url,
                 out_dir  = 'example1_csvs',
                 code_filter= code_filter,
-                npi_set  = npi_set
+                npi_filter= npi_set
             )
         except InvalidMRF as e:
             log.critical(e)

@@ -164,11 +164,11 @@ async def fetch_remote_p_ref(
 
 async def fetch_remote_p_refs(
 	unfetched_p_refs,
-	npi_set,
+	npi_filter,
 ):
 	'''
 	:param unfetched_p_refs: list of remote references to fetch
-	:param npi_set: NPI filter
+	:param npi_filter: NPI filter
 	:return: non-None p_refs
 	'''
 	tasks = []
@@ -182,7 +182,7 @@ async def fetch_remote_p_refs(
 					session,
 					p_ref_id,
 					p_ref_loc,
-					npi_set,
+					npi_filter,
 				),
 				timeout = 5
 			)
@@ -229,7 +229,7 @@ class MRFObjectBuilder:
 			raise InvalidMRF(
 				'Read to EOF without finding root data')
 
-	def _prepare_provider_refs(self, npi_set):
+	def _prepare_provider_refs(self, npi_filter):
 		remote_p_refs = []
 		builder = ijson.ObjectBuilder()
 
@@ -242,8 +242,8 @@ class MRFObjectBuilder:
 			elif prefix.endswith('npi.item'):
 				value = str(value)
 				if (
-					npi_set and
-					value not in npi_set
+					npi_filter and
+					value not in npi_filter
 				):
 					continue
 
@@ -272,18 +272,18 @@ class MRFObjectBuilder:
 
 			builder.event(event, value)
 
-	def _combine_local_remote_p_refs(self, npi_set):
+	def _combine_local_remote_p_refs(self, npi_filter):
 		"""
 		Collects the provider references into a map. This replaces
 		"provider_group_id" with provider groups
-		:param npi_set: set
+		:param npi_filter: set
 		:return: dict
 		"""
-		local_p_refs, unfetched_remote_p_refs = self._prepare_provider_refs(npi_set)
+		local_p_refs, unfetched_remote_p_refs = self._prepare_provider_refs(npi_filter)
 
 		loop = asyncio.get_event_loop()
 		fetched_p_refs = loop.run_until_complete(
-			fetch_remote_p_refs(unfetched_remote_p_refs, npi_set)
+			fetch_remote_p_refs(unfetched_remote_p_refs, npi_filter)
 		)
 
 		local_p_refs.extend(
@@ -527,7 +527,7 @@ class MRFWriter:
 
 def flatten_mrf(
 	loc: str,
-	npi_set: set,
+	npi_filter: set,
 	code_filter: set,
 	out_dir: str,
 	url: str = None,
@@ -542,7 +542,7 @@ def flatten_mrf(
 	3. The MRF doesn't have provider references
 
 	:param loc: remote or local file location
-	:param npi_set: set of NPI numbers
+	:param npi_filter: set of NPI numbers
 	:param code_filter: set of (CODE_TYPE, CODE) tuples (str, str)
 	:param out_dir: output directory
 	:param url: complete, clickable file remote URL. Assumed to be loc unless
@@ -568,9 +568,9 @@ def flatten_mrf(
 
 		# Case 1. The MRF has its provider references at the top
 		if m.parser.current == ('', 'map_key', 'provider_references'):
-			p_refs_map = m._combine_local_remote_p_refs(npi_set)
+			p_refs_map = m._combine_local_remote_p_refs(npi_filter)
 			m.ffwd(('', 'map_key', 'in_network'))
-			for item in m.in_network_items(npi_set, code_filter, p_refs_map):
+			for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
 				writer.write_in_network_item(item, root_hash)
 				log.warn('WROTE ITEM!!!!')
 			writer.write_table([root_data], 'root')
@@ -586,7 +586,7 @@ def flatten_mrf(
 			log.info('Checking end of file')
 			try:
 				m.ffwd(('', 'map_key', 'provider_references'))
-				p_refs_map = m._combine_local_remote_p_refs(npi_set)
+				p_refs_map = m._combine_local_remote_p_refs(npi_filter)
 			except Exception:
 				log.info('No provider references in this file')
 				p_refs_map = None
@@ -594,6 +594,6 @@ def flatten_mrf(
 	with MRFOpen(loc) as f:
 		m = MRFObjectBuilder(f)
 		m.ffwd(('', 'map_key', 'in_network'))
-		for item in m.in_network_items(npi_set, code_filter, p_refs_map):
+		for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
 			writer.write_in_network_item(item, root_hash)
 		writer.write_table([root_data], 'root')

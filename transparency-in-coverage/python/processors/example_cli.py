@@ -32,7 +32,7 @@ try:
         loc = url,
         out_dir = out_dir,
         code_filter= code_filter,
-        npi_set = npi_filter,
+        npi_filter= npi_filter,
         url = url # optional, see docstring
     )
 except InvalidMRF as e:
