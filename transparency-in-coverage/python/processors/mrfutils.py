@@ -255,23 +255,17 @@ class MRFObjectBuilder:
 				prefix.endswith('provider_groups.item')
 				and event == 'end_map'
 			):
-				if not \
-				builder.value[-1].get('provider_groups')[-1][
-					'npi']:
-					builder.value[-1][
-						'provider_groups'].pop()
+				if not builder.value[-1].get('provider_groups')[-1]['npi']:
+					builder.value[-1]['provider_groups'].pop()
 
 			elif (
 				prefix.endswith('provider_references.item')
 				and event == 'end_map'
 			):
-				if builder.value and builder.value[-1].get(
-					'location'):
-					remote_p_refs.append(
-						builder.value.pop())
+				if builder.value and builder.value[-1].get('location'):
+					remote_p_refs.append(builder.value.pop())
 
-				elif not builder.value[-1].get(
-					'provider_groups'):
+				elif not builder.value[-1].get('provider_groups'):
 					builder.value.pop()
 
 			builder.event(event, value)
@@ -353,8 +347,6 @@ class MRFObjectBuilder:
 			):
 				log.info(f"Skipping {bct} {bc}: no providers")
 
-				print(builder.value)
-
 				builder.value.pop()
 				builder.containers.pop()
 				builder.containers.pop()
@@ -380,35 +372,22 @@ class MRFObjectBuilder:
 				and event == 'end_map'
 			):
 
-				if builder.value[-1]['negotiated_rates'][
-					-1].get(
-					'provider_references'):
-					builder.value[-1]['negotiated_rates'][
-						-1].pop(
-						'provider_references')
+				if builder.value[-1]['negotiated_rates'][-1].get('provider_references'):
+					builder.value[-1]['negotiated_rates'][-1].pop('provider_references')
 
-				builder.value[-1]['negotiated_rates'][
-					-1].setdefault(
-					'provider_groups', [])
-				builder.value[-1]['negotiated_rates'][-1][
-					'provider_groups'].extend(
-					provider_groups)
+				builder.value[-1]['negotiated_rates'][-1].setdefault('provider_groups', [])
+				builder.value[-1]['negotiated_rates'][-1]['provider_groups'].extend(provider_groups)
 
-				if not builder.value[-1]['negotiated_rates'][
-					-1].get(
-					'provider_groups'):
-					builder.value[-1][
-						'negotiated_rates'].pop()
+				if not builder.value[-1]['negotiated_rates'][-1].get('provider_groups'):
+					builder.value[-1]['negotiated_rates'].pop()
 
 			elif (
 				prefix.endswith('provider_groups.item')
 				and event == 'end_map'
 				and not
-				builder.value[-1]['negotiated_rates'][-1][
-					'provider_groups'][-1]['npi']
+				builder.value[-1]['negotiated_rates'][-1]['provider_groups'][-1]['npi']
 			):
-				builder.value[-1]['negotiated_rates'][-1][
-					'provider_groups'].pop()
+				builder.value[-1]['negotiated_rates'][-1]['provider_groups'].pop()
 
 			elif prefix.endswith('npi.item'):
 				value = str(value)
@@ -483,25 +462,19 @@ class MRFWriter:
 
 				price_row = {
 					'billing_class': price['billing_class'],
-					'negotiated_type': price[
-						'negotiated_type'],
-					'expiration_date': price[
-						'expiration_date'],
-					'negotiated_rate': price[
-						'negotiated_rate'],
+					'negotiated_type': price['negotiated_type'],
+					'expiration_date': price['expiration_date'],
+					'negotiated_rate': price['negotiated_rate'],
 					'service_code': price['service_code'],
-					'additional_information': price.get(
-						'additional_information'),
-					'billing_code_modifier': price[
-						'billing_code_modifier'],
+					'additional_information': price.get('additional_information'),
+					'billing_code_modifier': price['billing_code_modifier'],
 					'code_hash': code_hash,
 					'root_hash': root_hash,
 				}
 				price_row['negotiated_price_hash'] = dicthasher(
 					price_row)
 				price_rows.append(price_row)
-				self.write_table(price_rows,
-				                 'negotiated_prices')
+				self.write_table(price_rows,'negotiated_prices')
 
 			group_rows = []
 			for group in rate['provider_groups']:
@@ -527,8 +500,7 @@ class MRFWriter:
 					}
 					links.append(link)
 
-			self.write_table(links,
-			                 'provider_groups_negotiated_prices_link')
+			self.write_table(links, 'provider_groups_negotiated_prices_link')
 
 
 def flatten_mrf(
@@ -578,7 +550,6 @@ def flatten_mrf(
 			m.ffwd(('', 'map_key', 'in_network'))
 			for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
 				writer.write_in_network_item(item, root_hash)
-				log.warn('WROTE ITEM!!!!')
 			writer.write_table([root_data], 'root')
 			return
 
@@ -587,18 +558,16 @@ def flatten_mrf(
 		# We try to find them by fast-forwarding to the end and collecting
 		# the provider references. If we do find them, we make a map.
 		# Then read the file again.
-		# elif m.parser.current == ('', 'map_key', 'in_network'):
-		# 	log.info('No provider references found at beginning of file')
-		# 	log.info('Checking end of file')
-		# 	try:
-		# 		m.ffwd(('', 'map_key', 'provider_references'))
-		# 		p_refs_map = m._combine_local_remote_p_refs(npi_filter)
-		# 	except Exception:
-		# 		log.info('No provider references in this file')
-		# 		p_refs_map = None
+		elif m.parser.current == ('', 'map_key', 'in_network'):
+			log.info('No provider references found at beginning of file')
+			log.info('Checking end of file')
+			try:
+				m.ffwd(('', 'map_key', 'provider_references'))
+				p_refs_map = m._combine_local_remote_p_refs(npi_filter)
+			except Exception:
+				log.info('No provider references in this file')
+				p_refs_map = None
 
-	p_refs_map = None
-	print(npi_filter)
 	with MRFOpen(loc) as f:
 		m = MRFObjectBuilder(f)
 		m.ffwd(('', 'map_key', 'in_network'))

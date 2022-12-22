@@ -7,9 +7,8 @@ from mrfutils import (
 	dicthasher,
 	fetch_remote_p_ref
 )
-from unittest import IsolatedAsyncioTestCase
 
-class TestSingleFetch(IsolatedAsyncioTestCase):
+class TestSingleFetch(unittest.IsolatedAsyncioTestCase):
 	loc = "https://raw.githubusercontent.com/CMSgov/price-transparency-guide/master/examples/provider-reference/provider-reference.json"
 	p_ref_id = 2
 	async def test_remote_ref(self):
