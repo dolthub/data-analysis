@@ -192,7 +192,8 @@ async def _collect_remote_p_refs(
 		return [
 			p_ref for p_ref in p_refs
 		        if p_ref is not None
-		        ]
+		]
+
 
 class MRFObjectBuilder:
 	"""
