@@ -1,43 +1,64 @@
+"""
+This file shows how to capture (and put into a small table)
+all of the in-network files in Anthem's gigantic 15GB ZIPPED
+JSON file.
+"""
 import sqlite3
 import re
 from mrfutils import MRFOpen
 
+anthem_toc_url ='https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-12-01_anthem_index.json.gz'
 dbname = "anthem-in-network.db"
 
 con = sqlite3.connect(dbname)
 cur = con.cursor()
 
+cur.execute("CREATE TABLE IF NOT EXISTS urls (id INTEGER PRIMARY KEY, url UNIQUE)")
+cur.execute("CREATE TABLE IF NOT EXISTS plans (id INTEGER PRIMARY KEY, name UNIQUE)")
 cur.execute(
     """
-    CREATE TABLE urls (
-        url PRIMARY KEY
-    )
-    """
-)
-cur.execute(
-    """
-    CREATE TABLE plan_urls (
-        plan,
-        url,
-        PRIMARY KEY (plan, url),
-        FOREIGN KEY (url) REFERENCES urls(url)
+    CREATE TABLE IF NOT EXISTS plan_url (
+        plan_id,
+        url_id,
+        FOREIGN KEY (url_id) REFERENCES urls(id),
+        FOREIGN KEY (plan_id) REFERENCES plans(id)
     )
     """)
 
 con.commit()
 
-toc_url ='https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-12-01_anthem_index.json.gz'
+def insert_plan_url(plan_name, url):
+    """
+    :param plan_name: str
+    :param url: str
+    """
+    cur.execute('SELECT id FROM plans WHERE name = ?', (plan_name,))
+    if (res := cur.fetchone()) is None:
+        cur.execute('INSERT INTO plans (name) VALUES (?)', (plan_name,))
+        plan_id = cur.lastrowid
+    else:
+        plan_id = res[0]
 
-with MRFOpen(toc_url) as f:
+    cur.execute('SELECT id FROM urls WHERE url = ?', (url,))
+    if (res := cur.fetchone()) is None:
+        cur.execute('INSERT INTO urls (url) VALUES (?)', (url,))
+        url_id = cur.lastrowid
+    else:
+        url_id = res[0]
+
+    cur.execute("INSERT OR IGNORE INTO plan_url (plan_id, url_id) VALUES (?, ?)", (plan_id, url_id))
+
+# Regular expression for capturing plan and location information
+# in the bytestrings returned by f.readlines()
+pat = "\"description\":\"(.+?)\",\"location\":\"(.+?)\""
+
+with MRFOpen(anthem_toc_url) as f:
     for line in f:
-        strline = str(line)
-        if 'in-network' in strline:
-            g = re.findall("\"description\":\"(.+?)\",\"location\":\"(.+?)\"", strline)
-            for plan, url in g:
-                try:
-                    cur.execute("INSERT INTO urls (url) VALUES (?)", (url,))
-                    row_id = cur.lastrowid
-                except sqlite3.IntegrityError:
-                    row_id = cur.execute("SELECT * FROM urls WHERE url = ?;", (url,)).lastrowid
-                cur.execute("INSERT OR IGNORE INTO plan_urls (plan, url) VALUES (?,?)", (plan, row_id))
-            con.commit()
+        line = str(line)
+        if 'in-network' in line:
+            g = re.findall(pat, line)
+            for plan_name, url in g:
+                insert_plan_url(plan_name, url)
+                con.commit()
+
+con.close()
