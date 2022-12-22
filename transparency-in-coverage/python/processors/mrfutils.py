@@ -19,6 +19,7 @@ file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
+pid = os.getegid()
 
 def data_import(filename):
 	"""
@@ -110,7 +111,7 @@ class MRFOpen:
 		else:
 			self.f = open(self.loc, 'rb')
 
-		log.info(f'Successfully opened file: {self.loc}')
+		log.info(f'{pid}: Successfully opened file: {self.loc}')
 		return self.f
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
@@ -134,7 +135,7 @@ async def fetch_remote_p_ref(
 	:return: json
 	'''
 	async with session.get(p_ref_url) as response:
-		log.info(f'Opened remote provider reference url:{p_ref_url}')
+		log.info(f'{pid}: Opened remote provider reference url:{p_ref_url}')
 
 		assert response.status == 200
 
@@ -316,7 +317,7 @@ class MRFObjectBuilder:
 
 			elif (prefix, event, value) == (
 			'in_network.item', 'end_map', None):
-				log.info(f"Rates found for {bct} {bc}")
+				log.info(f"{pid}: Rates found for {bct} {bc}")
 				in_network_item = builder.value.pop()
 
 				yield in_network_item
@@ -347,7 +348,7 @@ class MRFObjectBuilder:
 				(prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
 				and not builder.value[-1]['negotiated_rates']
 			):
-				log.info(f"Skipping {bct} {bc}: no providers")
+				log.info(f"{pid}: Skipping {bct} {bc}: no providers")
 
 				builder.value.pop()
 				builder.containers.pop()
@@ -584,13 +585,13 @@ def flatten_mrf(
 		# the provider references. If we do find them, we make a map.
 		# Then read the file again.
 		elif m.parser.current == ('', 'map_key', 'in_network'):
-			log.info('No provider references found at beginning of file')
+			log.info(f'{pid}: No provider references found at beginning of file')
 			log.info('Checking end of file')
 			try:
 				m.ffwd(('', 'map_key', 'provider_references'))
 				p_refs_map = m.collect_p_refs(npi_set)
 			except Exception:
-				log.info('No provider references in this file')
+				log.info(f'{pid}: No provider references in this file')
 				p_refs_map = None
 
 	with MRFOpen(loc) as f:
