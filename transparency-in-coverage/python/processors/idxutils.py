@@ -2,7 +2,7 @@ import ijson
 import logging
 from mrfutils import MRFOpen
 
-log = logging.getLogger(__name__)
+log = logging.getLogger('mrfutils')
 log.setLevel(logging.DEBUG)
 
 def gen_in_network_links(index_loc,):
