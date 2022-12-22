@@ -386,7 +386,7 @@ class MRFWriter:
 		file_loc = f'{self.out_dir}/{filename}.csv'
 		file_exists = os.path.exists(file_loc)
 
-		with open(file_loc, 'a') as f:
+		with open(file_loc, 'a', newline="") as f:
 			writer = csv.DictWriter(f, fieldnames = fieldnames)
 			if not file_exists:
 				writer.writeheader()
