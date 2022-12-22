@@ -11,22 +11,35 @@ import logging
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
+<<<<<<< Updated upstream
+=======
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as tqdma
+
+
+# import heartrate; heartrate.trace(browser=True, daemon=True)
+>>>>>>> Stashed changes
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.WARNING)
 
 file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
 
+<<<<<<< Updated upstream
 def import_csv_to_set(filename):
+=======
+def data_import(filename):
+>>>>>>> Stashed changes
 	"""
 	Imports data as tuples from a given file.
 	Iterates over rows
 	:param filename: filename
 	:return:
 	"""
+<<<<<<< Updated upstream
 	items = set()
 	with open(filename, 'r') as f:
 		reader = csv.reader(f)
@@ -37,6 +50,14 @@ def import_csv_to_set(filename):
 			else:
 				items.add(row.pop())
 		return items
+=======
+	with open(filename, 'r') as f:
+		reader = csv.reader(f)
+		objs = set()
+		for row in reader:
+			objs.add(tuple([x.strip() for x in row]))
+		return objs
+>>>>>>> Stashed changes
 
 
 def dicthasher(data, n_bytes=8):
@@ -128,13 +149,21 @@ async def fetch_remote_p_ref(
 	session,
 	p_ref_id,
 	p_ref_url,
+<<<<<<< Updated upstream
 	npi_filter = None,
+=======
+	npi_set,
+>>>>>>> Stashed changes
 ):
 	'''
 	:param session: aiohttp.ClientSession()
 	:param p_ref_id: provider_group_id
 	:param p_ref_url: location of remote reference
+<<<<<<< Updated upstream
 	:param npi_filter: NPI filter
+=======
+	:param npi_set: NPI filter
+>>>>>>> Stashed changes
 	:return: json
 	'''
 	async with session.get(p_ref_url) as response:
@@ -150,11 +179,17 @@ async def fetch_remote_p_ref(
 
 		data['provider_group_id'] = p_ref_id
 
+<<<<<<< Updated upstream
 		for g in data['provider_groups']:
 			g['npi'] = [str(n) for n in g['npi']]
 
 			if npi_filter:
 				g['npi'] = [n for n in g['npi'] if n in npi_filter]
+=======
+		for g in tqdm(data['provider_groups'], desc="Provider groups"):
+			g['npi'] = [str(n) for n in g['npi']]
+			g['npi'] = [n for n in g['npi'] if n in npi_set]
+>>>>>>> Stashed changes
 
 		data['provider_groups'] = [
 			g for g in data['provider_groups']
@@ -166,6 +201,7 @@ async def fetch_remote_p_ref(
 		return data
 
 
+<<<<<<< Updated upstream
 async def fetch_remote_p_refs(
 	unfetched_p_refs,
 	npi_filter,
@@ -173,11 +209,24 @@ async def fetch_remote_p_refs(
 	'''
 	:param unfetched_p_refs: list of remote references to fetch
 	:param npi_filter: NPI filter
+=======
+async def _collect_remote_p_refs(
+	remote_p_refs,
+	npi_set,
+):
+	'''
+	:param remote_p_refs: list of remote references to fetch
+	:param npi_set: NPI filter
+>>>>>>> Stashed changes
 	:return: non-None p_refs
 	'''
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
+<<<<<<< Updated upstream
 		for p in unfetched_p_refs:
+=======
+		for p in tqdm(remote_p_refs, desc="Remote P refs"):
+>>>>>>> Stashed changes
 			p_ref_id = p['provider_group_id']
 			p_ref_loc = p['location']
 
@@ -186,14 +235,22 @@ async def fetch_remote_p_refs(
 					session,
 					p_ref_id,
 					p_ref_loc,
+<<<<<<< Updated upstream
 					npi_filter,
+=======
+					npi_set,
+>>>>>>> Stashed changes
 				),
 				timeout = 5
 			)
 
 			tasks.append(task)
 
+<<<<<<< Updated upstream
 		p_refs = await asyncio.gather(*tasks)
+=======
+		p_refs = await tqdma.gather(*tasks)
+>>>>>>> Stashed changes
 
 		return [
 			p_ref for p_ref in p_refs
@@ -233,11 +290,19 @@ class MRFObjectBuilder:
 			raise InvalidMRF(
 				'Read to EOF without finding root data')
 
+<<<<<<< Updated upstream
 	def _prepare_provider_refs(self, npi_filter):
 		remote_p_refs = []
 		builder = ijson.ObjectBuilder()
 
 		for prefix, event, value in self.parser:
+=======
+	def _prepare_provider_refs(self, npi_set):
+		remote_p_refs = []
+		builder = ijson.ObjectBuilder()
+
+		for prefix, event, value in tqdm(self.parser, desc="Prepare Provider Refs"):
+>>>>>>> Stashed changes
 
 			if (prefix, event) == (
 			'provider_references', 'end_array'):
@@ -246,8 +311,13 @@ class MRFObjectBuilder:
 			elif prefix.endswith('npi.item'):
 				value = str(value)
 				if (
+<<<<<<< Updated upstream
 					npi_filter and
 					value not in npi_filter
+=======
+					npi_set and
+					value not in npi_set
+>>>>>>> Stashed changes
 				):
 					continue
 
@@ -255,21 +325,40 @@ class MRFObjectBuilder:
 				prefix.endswith('provider_groups.item')
 				and event == 'end_map'
 			):
+<<<<<<< Updated upstream
 				if not builder.value[-1].get('provider_groups')[-1]['npi']:
 					builder.value[-1]['provider_groups'].pop()
+=======
+				if not \
+				builder.value[-1].get('provider_groups')[-1][
+					'npi']:
+					builder.value[-1][
+						'provider_groups'].pop()
+>>>>>>> Stashed changes
 
 			elif (
 				prefix.endswith('provider_references.item')
 				and event == 'end_map'
 			):
+<<<<<<< Updated upstream
 				if builder.value and builder.value[-1].get('location'):
 					remote_p_refs.append(builder.value.pop())
 
 				elif not builder.value[-1].get('provider_groups'):
+=======
+				if builder.value and builder.value[-1].get(
+					'location'):
+					remote_p_refs.append(
+						builder.value.pop())
+
+				elif not builder.value[-1].get(
+					'provider_groups'):
+>>>>>>> Stashed changes
 					builder.value.pop()
 
 			builder.event(event, value)
 
+<<<<<<< Updated upstream
 	def _combine_local_remote_p_refs(self, npi_filter):
 		"""
 		Collects the provider references into a map. This replaces
@@ -286,14 +375,36 @@ class MRFObjectBuilder:
 
 		local_p_refs.extend(
 			fetched_p_refs
+=======
+	def collect_p_refs(self, npi_set):
+		"""
+		Collects the provider references into a map. This replaces
+		"provider_group_id" with provider groups
+		:param npi_set: set
+		:return: dict
+		"""
+		local_p_refs, remote_p_refs = self._prepare_provider_refs(npi_set)
+
+		loop = asyncio.get_event_loop()
+		new_p_refs = loop.run_until_complete(
+			_collect_remote_p_refs(remote_p_refs, npi_set)
+		)
+		local_p_refs.extend(
+			new_p_refs
+>>>>>>> Stashed changes
 		)
 		return {p['provider_group_id']: p['provider_groups']
 			for p in local_p_refs}
 
 	def in_network_items(
 		self,
+<<<<<<< Updated upstream
 		npi_filter,
 		code_filter,
+=======
+		npi_set,
+		code_set,
+>>>>>>> Stashed changes
 		p_refs_map,
 	):
 		"""
@@ -302,19 +413,35 @@ class MRFObjectBuilder:
 		Note: if there's a bug in this program -- it's probably in
 		this part.
 
+<<<<<<< Updated upstream
 		:param npi_filter: set
 		:param code_filter: set
+=======
+		:param npi_set: set
+		:param code_set: set
+>>>>>>> Stashed changes
 		:param p_refs_map: dict
 		:return: dict
 		"""
 		builder = ijson.ObjectBuilder()
 
+<<<<<<< Updated upstream
 		for prefix, event, value in self.parser:
 
 			if (prefix, event) == ('in_network', 'end_array'):
 				return
 
 			elif (prefix, event) == ('in_network.item', 'end_map'):
+=======
+		for prefix, event, value in tqdm(self.parser, desc="Parser"):
+
+			if (prefix, event, value) == (
+			'in_network', 'end_array', None):
+				return
+
+			elif (prefix, event, value) == (
+			'in_network.item', 'end_map', None):
+>>>>>>> Stashed changes
 				log.info(f"Rates found for {bct} {bc}")
 				in_network_item = builder.value.pop()
 
@@ -323,16 +450,29 @@ class MRFObjectBuilder:
 				del bct, bc
 
 			elif (
+<<<<<<< Updated upstream
 				(prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
+=======
+				(prefix, event) == (
+			'in_network.item.negotiated_rates', 'start_array')
+>>>>>>> Stashed changes
 			):
 				bct = builder.value[-1]['billing_code_type']
 				bc = str(builder.value[-1]['billing_code'])
 
 				if (
+<<<<<<< Updated upstream
 					code_filter
 					and (bct, bc) not in code_filter
 				):
 					log.debug(f"Skipping {bct} {bc}: not in list")
+=======
+					code_set
+					and (bct, bc) not in code_set
+				):
+					log.debug(
+						f"Skipping {bct} {bc}: not in list")
+>>>>>>> Stashed changes
 
 					builder.value.pop()
 					builder.containers.pop()
@@ -344,7 +484,11 @@ class MRFObjectBuilder:
 				(prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
 				and not builder.value[-1]['negotiated_rates']
 			):
+<<<<<<< Updated upstream
 				log.info(f"Skipping {bct} {bc}: no providers")
+=======
+				log.debug(f"Skipping {bct} {bc}: no providers")
+>>>>>>> Stashed changes
 
 				builder.value.pop()
 				builder.containers.pop()
@@ -370,6 +514,7 @@ class MRFObjectBuilder:
 				prefix.endswith('negotiated_rates.item')
 				and event == 'end_map'
 			):
+<<<<<<< Updated upstream
 				latest_value = builder.value[-1]
 				latest_rates = latest_value['negotiated_rates'][-1]
 
@@ -380,10 +525,33 @@ class MRFObjectBuilder:
 
 				if not latest_rates['provider_groups']:
 					latest_value['negotiated_rates'].pop()
+=======
+
+				if builder.value[-1]['negotiated_rates'][
+					-1].get(
+					'provider_references'):
+					builder.value[-1]['negotiated_rates'][
+						-1].pop(
+						'provider_references')
+
+				builder.value[-1]['negotiated_rates'][
+					-1].setdefault(
+					'provider_groups', [])
+				builder.value[-1]['negotiated_rates'][-1][
+					'provider_groups'].extend(
+					provider_groups)
+
+				if not builder.value[-1]['negotiated_rates'][
+					-1].get(
+					'provider_groups'):
+					builder.value[-1][
+						'negotiated_rates'].pop()
+>>>>>>> Stashed changes
 
 			elif (
 				prefix.endswith('provider_groups.item')
 				and event == 'end_map'
+<<<<<<< Updated upstream
 			):
 				latest_value = builder.value[-1]
 				latest_rates = latest_value['negotiated_rates'][-1]
@@ -392,12 +560,25 @@ class MRFObjectBuilder:
 
 				if not latest_npis:
 					latest_rates['provider_groups'].pop()
+=======
+				and not
+				builder.value[-1]['negotiated_rates'][-1][
+					'provider_groups'][-1]['npi']
+			):
+				builder.value[-1]['negotiated_rates'][-1][
+					'provider_groups'].pop()
+>>>>>>> Stashed changes
 
 			elif prefix.endswith('npi.item'):
 				value = str(value)
 				if (
+<<<<<<< Updated upstream
 					npi_filter and
 					value not in npi_filter
+=======
+					npi_set and
+					value not in npi_set
+>>>>>>> Stashed changes
 				):
 					continue
 
@@ -428,8 +609,13 @@ class MRFWriter:
 		file_loc = f'{self.out_dir}/{filename}.csv'
 		file_exists = os.path.exists(file_loc)
 
+<<<<<<< Updated upstream
 		with open(file_loc, 'a') as f:
 			writer = csv.DictWriter(f, fieldnames = fieldnames)
+=======
+		with open(file_loc, 'a', newline="") as f:
+			writer = csv.DictWriter(f, fieldnames=fieldnames)
+>>>>>>> Stashed changes
 			if not file_exists:
 				writer.writeheader()
 			writer.writerows(rows)
@@ -437,9 +623,17 @@ class MRFWriter:
 	def write_in_network_item(self, item, root_hash):
 
 		code_row = {
+<<<<<<< Updated upstream
 			'negotiation_arrangement': item['negotiation_arrangement'],
 			'billing_code_type': item['billing_code_type'],
 			'billing_code_type_version': item['billing_code_type_version'],
+=======
+			'negotiation_arrangement': item[
+				'negotiation_arrangement'],
+			'billing_code_type': item['billing_code_type'],
+			'billing_code_type_version': item[
+				'billing_code_type_version'],
+>>>>>>> Stashed changes
 			'billing_code': item['billing_code'],
 		}
 		code_hash = dicthasher(code_row)
@@ -452,17 +646,29 @@ class MRFWriter:
 			for price in rate['negotiated_prices']:
 
 				if sc := price.get('service_code'):
+<<<<<<< Updated upstream
 					price['service_code'] = json.dumps(sorted(sc))
+=======
+					price['service_code'] = json.dumps(
+						sorted(sc))
+>>>>>>> Stashed changes
 				else:
 					price['service_code'] = None
 
 				if bcm := price.get('billing_code_modifier'):
+<<<<<<< Updated upstream
 					price['billing_code_modifier'] = json.dumps(sorted(bcm))
+=======
+					price[
+						'billing_code_modifier'] = json.dumps(
+						sorted(bcm))
+>>>>>>> Stashed changes
 				else:
 					price['billing_code_modifier'] = None
 
 				price_row = {
 					'billing_class': price['billing_class'],
+<<<<<<< Updated upstream
 					'negotiated_type': price['negotiated_type'],
 					'expiration_date': price['expiration_date'],
 					'negotiated_rate': price['negotiated_rate'],
@@ -475,15 +681,46 @@ class MRFWriter:
 				price_row['negotiated_price_hash'] = dicthasher(price_row)
 				price_rows.append(price_row)
 				self.write_table(price_rows,'negotiated_prices')
+=======
+					'negotiated_type': price[
+						'negotiated_type'],
+					'expiration_date': price[
+						'expiration_date'],
+					'negotiated_rate': price[
+						'negotiated_rate'],
+					'service_code': price['service_code'],
+					'additional_information': price.get(
+						'additional_information'),
+					'billing_code_modifier': price[
+						'billing_code_modifier'],
+					'code_hash': code_hash,
+					'root_hash': root_hash,
+				}
+				price_row['negotiated_price_hash'] = dicthasher(
+					price_row)
+				price_rows.append(price_row)
+				self.write_table(price_rows,
+				                 'negotiated_prices')
+>>>>>>> Stashed changes
 
 			group_rows = []
 			for group in rate['provider_groups']:
 				group_row = {
+<<<<<<< Updated upstream
 					'npi_numbers': json.dumps(sorted(group['npi'])),
 					'tin_type': group['tin']['type'],
 					'tin_value': group['tin']['value'],
 				}
 				group_row['provider_group_hash'] = dicthasher(group_row)
+=======
+					'npi_numbers': json.dumps(
+						sorted(group['npi'])),
+					'tin_type': group['tin']['type'],
+					'tin_value': group['tin']['value'],
+				}
+				group_row['provider_group_hash'] = dicthasher(
+					group_row)
+>>>>>>> Stashed changes
 				group_rows.append(group_row)
 			self.write_table(group_rows, 'provider_groups')
 
@@ -491,18 +728,35 @@ class MRFWriter:
 			for price in price_rows:
 				for group in group_rows:
 					link = {
+<<<<<<< Updated upstream
 						'provider_group_hash': group['provider_group_hash'],
 						'negotiated_price_hash': price['negotiated_price_hash'],
 					}
 					links.append(link)
 
 			self.write_table(links, 'provider_groups_negotiated_prices_link')
+=======
+						'provider_group_hash': group[
+							'provider_group_hash'],
+						'negotiated_price_hash': price[
+							'negotiated_price_hash'],
+					}
+					links.append(link)
+
+			self.write_table(links,
+			                 'provider_groups_negotiated_prices_link')
+>>>>>>> Stashed changes
 
 
 def flatten_mrf(
 	loc: str,
+<<<<<<< Updated upstream
 	npi_filter: set,
 	code_filter: set,
+=======
+	npi_set: set,
+	code_set: set,
+>>>>>>> Stashed changes
 	out_dir: str,
 	url: str = None,
 ):
@@ -516,8 +770,13 @@ def flatten_mrf(
 	3. The MRF doesn't have provider references
 
 	:param loc: remote or local file location
+<<<<<<< Updated upstream
 	:param npi_filter: set of NPI numbers
 	:param code_filter: set of (CODE_TYPE, CODE) tuples (str, str)
+=======
+	:param npi_set: set of NPI numbers
+	:param code_set: set of (CODE_TYPE, CODE) tuples (str, str)
+>>>>>>> Stashed changes
 	:param out_dir: output directory
 	:param url: complete, clickable file remote URL. Assumed to be loc unless
 	specified
@@ -542,10 +801,18 @@ def flatten_mrf(
 
 		# Case 1. The MRF has its provider references at the top
 		if m.parser.current == ('', 'map_key', 'provider_references'):
+<<<<<<< Updated upstream
 			p_refs_map = m._combine_local_remote_p_refs(npi_filter)
 			m.ffwd(('', 'map_key', 'in_network'))
 			for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
 				writer.write_in_network_item(item, root_hash)
+=======
+			p_refs_map = m.collect_p_refs(npi_set)
+			m.ffwd(('', 'map_key', 'in_network'))
+			for item in m.in_network_items(npi_set, code_set, p_refs_map):
+				writer.write_in_network_item(item, root_hash)
+				log.warn('WROTE ITEM!!!!')
+>>>>>>> Stashed changes
 			writer.write_table([root_data], 'root')
 			return
 
@@ -559,7 +826,12 @@ def flatten_mrf(
 			log.info('Checking end of file')
 			try:
 				m.ffwd(('', 'map_key', 'provider_references'))
+<<<<<<< Updated upstream
 				p_refs_map = m._combine_local_remote_p_refs(npi_filter)
+=======
+				p_refs_map = m.collect_p_refs(npi_set)
+				log.info('Found provider references')
+>>>>>>> Stashed changes
 			except Exception:
 				log.info('No provider references in this file')
 				p_refs_map = None
@@ -567,6 +839,12 @@ def flatten_mrf(
 	with MRFOpen(loc) as f:
 		m = MRFObjectBuilder(f)
 		m.ffwd(('', 'map_key', 'in_network'))
+<<<<<<< Updated upstream
 		for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
 			writer.write_in_network_item(item, root_hash)
 		writer.write_table([root_data], 'root')
+=======
+		for item in m.in_network_items(npi_set, code_set, p_refs_map):
+			writer.write_in_network_item(item, root_hash)
+		writer.write_table([root_data], 'root')
+>>>>>>> Stashed changes
