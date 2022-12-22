@@ -311,11 +311,10 @@ class MRFObjectBuilder:
 
 		for prefix, event, value in self.parser:
 
-			if (prefix, event, value) == (
-			'in_network', 'end_array', None):
+			if (prefix, event) == ('in_network', 'end_array'):
 				return
 
-			elif (prefix, event, value) == ('in_network.item', 'end_map', None):
+			elif (prefix, event) == ('in_network.item', 'end_map'):
 				log.info(f"Rates found for {bct} {bc}")
 				in_network_item = builder.value.pop()
 
@@ -371,23 +370,28 @@ class MRFObjectBuilder:
 				prefix.endswith('negotiated_rates.item')
 				and event == 'end_map'
 			):
+				latest_value = builder.value[-1]
+				latest_rates = latest_value['negotiated_rates'][-1]
 
-				if builder.value[-1]['negotiated_rates'][-1].get('provider_references'):
-					builder.value[-1]['negotiated_rates'][-1].pop('provider_references')
+				latest_rates.pop('provider_references', None)
+				latest_rates.setdefault('provider_groups', [])
 
-				builder.value[-1]['negotiated_rates'][-1].setdefault('provider_groups', [])
-				builder.value[-1]['negotiated_rates'][-1]['provider_groups'].extend(provider_groups)
+				latest_rates['provider_groups'].extend(provider_groups)
 
-				if not builder.value[-1]['negotiated_rates'][-1].get('provider_groups'):
-					builder.value[-1]['negotiated_rates'].pop()
+				if not latest_rates['provider_groups']:
+					latest_value['negotiated_rates'].pop()
 
 			elif (
 				prefix.endswith('provider_groups.item')
 				and event == 'end_map'
-				and not
-				builder.value[-1]['negotiated_rates'][-1]['provider_groups'][-1]['npi']
 			):
-				builder.value[-1]['negotiated_rates'][-1]['provider_groups'].pop()
+				latest_value = builder.value[-1]
+				latest_rates = latest_value['negotiated_rates'][-1]
+				latest_groups = latest_rates['provider_groups'][-1]
+				latest_npis = latest_groups['npi']
+
+				if not latest_npis:
+					latest_rates['provider_groups'].pop()
 
 			elif prefix.endswith('npi.item'):
 				value = str(value)
@@ -433,11 +437,9 @@ class MRFWriter:
 	def write_in_network_item(self, item, root_hash):
 
 		code_row = {
-			'negotiation_arrangement': item[
-				'negotiation_arrangement'],
+			'negotiation_arrangement': item['negotiation_arrangement'],
 			'billing_code_type': item['billing_code_type'],
-			'billing_code_type_version': item[
-				'billing_code_type_version'],
+			'billing_code_type_version': item['billing_code_type_version'],
 			'billing_code': item['billing_code'],
 		}
 		code_hash = dicthasher(code_row)
@@ -455,8 +457,7 @@ class MRFWriter:
 					price['service_code'] = None
 
 				if bcm := price.get('billing_code_modifier'):
-					price[
-						'billing_code_modifier'] = json.dumps(sorted(bcm))
+					price['billing_code_modifier'] = json.dumps(sorted(bcm))
 				else:
 					price['billing_code_modifier'] = None
 
@@ -471,21 +472,18 @@ class MRFWriter:
 					'code_hash': code_hash,
 					'root_hash': root_hash,
 				}
-				price_row['negotiated_price_hash'] = dicthasher(
-					price_row)
+				price_row['negotiated_price_hash'] = dicthasher(price_row)
 				price_rows.append(price_row)
 				self.write_table(price_rows,'negotiated_prices')
 
 			group_rows = []
 			for group in rate['provider_groups']:
 				group_row = {
-					'npi_numbers': json.dumps(
-						sorted(group['npi'])),
+					'npi_numbers': json.dumps(sorted(group['npi'])),
 					'tin_type': group['tin']['type'],
 					'tin_value': group['tin']['value'],
 				}
-				group_row['provider_group_hash'] = dicthasher(
-					group_row)
+				group_row['provider_group_hash'] = dicthasher(group_row)
 				group_rows.append(group_row)
 			self.write_table(group_rows, 'provider_groups')
 
@@ -493,10 +491,8 @@ class MRFWriter:
 			for price in price_rows:
 				for group in group_rows:
 					link = {
-						'provider_group_hash': group[
-							'provider_group_hash'],
-						'negotiated_price_hash': price[
-							'negotiated_price_hash'],
+						'provider_group_hash': group['provider_group_hash'],
+						'negotiated_price_hash': price['negotiated_price_hash'],
 					}
 					links.append(link)
 
