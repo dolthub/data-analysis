@@ -1,6 +1,6 @@
 import argparse
 import logging
-from mrfutils import data_import, flatten_mrf, InvalidMRF
+from mrfutils import import_csv_to_set, flatten_mrf, InvalidMRF
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
@@ -18,12 +18,12 @@ url = args.url
 out_dir = args.out
 
 if args.codes:
-    code_filter = data_import(args.codes)
+    code_filter = import_csv_to_set(args.codes)
 else:
     code_filter = None
 
 if args.npis:
-    npi_filter = data_import(args.npis)
+    npi_filter = import_csv_to_set(args.npis)
 else:
     npi_filter = None
 

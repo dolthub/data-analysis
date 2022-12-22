@@ -20,19 +20,23 @@ file_handler.setLevel(logging.WARNING)
 log.addHandler(file_handler)
 
 
-def data_import(filename):
+def import_csv_to_set(filename):
 	"""
 	Imports data as tuples from a given file.
 	Iterates over rows
 	:param filename: filename
 	:return:
 	"""
+	items = set()
 	with open(filename, 'r') as f:
 		reader = csv.reader(f)
-		objs = set()
 		for row in reader:
-			objs.add(tuple([x.strip() for x in row]))
-		return objs
+			row = [col.strip() for col in row]
+			if len(row) > 1:
+				items.add(tuple(row))
+			else:
+				items.add(row.pop())
+		return items
 
 
 def dicthasher(data, n_bytes=8):
@@ -149,7 +153,7 @@ async def fetch_remote_p_ref(
 		for g in data['provider_groups']:
 			g['npi'] = [str(n) for n in g['npi']]
 
-			if npi_filter is not None:
+			if npi_filter:
 				g['npi'] = [n for n in g['npi'] if n in npi_filter]
 
 		data['provider_groups'] = [
@@ -348,6 +352,8 @@ class MRFObjectBuilder:
 				and not builder.value[-1]['negotiated_rates']
 			):
 				log.info(f"Skipping {bct} {bc}: no providers")
+
+				print(builder.value)
 
 				builder.value.pop()
 				builder.containers.pop()
@@ -581,16 +587,18 @@ def flatten_mrf(
 		# We try to find them by fast-forwarding to the end and collecting
 		# the provider references. If we do find them, we make a map.
 		# Then read the file again.
-		elif m.parser.current == ('', 'map_key', 'in_network'):
-			log.info('No provider references found at beginning of file')
-			log.info('Checking end of file')
-			try:
-				m.ffwd(('', 'map_key', 'provider_references'))
-				p_refs_map = m._combine_local_remote_p_refs(npi_filter)
-			except Exception:
-				log.info('No provider references in this file')
-				p_refs_map = None
+		# elif m.parser.current == ('', 'map_key', 'in_network'):
+		# 	log.info('No provider references found at beginning of file')
+		# 	log.info('Checking end of file')
+		# 	try:
+		# 		m.ffwd(('', 'map_key', 'provider_references'))
+		# 		p_refs_map = m._combine_local_remote_p_refs(npi_filter)
+		# 	except Exception:
+		# 		log.info('No provider references in this file')
+		# 		p_refs_map = None
 
+	p_refs_map = None
+	print(npi_filter)
 	with MRFOpen(loc) as f:
 		m = MRFObjectBuilder(f)
 		m.ffwd(('', 'map_key', 'in_network'))

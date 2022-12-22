@@ -1,4 +1,4 @@
-from mrfutils import data_import, flatten_mrf, InvalidMRF
+from mrfutils import import_csv_to_set, flatten_mrf, InvalidMRF
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm import tqdm
 from pathlib import Path
@@ -6,8 +6,8 @@ import logging
 
 log = logging.getLogger('mrfutils')
 
-code_filter = data_import('test/codes.csv')
-npi_filter = data_import('test/npis.csv')
+code_filter = import_csv_to_set('test/codes.csv')
+npi_filter = import_csv_to_set('test/npis.csv')
 
 p = Path(__file__).parent.absolute()
 
