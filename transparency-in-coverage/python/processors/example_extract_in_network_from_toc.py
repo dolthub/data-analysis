@@ -31,7 +31,8 @@ cur.execute(
 
 con.commit()
 
-def database_write(sql, values=None, database=dbname):
+
+def database_write(sql, values=None):
     if not TESTING:
         db_cur = con.cursor()
         attempt = 0
@@ -57,7 +58,7 @@ def database_write(sql, values=None, database=dbname):
         return db_cur.lastrowid
 
 
-def database_read(sql, values=None, database=dbname, records='All'):
+def database_read(sql, values=None, records='All'):
     db_cur = con.cursor()
     attempt = 0
     rows = []
