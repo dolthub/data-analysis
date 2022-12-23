@@ -3,9 +3,9 @@ import aiohttp
 from pathlib import Path
 from mrfutils import (
 	MRFOpen,
-	MRFObjectBuilder,
+	MRFProcessor,
 	dicthasher,
-	fetch_remote_provider_reference
+	_fetch_remote_provider_reference
 )
 
 class TestSingleFetch(unittest.IsolatedAsyncioTestCase):
@@ -13,7 +13,7 @@ class TestSingleFetch(unittest.IsolatedAsyncioTestCase):
 	p_ref_id = 2
 	async def test_remote_ref(self):
 		async with aiohttp.client.ClientSession() as session:
-			data = await fetch_remote_provider_reference(
+			data = await _fetch_remote_provider_reference(
 				session,
 				self.p_ref_id,
 				self.loc,
@@ -29,7 +29,7 @@ class TestSingleFetch(unittest.IsolatedAsyncioTestCase):
 	npi_filter = {'6383593489'}
 	async def test_remote_ref(self):
 		async with aiohttp.client.ClientSession() as session:
-			data = await fetch_remote_provider_reference(
+			data = await _fetch_remote_provider_reference(
 				session,
 				self.p_ref_id,
 				self.loc,
@@ -61,7 +61,7 @@ class TestMRFObjectBuilder(unittest.TestCase):
 
 	def test_p_refs_map(self):
 		with MRFOpen(self.loc) as f:
-			m = MRFObjectBuilder(f)
+			m = MRFProcessor(f)
 			m._ffwd(('', 'map_key', 'provider_references'))
 			p_refs_map = m._make_provider_reference_map(self.npi_filter)
 
@@ -77,7 +77,7 @@ class TestMRFObjectBuilder(unittest.TestCase):
 
 	def test_npis(self):
 		with MRFOpen(self.loc) as f:
-			m = MRFObjectBuilder(f)
+			m = MRFProcessor(f)
 			root_data = m._process_root()
 
 			root_data['filename'] = Path(self.loc).stem.split('.')[0]

@@ -9,6 +9,7 @@ import itertools
 import requests
 import gzip
 import logging
+from async_lru import alru_cache
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
@@ -126,7 +127,7 @@ class MRFOpen:
 		self.f.close()
 
 
-def process_remote_provider_reference(
+def _process_remote_provider_reference(
 	data,
 	npi_filter
 ):
@@ -145,8 +146,8 @@ def process_remote_provider_reference(
 
 	return data
 
-
-async def fetch_remote_provider_reference(
+@alru_cache(maxsize = 128)
+async def _fetch_remote_provider_reference(
 	session,
 	provider_group_id,
 	provider_reference_loc,
@@ -158,14 +159,14 @@ async def fetch_remote_provider_reference(
 		f = await response.read()
 		unprocessed_data = json.loads(f)
 		unprocessed_data['provider_group_id'] = provider_group_id
-		processed_remote_provider_reference = process_remote_provider_reference(
+		processed_remote_provider_reference = _process_remote_provider_reference(
 			unprocessed_data,
 			npi_filter,
 		)
 		return processed_remote_provider_reference
 
 
-async def fetch_remote_provider_references(
+async def _fetch_remote_provider_references(
 	unfetched_provider_references,
 	npi_filter,
 ):
@@ -181,10 +182,10 @@ async def fetch_remote_provider_references(
 			provider_reference_loc = unfetched_provider_reference['location']
 
 			task = asyncio.wait_for(
-				fetch_remote_provider_reference(session,
-				                                provider_group_id,
-				                                provider_reference_loc,
-				                                npi_filter,),
+				_fetch_remote_provider_reference(session,
+				                                 provider_group_id,
+				                                 provider_reference_loc,
+				                                 npi_filter, ),
 				timeout = 5,
 			)
 
@@ -195,7 +196,7 @@ async def fetch_remote_provider_references(
 		return fetched_remote_provider_references
 
 
-class MRFObjectBuilder:
+class MRFProcessor:
 	"""
 	Takes a parser and returns necessary objects
 	for parsing and flattening MRFs.
@@ -203,6 +204,8 @@ class MRFObjectBuilder:
 
 	def __init__(self, f):
 		self.parser = Parser(f)
+		self.in_network_parser = None
+		self.provider_references_parser = None
 
 	def _ffwd(self, to_row):
 		"""
@@ -220,11 +223,13 @@ class MRFObjectBuilder:
 		builder = ijson.ObjectBuilder()
 		for (prefix, event, value) in self.parser:
 			row = (prefix, event, value)
-			if (row in [
-				('', 'map_key', 'provider_references'),
-				('', 'map_key', 'in_network')]):
-				root_data = builder.value
-				return root_data
+
+			if (
+				row == ('', 'map_key', 'provider_references') or
+				row == ('', 'map_key', 'in_network')
+			):
+				return builder.value
+
 			builder.event(event, value)
 		else:
 			raise InvalidMRF('Read to EOF without finding root data')
@@ -285,7 +290,7 @@ class MRFObjectBuilder:
 
 		loop = asyncio.get_event_loop()
 		fetched_remote_provider_references = loop.run_until_complete(
-			fetch_remote_provider_references(
+			_fetch_remote_provider_references(
 				unfetched_remote_provider_references,
 				npi_filter)
 		)
@@ -335,7 +340,7 @@ class MRFObjectBuilder:
 			provider_reference_map = None
 		return provider_reference_map
 
-	def seek_to_in_network_items(self):
+	def jump_to_in_network(self):
 		self._ffwd(('', 'map_key', 'in_network'))
 
 	def gen_in_network(
@@ -639,20 +644,20 @@ def flatten_mrf(
 	"""
 	with MRFOpen(loc) as f:
 
-		builder = MRFObjectBuilder(f)
+		processor = MRFProcessor(f)
 		writer = MRFWriter(out_dir, SCHEMA)
 
-		file_row, plan_row = builder.prepare_file_row_plan_row(loc, url)
+		file_row, plan_row = processor.prepare_file_row_plan_row(loc, url)
 		filename_hash = file_row['filename_hash']
 
-		provider_reference_map = builder.prepare_provider_references(npi_filter)
+		provider_reference_map = processor.prepare_provider_references(npi_filter)
 
 		if not provider_reference_map:
 			log.info("No provider references in this file")
 
 		try:
-			builder.seek_to_in_network_items()
-			for item in builder.gen_in_network(npi_filter, code_filter, provider_reference_map):
+			processor.jump_to_in_network()
+			for item in processor.gen_in_network(npi_filter, code_filter, provider_reference_map):
 				writer.write_in_network_item(item, filename_hash)
 			writer.write_file_and_plan(file_row, plan_row)
 			return
@@ -660,13 +665,13 @@ def flatten_mrf(
 			log.info("Didn't find in-network items on first pass. Re-opening file")
 
 	with MRFOpen(loc) as f:
-		builder = MRFObjectBuilder(f)
+		processor = MRFProcessor(f)
 
 		try:
-			builder.seek_to_in_network_items()
+			processor.jump_to_in_network()
 		except StopIteration:
 			raise InvalidMRF('No in-network items in this file')
 
-		for item in builder.gen_in_network(npi_filter, code_filter, provider_reference_map):
+		for item in processor.gen_in_network(npi_filter, code_filter, provider_reference_map):
 			writer.write_in_network_item(item, filename_hash)
 		writer.write_file_and_plan(file_row, plan_row)

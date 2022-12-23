@@ -13,7 +13,7 @@ import time
 import ijson
 from tqdm import tqdm
 
-from mrfutils import InvalidMRF, MRFOpen, MRFObjectBuilder
+from mrfutils import InvalidMRF, MRFOpen, MRFProcessor
 
 
 logging.basicConfig()
