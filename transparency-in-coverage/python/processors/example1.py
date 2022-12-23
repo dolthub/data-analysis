@@ -24,7 +24,7 @@ for url in tqdm(urls):
     with logging_redirect_tqdm():
             with MRFOpen(url) as f:
 
-                writer = MRFWriter(out_dir='example1', schema=SCHEMA)
+                writer = MRFWriter(out_dir='simple', schema=SCHEMA)
 
                 flattener = MRFFlattener(
                     loc=url,
