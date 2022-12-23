@@ -301,6 +301,43 @@ class MRFObjectBuilder:
 
 		return provider_reference_map
 
+	def prepare_file_row_plan_row(self, loc, url = None):
+		root_data = self._process_root()
+
+		plan_row = {
+			'reporting_entity_name': root_data['reporting_entity_name'],
+			'reporting_entity_type': root_data['reporting_entity_type'],
+			'plan_name': root_data.get('plan_name'),
+			'plan_id': root_data.get('plan_id'),
+			'plan_id_type': root_data.get('plan_id_type'),
+			'plan_market_type': root_data.get('plan_market_type'),
+			'last_updated_on': root_data['last_updated_on'],
+			'version': root_data['version']
+		}
+
+		plan_hash = dicthasher(plan_row)
+		plan_row['plan_hash'] = plan_hash
+
+		file_row = {
+			'filename': Path(loc).stem.split('.')[0]
+		}
+
+		filename_hash = dicthasher(file_row)
+		file_row['filename_hash'] = filename_hash
+
+		return file_row, plan_row
+
+	def prepare_provider_references(self, npi_filter):
+		try:
+			self._ffwd(('', 'map_key', 'provider_references'))
+			provider_reference_map = self._make_provider_reference_map(npi_filter)
+		except StopIteration:
+			provider_reference_map = None
+		return provider_reference_map
+
+	def seek_to_in_network_items(self):
+		self._ffwd(('', 'map_key', 'in_network'))
+
 	def gen_in_network(
 		self,
 		npi_filter,
@@ -422,29 +459,6 @@ class MRFObjectBuilder:
 
 			builder.event(event, value)
 
-	def prepare_root_row(self, loc, url = None):
-		root_row = self._process_root()
-		root_row['filename'] = Path(loc).stem.split('.')[0]
-		root_hash = dicthasher(root_row)
-		root_row['root_hash'] = root_hash
-
-		if url:
-			root_row['url'] = url
-		else:
-			root_row['url'] = loc
-
-		return root_row
-
-	def prepare_provider_references(self, npi_filter):
-		try:
-			self._ffwd(('', 'map_key', 'provider_references'))
-			provider_reference_map = self._make_provider_reference_map(npi_filter)
-		except StopIteration:
-			provider_reference_map = None
-		return provider_reference_map
-
-	def seek_to_in_network_items(self):
-		self._ffwd(('', 'map_key', 'in_network'))
 
 class MRFWriter:
 	"""Class for writing the MRF data to the appropriate
@@ -459,9 +473,9 @@ class MRFWriter:
 		if not os.path.exists(self.out_dir):
 			os.mkdir(self.out_dir)
 
-	def _write_table(self, rows, filename):
-		fieldnames = self.schema[filename]
-		file_loc = f'{self.out_dir}/{filename}.csv'
+	def _write_table(self, rows, tablename):
+		fieldnames = self.schema[tablename]
+		file_loc = f'{self.out_dir}/{tablename}.csv'
 		file_exists = os.path.exists(file_loc)
 
 		# newline = '' is to prevent Windows
@@ -472,7 +486,46 @@ class MRFWriter:
 				writer.writeheader()
 			writer.writerows(rows)
 
+	def _write_plan(self, root_data):
+
+		plan_row = {
+			'reporting_entity_name': root_data['reporting_entity_name'],
+			'reporting_entity_type': root_data['reporting_entity_type'],
+			'plan_name': root_data['plan_name'],
+			'plan_id': root_data['plan_id'],
+			'plan_id_type': root_data['plan_id_type'],
+			'plan_market_type': root_data['plan_market_type'],
+			'last_updated_on': root_data['last_updated_on'],
+			'version': root_data['version']
+		}
+		plan_hash = dicthasher(plan_row)
+		plan_row['plan_hash'] = plan_hash
+		self._write_table([plan_row], 'plan')
+		return plan_row
+
+	def _write_file(self, root_data):
+
+		file_row = {
+			'filename': root_data['filename']
+		}
+		filename_hash = dicthasher(file_row)
+		file_row['filename_hash'] = filename_hash
+		file_row['url'] = root_data['url']
+		self._write_table([file_row], 'file')
+		return file_row
+
+	def _write_plan_file(self, plan_row, file_row):
+
+		linking_row = {
+			'plan_hash': plan_row['plan_hash'],
+			'filename_hash': file_row['filename_hash']
+		}
+
+		self._write_table([linking_row], 'plans_files')
+		return linking_row
+
 	def _write_code(self, item):
+
 		code_row = {
 			'negotiation_arrangement':   item['negotiation_arrangement'],
 			'billing_code_type':         item['billing_code_type'],
@@ -485,7 +538,7 @@ class MRFWriter:
 		self._write_table([code_row], 'codes')
 		return code_row
 
-	def _write_prices(self, prices, code_hash, root_hash):
+	def _write_prices(self, prices, code_hash, filename_hash):
 		price_rows = []
 		for price in prices:
 			if sc := price.get('service_code'):
@@ -507,15 +560,15 @@ class MRFWriter:
 				'additional_information': price.get('additional_information'),
 				'billing_code_modifier':  price['billing_code_modifier'],
 				'code_hash':              code_hash,
-				'root_hash':              root_hash,
+				'filename_hash':          filename_hash,
 			}
-			price_row['negotiated_price_hash'] = dicthasher(price_row)
+			price_row['price_hash'] = dicthasher(price_row)
 			price_rows.append(price_row)
-		self._write_table(price_rows, 'negotiated_prices')
+		self._write_table(price_rows, 'prices')
 		return price_rows
 
-	def _write_groups(self, provider_groups):
-		group_rows = []
+	def _write_provider_groups(self, provider_groups):
+		provider_group_rows = []
 		for group in provider_groups:
 			group_row = {
 				'npi_numbers': json.dumps(sorted(group['npi'])),
@@ -523,41 +576,42 @@ class MRFWriter:
 				'tin_value':   group['tin']['value'],
 			}
 			group_row['provider_group_hash'] = dicthasher(group_row)
-			group_rows.append(group_row)
-		self._write_table(group_rows, 'provider_groups')
-		return group_rows
+			provider_group_rows.append(group_row)
+		self._write_table(provider_group_rows, 'provider_groups')
+		return provider_group_rows
 
-	def _write_link(self, prices, provider_groups):
-		links = []
-		for price, group in itertools.product(prices, provider_groups):
+	def _write_prices_provider_groups(self, price_rows, provider_group_rows):
+		linking_hashes = []
+		for price_row, provider_group_row in itertools.product(price_rows, provider_group_rows):
 			link = {
-				'provider_group_hash':   group['provider_group_hash'],
-				'negotiated_price_hash': price['negotiated_price_hash'],
+				'provider_group_hash':   provider_group_row['provider_group_hash'],
+				'price_hash':            price_row['price_hash'],
 			}
-			links.append(link)
-		self._write_table(links, 'provider_groups_negotiated_prices_link')
-		return links
+			linking_hashes.append(link)
+		self._write_table(linking_hashes, 'prices_provider_groups')
+		return linking_hashes
 
-	def _write_rate(self, rate, code_hash, root_hash):
-		prices = rate['negotiated_prices']
-		price_rows = self._write_prices(prices, code_hash, root_hash)
+	def write_file_and_plan(self, file_row, plan_row):
 
-		provider_groups = rate['provider_groups']
-		provider_group_rows = self._write_groups(provider_groups)
+		self._write_table([file_row], 'files')
+		self._write_table([plan_row], 'plans')
 
-		self._write_link(price_rows, provider_group_rows)
+		self._write_plan_file(plan_row, file_row)
 
-	def write_root(self, root_row):
-		self._write_table([root_row], 'root')
-		return root_row
-
-	def write_in_network_item(self, item, root_hash):
+	def write_in_network_item(self, item, filename_hash):
 
 		code_row = self._write_code(item)
 		code_hash = code_row['code_hash']
 
 		for rate in item.get('negotiated_rates'):
-			self._write_rate(rate, code_hash, root_hash)
+			prices = rate['negotiated_prices']
+			price_rows = self._write_prices(prices, code_hash, filename_hash)
+
+			provider_groups = rate['provider_groups']
+			provider_group_rows = self._write_provider_groups(provider_groups)
+
+			self._write_prices_provider_groups(price_rows, provider_group_rows)
+
 
 def flatten_mrf(
 	loc: str,
@@ -588,8 +642,8 @@ def flatten_mrf(
 		builder = MRFObjectBuilder(f)
 		writer = MRFWriter(out_dir, SCHEMA)
 
-		root_row = builder.prepare_root_row(loc, url)
-		root_hash = root_row['root_hash']
+		file_row, plan_row = builder.prepare_file_row_plan_row(loc, url)
+		filename_hash = file_row['filename_hash']
 
 		provider_reference_map = builder.prepare_provider_references(npi_filter)
 
@@ -599,8 +653,8 @@ def flatten_mrf(
 		try:
 			builder.seek_to_in_network_items()
 			for item in builder.gen_in_network(npi_filter, code_filter, provider_reference_map):
-				writer.write_in_network_item(item, root_hash)
-			writer.write_root(root_row)
+				writer.write_in_network_item(item, filename_hash)
+			writer.write_file_and_plan(file_row, plan_row)
 			return
 		except StopIteration:
 			log.info("Didn't find in-network items on first pass. Re-opening file")
@@ -614,5 +668,5 @@ def flatten_mrf(
 			raise InvalidMRF('No in-network items in this file')
 
 		for item in builder.gen_in_network(npi_filter, code_filter, provider_reference_map):
-			writer.write_in_network_item(item, root_hash)
-		writer.write_root(root_row)
+			writer.write_in_network_item(item, filename_hash)
+		writer.write_file_and_plan(file_row, plan_row)

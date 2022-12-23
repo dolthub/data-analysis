@@ -1,6 +1,6 @@
 SCHEMA = {
-    "root": [
-        "root_hash",
+    "plans": [
+        "plan_hash",
         "reporting_entity_name",
         "reporting_entity_type",
         "plan_name",
@@ -9,8 +9,15 @@ SCHEMA = {
         "plan_market_type",
         "last_updated_on",
         "version",
+    ],
+    "files": [
+        "filename_hash",
         "filename",
         "url",
+    ],
+    "plans_files": [
+        "plan_hash",
+        "filename_hash",
     ],
     "codes": [
         "code_hash",
@@ -19,10 +26,10 @@ SCHEMA = {
         "billing_code",
         "billing_code_type",
     ],
-    "negotiated_prices": [
+    "prices": [
         "root_hash",
         "code_hash",
-        "negotiated_price_hash",
+        "price_hash",
         "billing_class",
         "negotiated_type",
         "service_code",
@@ -37,9 +44,9 @@ SCHEMA = {
         "tin_value",
         "npi_numbers",
     ],
-    "provider_groups_negotiated_prices_link": [
+    "prices_provider_groups": [
         "provider_group_hash",
-        "negotiated_price_hash",
+        "price_hash",
     ]
     # "covered_services": [
     #     "root_hash_key",
