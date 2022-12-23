@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS root (
     reporting_entity_type VARCHAR(200),
     plan_name VARCHAR(200),
     plan_id VARCHAR(10),
-    plan_id_type ENUM("enum", "hios") COLLATE utf8_general_ci,
+    plan_id_type ENUM("ein", "hios") COLLATE utf8_general_ci,
     plan_market_type ENUM("group", "individual") COLLATE utf8_general_ci,
     last_updated_on VARCHAR(20),
     version VARCHAR(20),
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS negotiated_prices (
 
 CREATE TABLE IF NOT EXISTS provider_groups (
     provider_group_hash BIGINT UNSIGNED,
-    tin_type ENUM("EIN", "NPI", "ein", "npi"),
+    tin_type ENUM("ein", "npi") COLLATE utf8_general_ci,
     tin_value VARCHAR(11),
     npi_numbers JSON,
     PRIMARY KEY (provider_group_hash)
