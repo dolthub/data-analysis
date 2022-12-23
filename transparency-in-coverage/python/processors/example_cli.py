@@ -1,6 +1,7 @@
 import argparse
 import logging
-from mrfutils import import_csv_to_set, flatten_mrf, InvalidMRF
+from mrfutils import import_csv_to_set, MRFWriter, MRFOpen, MRFFlattener, InvalidMRF
+from schema import SCHEMA
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
@@ -28,12 +29,16 @@ else:
     npi_filter = None
 
 try:
-    flatten_mrf(
-        loc = url,
-        out_dir = out_dir,
-        code_filter= code_filter,
-        npi_filter= npi_filter,
-        url = url # optional, see docstring
-    )
+    with MRFOpen(url) as f:
+
+        writer = MRFWriter(out_dir=out_dir, schema=SCHEMA)
+
+        flattener = MRFFlattener(
+            loc=url,
+            code_filter=code_filter,
+            npi_filter=npi_filter)
+
+        flattener.make_first_pass(f, writer)
+
 except InvalidMRF as e:
     log.critical(e)

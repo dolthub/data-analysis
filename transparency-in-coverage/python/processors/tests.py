@@ -6,6 +6,8 @@ from mrfutils import (
 	_fetch_remote_provider_reference
 )
 
+
+
 class TestUnfilteredFetch(unittest.IsolatedAsyncioTestCase):
 
 	provider_group_id = 2
