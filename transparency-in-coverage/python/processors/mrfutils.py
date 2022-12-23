@@ -207,6 +207,8 @@ class MRFObjectBuilder:
 		"""
 		:param to_row: the row to fast-forward to
 		"""
+		if self.parser.current == to_row:
+			return
 		for current_row in self.parser:
 			if current_row == to_row:
 				break
