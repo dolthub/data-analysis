@@ -1,3 +1,5 @@
 tqdm==4.64.1
 ijson==3.1.4
 requests==2.25.1
+aiohttp==3.8.3
+async_lru==1.0.3

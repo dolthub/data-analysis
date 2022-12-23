@@ -5,9 +5,11 @@ import json
 import ijson
 import asyncio
 import aiohttp
+import itertools
 import requests
 import gzip
 import logging
+from async_lru import alru_cache
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
@@ -68,6 +70,7 @@ class Parser:
 
 	def __init__(self, f):
 		self.__p = ijson.parse(f, use_float=True)
+		self.current = None
 
 	def __iter__(self):
 		return self
@@ -129,84 +132,76 @@ class MRFOpen:
 		self.f.close()
 
 
-async def fetch_remote_p_ref(
+def _process_remote_provider_reference(
+	data,
+	npi_filter
+):
+	for group in data['provider_groups']:
+		group['npi'] = [str(npi) for npi in group['npi']]
+
+		if npi_filter:
+			group['npi'] = [npi for npi in group['npi'] if npi in npi_filter]
+
+	data['provider_groups'] = [
+		group for group in data['provider_groups']
+		if group['npi']]
+
+	if not data['provider_groups']:
+		return
+
+	return data
+
+@alru_cache(maxsize = 128)
+async def _fetch_remote_provider_reference(
 	session,
-	p_ref_id,
-	p_ref_url,
+	provider_group_id,
+	provider_reference_loc,
 	npi_filter = None,
 ):
-	'''
-	:param session: aiohttp.ClientSession()
-	:param p_ref_id: provider_group_id
-	:param p_ref_url: location of remote reference
-	:param npi_filter: NPI filter
-	:return: json
-	'''
-	async with session.get(p_ref_url) as response:
-		log.info(f'Opened remote provider reference url:{p_ref_url}')
-
+	async with session.get(provider_reference_loc) as response:
+		log.info(f'Opened remote provider reference url:{provider_reference_loc}')
 		assert response.status == 200
-
-		r = await response.read()
-		data = json.loads(r)
-
-		if not data:
-			return
-
-		data['provider_group_id'] = p_ref_id
-
-		for g in data['provider_groups']:
-			g['npi'] = [str(n) for n in g['npi']]
-
-			if npi_filter:
-				g['npi'] = [n for n in g['npi'] if n in npi_filter]
-
-		data['provider_groups'] = [
-			g for g in data['provider_groups']
-			if g['npi']]
-
-		if not data['provider_groups']:
-			return
-
-		return data
+		f = await response.read()
+		unprocessed_data = json.loads(f)
+		unprocessed_data['provider_group_id'] = provider_group_id
+		processed_remote_provider_reference = _process_remote_provider_reference(
+			unprocessed_data,
+			npi_filter,
+		)
+		return processed_remote_provider_reference
 
 
-async def fetch_remote_p_refs(
-	unfetched_p_refs,
+async def _fetch_remote_provider_references(
+	unfetched_provider_references,
 	npi_filter,
 ):
-	'''
-	:param unfetched_p_refs: list of remote references to fetch
-	:param npi_filter: NPI filter
-	:return: non-None p_refs
-	'''
+	"""
+	:param unfetched_provider_references: list 
+	:param npi_filter: set 
+	:return: 
+	"""
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
-		for p in tqdm(unfetched_p_refs, desc="Remote P refs"):
-			p_ref_id = p['provider_group_id']
-			p_ref_loc = p['location']
+		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc="Remote P refs"):
+			provider_group_id = unfetched_provider_reference['provider_group_id']
+			provider_reference_loc = unfetched_provider_reference['location']
 
 			task = asyncio.wait_for(
-				fetch_remote_p_ref(
-					session,
-					p_ref_id,
-					p_ref_loc,
-					npi_filter,
-				),
-				timeout = 5
+				_fetch_remote_provider_reference(session,
+				                                 provider_group_id,
+				                                 provider_reference_loc,
+				                                 npi_filter, ),
+				timeout = 5,
 			)
 
 			tasks.append(task)
 
-		p_refs = await tqdma.gather(*tasks)
-
-		return [
-			p_ref for p_ref in p_refs
-		        if p_ref is not None
-		]
+		fetched_remote_provider_references = await tqdma.gather(*tasks)
+		fetched_remote_provider_references = list(filter(lambda item: item, fetched_remote_provider_references))
+		return fetched_remote_provider_references
 
 
-class MRFObjectBuilder:
+class MRFProcessor:
 	"""
 	Takes a parser and returns necessary objects
 	for parsing and flattening MRFs.
@@ -214,39 +209,69 @@ class MRFObjectBuilder:
 
 	def __init__(self, f):
 		self.parser = Parser(f)
+		self.in_network_parser = None
+		self.provider_references_parser = None
 
-	def ffwd(self, to_row):
+	def _ffwd(self, to_row):
 		"""
 		:param to_row: the row to fast-forward to
 		"""
+		if self.parser.current == to_row:
+			return
 		for current_row in self.parser:
 			if current_row == to_row:
 				break
 		else:
-			raise Exception('Fast-forward failed to find row')
+			raise StopIteration('Fast-forward failed to find row')
 
-	def collect_root(self):
+	def _process_root(self):
 		builder = ijson.ObjectBuilder()
 		for (prefix, event, value) in self.parser:
 			row = (prefix, event, value)
-			if (row in [
-				('', 'map_key', 'provider_references'),
-				('', 'map_key', 'in_network')]):
+
+			if (
+				row == ('', 'map_key', 'provider_references') or
+				row == ('', 'map_key', 'in_network')
+			):
 				return builder.value
+
 			builder.event(event, value)
 		else:
-			raise InvalidMRF(
-				'Read to EOF without finding root data')
+			raise InvalidMRF('Read to EOF without finding root data')
 
-	def _prepare_provider_refs(self, npi_filter):
-		remote_p_refs = []
+	def _process_provider_references(self, npi_filter):
+		unfetched_remote_provider_references = []
 		builder = ijson.ObjectBuilder()
 
 		for prefix, event, value in self.parser:
 
-			if (prefix, event) == (
-			'provider_references', 'end_array'):
-				return builder.value, remote_p_refs
+			if (prefix, event) == ('provider_references', 'end_array'):
+				local_provider_references = builder.value
+				return local_provider_references, unfetched_remote_provider_references
+
+			elif (
+				prefix.endswith('provider_groups.item')
+				and event == 'end_map'
+			):
+				latest_value = builder.value[-1]
+				latest_provider_group = latest_value['provider_groups'][-1]
+				latest_npis = latest_provider_group['npi']
+
+				if not latest_npis:
+					latest_value['provider_groups'].pop()
+
+			elif (
+				prefix.endswith('provider_references.item')
+				and event == 'end_map'
+			):
+				latest_value = builder.value[-1]
+
+				if latest_value.get('location'):
+					provider_reference = builder.value.pop()
+					unfetched_remote_provider_references.append(provider_reference)
+
+				elif not latest_value.get('provider_groups'):
+					builder.value.pop()
 
 			elif prefix.endswith('npi.item'):
 				value = str(value)
@@ -256,50 +281,78 @@ class MRFObjectBuilder:
 				):
 					continue
 
-			elif (
-				prefix.endswith('provider_groups.item')
-				and event == 'end_map'
-			):
-				if not builder.value[-1].get('provider_groups')[-1]['npi']:
-					builder.value[-1]['provider_groups'].pop()
-
-			elif (
-				prefix.endswith('provider_references.item')
-				and event == 'end_map'
-			):
-				if builder.value and builder.value[-1].get('location'):
-					remote_p_refs.append(builder.value.pop())
-
-				elif not builder.value[-1].get('provider_groups'):
-					builder.value.pop()
-
 			builder.event(event, value)
 
-	def _combine_local_remote_p_refs(self, npi_filter):
+	def _make_provider_reference_map(self, npi_filter):
 		"""
 		Collects the provider references into a map. This replaces
 		"provider_group_id" with provider groups
 		:param npi_filter: set
 		:return: dict
 		"""
-		local_p_refs, unfetched_remote_p_refs = self._prepare_provider_refs(npi_filter)
+		local_provider_references, unfetched_remote_provider_references = \
+			self._process_provider_references(npi_filter)
 
 		loop = asyncio.get_event_loop()
-		fetched_p_refs = loop.run_until_complete(
-			fetch_remote_p_refs(unfetched_remote_p_refs, npi_filter)
+		fetched_remote_provider_references = loop.run_until_complete(
+			_fetch_remote_provider_references(
+				unfetched_remote_provider_references,
+				npi_filter)
 		)
 
-		local_p_refs.extend(
-			fetched_p_refs
+		local_provider_references.extend(
+			fetched_remote_provider_references
 		)
-		return {p['provider_group_id']: p['provider_groups']
-			for p in local_p_refs}
 
-	def in_network_items(
+		provider_reference_map = {
+			ref['provider_group_id']: ref['provider_groups']
+			for ref in local_provider_references
+		}
+
+		return provider_reference_map
+
+	def prepare_file_row_plan_row(self, loc, url = None):
+		root_data = self._process_root()
+
+		plan_row = {
+			'reporting_entity_name': root_data['reporting_entity_name'],
+			'reporting_entity_type': root_data['reporting_entity_type'],
+			'plan_name': root_data.get('plan_name'),
+			'plan_id': root_data.get('plan_id'),
+			'plan_id_type': root_data.get('plan_id_type'),
+			'plan_market_type': root_data.get('plan_market_type'),
+			'last_updated_on': root_data['last_updated_on'],
+			'version': root_data['version']
+		}
+
+		plan_hash = dicthasher(plan_row)
+		plan_row['plan_hash'] = plan_hash
+
+		file_row = {
+			'filename': Path(loc).stem.split('.')[0]
+		}
+
+		filename_hash = dicthasher(file_row)
+		file_row['filename_hash'] = filename_hash
+
+		return file_row, plan_row
+
+	def prepare_provider_references(self, npi_filter):
+		try:
+			self._ffwd(('', 'map_key', 'provider_references'))
+			provider_reference_map = self._make_provider_reference_map(npi_filter)
+		except StopIteration:
+			provider_reference_map = None
+		return provider_reference_map
+
+	def jump_to_in_network(self):
+		self._ffwd(('', 'map_key', 'in_network'))
+
+	def gen_in_network(
 		self,
 		npi_filter,
 		code_filter,
-		p_refs_map,
+		provider_reference_map,
 	):
 		"""
 		Generator that returns a fully-constructed in-network item.
@@ -309,7 +362,7 @@ class MRFObjectBuilder:
 
 		:param npi_filter: set
 		:param code_filter: set
-		:param p_refs_map: dict
+		:param provider_reference_map: dict
 		:return: dict
 		"""
 		builder = ijson.ObjectBuilder()
@@ -320,42 +373,42 @@ class MRFObjectBuilder:
 				return
 
 			elif (prefix, event) == ('in_network.item', 'end_map'):
-				log.info(f"Rates found for {bct} {bc}")
+				log.info(f"Rates found for {code_type} {code}")
 				in_network_item = builder.value.pop()
 
 				yield in_network_item
 
-				del bct, bc
+				del code_type, code
 
 			elif (
 				(prefix, event) == ('in_network.item.negotiated_rates', 'start_array')
 			):
-				bct = builder.value[-1]['billing_code_type']
-				bc = str(builder.value[-1]['billing_code'])
+				code_type = builder.value[-1]['billing_code_type']
+				code = str(builder.value[-1]['billing_code'])
 
 				if (
 					code_filter
-					and (bct, bc) not in code_filter
+					and (code_type, code) not in code_filter
 				):
-					log.debug(f"Skipping {bct} {bc}: not in list")
+					log.debug(f"Skipping {code_type} {code}: not in list")
 
 					builder.value.pop()
 					builder.containers.pop()
 
-					self.ffwd(('in_network.item', 'end_map', None))
+					self._ffwd(('in_network.item', 'end_map', None))
 					continue
 
 			elif (
 				(prefix, event) == ('in_network.item.negotiated_rates', 'end_array')
 				and not builder.value[-1]['negotiated_rates']
 			):
-				log.debug(f"Skipping {bct} {bc}: no providers")
+				log.debug(f"Skipping {code_type} {code}: no providers")
 
 				builder.value.pop()
 				builder.containers.pop()
 				builder.containers.pop()
 
-				self.ffwd(('in_network.item', 'end_map', None))
+				self._ffwd(('in_network.item', 'end_map', None))
 				continue
 
 			elif (
@@ -365,11 +418,13 @@ class MRFObjectBuilder:
 				provider_groups = []
 
 			elif (
-				p_refs_map
+				provider_reference_map
 				and prefix.endswith('provider_references.item')
-				and (groups := p_refs_map.get(value))
+
 			):
-				provider_groups.extend(groups)
+				groups = provider_reference_map.get(value)
+				if groups:
+					provider_groups.extend(groups)
 
 			elif (
 				prefix.endswith('negotiated_rates.item')
@@ -428,80 +483,144 @@ class MRFWriter:
 		if not os.path.exists(self.out_dir):
 			os.mkdir(self.out_dir)
 
-	def write_table(self, rows, filename):
-		fieldnames = self.schema[filename]
-		file_loc = f'{self.out_dir}/{filename}.csv'
+	def _write_table(self, rows, tablename):
+		fieldnames = self.schema[tablename]
+		file_loc = f'{self.out_dir}/{tablename}.csv'
 		file_exists = os.path.exists(file_loc)
 
-		with open(file_loc, 'a', newline="") as f:
-			writer = csv.DictWriter(f, fieldnames=fieldnames)
+		# newline = '' is to prevent Windows
+		# from addiing \r\n\n to the end of each line
+		with open(file_loc, 'a', newline = '') as f:
+			writer = csv.DictWriter(f, fieldnames = fieldnames)
 			if not file_exists:
 				writer.writeheader()
 			writer.writerows(rows)
 
-	def write_in_network_item(self, item, root_hash):
+	def _write_plan(self, root_data):
+
+		plan_row = {
+			'reporting_entity_name': root_data['reporting_entity_name'],
+			'reporting_entity_type': root_data['reporting_entity_type'],
+			'plan_name': root_data['plan_name'],
+			'plan_id': root_data['plan_id'],
+			'plan_id_type': root_data['plan_id_type'],
+			'plan_market_type': root_data['plan_market_type'],
+			'last_updated_on': root_data['last_updated_on'],
+			'version': root_data['version']
+		}
+		plan_hash = dicthasher(plan_row)
+		plan_row['plan_hash'] = plan_hash
+		self._write_table([plan_row], 'plan')
+		return plan_row
+
+	def _write_file(self, root_data):
+
+		file_row = {
+			'filename': root_data['filename']
+		}
+		filename_hash = dicthasher(file_row)
+		file_row['filename_hash'] = filename_hash
+		file_row['url'] = root_data['url']
+		self._write_table([file_row], 'file')
+		return file_row
+
+	def _write_plan_file(self, plan_row, file_row):
+
+		linking_row = {
+			'plan_hash': plan_row['plan_hash'],
+			'filename_hash': file_row['filename_hash']
+		}
+
+		self._write_table([linking_row], 'plans_files')
+		return linking_row
+
+	def _write_code(self, item):
 
 		code_row = {
-			'negotiation_arrangement': item['negotiation_arrangement'],
-			'billing_code_type': item['billing_code_type'],
+			'negotiation_arrangement':   item['negotiation_arrangement'],
+			'billing_code_type':         item['billing_code_type'],
 			'billing_code_type_version': item['billing_code_type_version'],
-			'billing_code': item['billing_code'],
+			'billing_code':              item['billing_code'],
 		}
+
 		code_hash = dicthasher(code_row)
 		code_row['code_hash'] = code_hash
-		self.write_table([code_row], 'codes')
+		self._write_table([code_row], 'codes')
+		return code_row
 
-		for rate in item.get('negotiated_rates', []):
+	def _write_prices(self, prices, code_hash, filename_hash):
+		price_rows = []
+		for price in prices:
+			if sc := price.get('service_code'):
+				price['service_code'] = json.dumps(sorted(sc))
+			else:
+				price['service_code'] = None
 
-			price_rows = []
-			for price in rate['negotiated_prices']:
+			if bcm := price.get('billing_code_modifier'):
+				price['billing_code_modifier'] = json.dumps(sorted(bcm))
+			else:
+				price['billing_code_modifier'] = None
 
-				if sc := price.get('service_code'):
-					price['service_code'] = json.dumps(sorted(sc))
-				else:
-					price['service_code'] = None
+			price_row = {
+				'billing_class':          price['billing_class'],
+				'negotiated_type':        price['negotiated_type'],
+				'expiration_date':        price['expiration_date'],
+				'negotiated_rate':        price['negotiated_rate'],
+				'service_code':           price['service_code'],
+				'additional_information': price.get('additional_information'),
+				'billing_code_modifier':  price['billing_code_modifier'],
+				'code_hash':              code_hash,
+				'filename_hash':          filename_hash,
+			}
+			price_row['price_hash'] = dicthasher(price_row)
+			price_rows.append(price_row)
+		self._write_table(price_rows, 'prices')
+		return price_rows
 
-				if bcm := price.get('billing_code_modifier'):
-					price['billing_code_modifier'] = json.dumps(sorted(bcm))
-				else:
-					price['billing_code_modifier'] = None
+	def _write_provider_groups(self, provider_groups):
+		provider_group_rows = []
+		for group in provider_groups:
+			group_row = {
+				'npi_numbers': json.dumps(sorted(group['npi'])),
+				'tin_type':    group['tin']['type'],
+				'tin_value':   group['tin']['value'],
+			}
+			group_row['provider_group_hash'] = dicthasher(group_row)
+			provider_group_rows.append(group_row)
+		self._write_table(provider_group_rows, 'provider_groups')
+		return provider_group_rows
 
-				price_row = {
-					'billing_class': price['billing_class'],
-					'negotiated_type': price['negotiated_type'],
-					'expiration_date': price['expiration_date'],
-					'negotiated_rate': price['negotiated_rate'],
-					'service_code': price['service_code'],
-					'additional_information': price.get('additional_information'),
-					'billing_code_modifier': price['billing_code_modifier'],
-					'code_hash': code_hash,
-					'root_hash': root_hash,
-				}
-				price_row['negotiated_price_hash'] = dicthasher(price_row)
-				price_rows.append(price_row)
-				self.write_table(price_rows,'negotiated_prices')
+	def _write_prices_provider_groups(self, price_rows, provider_group_rows):
+		linking_hashes = []
+		for price_row, provider_group_row in itertools.product(price_rows, provider_group_rows):
+			link = {
+				'provider_group_hash':   provider_group_row['provider_group_hash'],
+				'price_hash':            price_row['price_hash'],
+			}
+			linking_hashes.append(link)
+		self._write_table(linking_hashes, 'prices_provider_groups')
+		return linking_hashes
 
-			group_rows = []
-			for group in rate['provider_groups']:
-				group_row = {
-					'npi_numbers': json.dumps(sorted(group['npi'])),
-					'tin_type': group['tin']['type'],
-					'tin_value': group['tin']['value'],
-				}
-				group_row['provider_group_hash'] = dicthasher(group_row)
-				group_rows.append(group_row)
-			self.write_table(group_rows, 'provider_groups')
+	def write_file_and_plan(self, file_row, plan_row):
 
-			links = []
-			for price in price_rows:
-				for group in group_rows:
-					link = {
-						'provider_group_hash': group['provider_group_hash'],
-						'negotiated_price_hash': price['negotiated_price_hash'],
-					}
-					links.append(link)
+		self._write_table([file_row], 'files')
+		self._write_table([plan_row], 'plans')
 
-			self.write_table(links, 'provider_groups_negotiated_prices_link')
+		self._write_plan_file(plan_row, file_row)
+
+	def write_in_network_item(self, item, filename_hash):
+
+		code_row = self._write_code(item)
+		code_hash = code_row['code_hash']
+
+		for rate in item.get('negotiated_rates'):
+			prices = rate['negotiated_prices']
+			price_rows = self._write_prices(prices, code_hash, filename_hash)
+
+			provider_groups = rate['provider_groups']
+			provider_group_rows = self._write_provider_groups(provider_groups)
+
+			self._write_prices_provider_groups(price_rows, provider_group_rows)
 
 
 def flatten_mrf(
@@ -530,49 +649,34 @@ def flatten_mrf(
 	"""
 	with MRFOpen(loc) as f:
 
-		m = MRFObjectBuilder(f)
+		processor = MRFProcessor(f)
 		writer = MRFWriter(out_dir, SCHEMA)
 
-		# Get root data from top of file
-		root_data = m.collect_root()
-		root_data['filename'] = Path(loc).stem.split('.')[0]
-		root_hash = dicthasher(root_data)
-		root_data['root_hash'] = root_hash
+		file_row, plan_row = processor.prepare_file_row_plan_row(loc, url)
+		filename_hash = file_row['filename_hash']
 
-		# Importantly, URL stays outside the hash
-		if url:
-			root_data['url'] = url
-		else:
-			root_data['url'] = loc
+		provider_reference_map = processor.prepare_provider_references(npi_filter)
 
-		# Case 1. The MRF has its provider references at the top
-		if m.parser.current == ('', 'map_key', 'provider_references'):
-			p_refs_map = m._combine_local_remote_p_refs(npi_filter)
-			m.ffwd(('', 'map_key', 'in_network'))
-			for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
-				writer.write_in_network_item(item, root_hash)
-			writer.write_table([root_data], 'root')
+		if not provider_reference_map:
+			log.info("No provider references in this file")
+
+		try:
+			processor.jump_to_in_network()
+			for item in processor.gen_in_network(npi_filter, code_filter, provider_reference_map):
+				writer.write_in_network_item(item, filename_hash)
+			writer.write_file_and_plan(file_row, plan_row)
 			return
-
-		# Case 2/3. The MRF has its provider references either at the bottom,
-		# or not at all.
-		# We try to find them by fast-forwarding to the end and collecting
-		# the provider references. If we do find them, we make a map.
-		# Then read the file again.
-		elif m.parser.current == ('', 'map_key', 'in_network'):
-			log.info('No provider references found at beginning of file')
-			log.info('Checking end of file')
-			try:
-				m.ffwd(('', 'map_key', 'provider_references'))
-				p_refs_map = m._combine_local_remote_p_refs(npi_filter)
-				log.info('Found provider references')
-			except Exception:
-				log.info('No provider references in this file')
-				p_refs_map = None
+		except StopIteration:
+			log.info("Didn't find in-network items on first pass. Re-opening file")
 
 	with MRFOpen(loc) as f:
-		m = MRFObjectBuilder(f)
-		m.ffwd(('', 'map_key', 'in_network'))
-		for item in m.in_network_items(npi_filter, code_filter, p_refs_map):
-			writer.write_in_network_item(item, root_hash)
-		writer.write_table([root_data], 'root')
+		processor = MRFProcessor(f)
+
+		try:
+			processor.jump_to_in_network()
+		except StopIteration:
+			raise InvalidMRF('No in-network items in this file')
+
+		for item in processor.gen_in_network(npi_filter, code_filter, provider_reference_map):
+			writer.write_in_network_item(item, filename_hash)
+		writer.write_file_and_plan(file_row, plan_row)
