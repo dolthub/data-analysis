@@ -27,7 +27,7 @@ SCHEMA = {
         "billing_code_type",
     ],
     "prices": [
-        "root_hash",
+        "filename_hash",
         "code_hash",
         "price_hash",
         "billing_class",
