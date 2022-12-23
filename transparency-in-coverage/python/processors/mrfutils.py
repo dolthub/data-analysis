@@ -18,7 +18,7 @@ from tqdm.asyncio import tqdm as tqdma
 # import heartrate; heartrate.trace(browser=True, daemon=True)
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.WARNING)
+log.setLevel(logging.INFO)
 
 file_handler = logging.FileHandler('log.txt', 'a')
 file_handler.setLevel(logging.WARNING)
