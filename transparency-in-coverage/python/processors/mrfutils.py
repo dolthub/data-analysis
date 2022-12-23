@@ -9,7 +9,6 @@ import itertools
 import requests
 import gzip
 import logging
-from async_lru import alru_cache
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
@@ -146,7 +145,7 @@ def _process_remote_provider_reference(
 
 	return data
 
-@alru_cache(maxsize = 128)
+
 async def _fetch_remote_provider_reference(
 	session,
 	provider_group_id,
