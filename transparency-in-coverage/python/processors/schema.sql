@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS plans_files (
 
 CREATE TABLE IF NOT EXISTS codes (
     code_hash BIGINT UNSIGNED,
-    negotiation_arrangement ENUM("ffs", "capitation") COLLATE utf8_general_ci,
+--    negotiation_arrangement ENUM("ffs", "capitation", "bundle") COLLATE utf8_general_ci,
     billing_code_type_version VARCHAR(20),
     billing_code VARCHAR(14),
     billing_code_type VARCHAR(8),

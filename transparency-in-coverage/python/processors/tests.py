@@ -51,9 +51,9 @@ class TestMRFProcessor(unittest.TestCase):
 			provider_reference_map = processor.prepare_provider_references(self.npi_filter)
 			processor.jump_to_in_network()
 			g = processor.gen_in_network(
-				self.npi_filter,
-				self.code_filter,
-				provider_reference_map
+				npi_filter = self.npi_filter,
+				code_filter = self.code_filter,
+				provider_reference_map = provider_reference_map
 			)
 			item_data = next(g)
 

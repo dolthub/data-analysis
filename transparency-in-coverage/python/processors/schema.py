@@ -21,7 +21,7 @@ SCHEMA = {
     ],
     "codes": [
         "code_hash",
-        "negotiation_arrangement",
+        # "negotiation_arrangement", # always ffs for now
         "billing_code_type_version",
         "billing_code",
         "billing_code_type",

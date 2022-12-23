@@ -2,7 +2,7 @@ import os
 import csv
 import hashlib
 import json
-import ijson
+import ijson.backends.yajl2_c as ijson
 import asyncio
 import aiohttp
 import itertools
@@ -10,8 +10,8 @@ import requests
 import gzip
 import logging
 from urllib.parse import urlparse
-from pathlib import Path
-from schema import SCHEMA
+from pathlib      import Path
+from schema       import SCHEMA
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -203,8 +203,6 @@ class MRFProcessor:
 
 	def __init__(self, f):
 		self.parser = Parser(f)
-		self.in_network_parser = None
-		self.provider_references_parser = None
 
 	def _ffwd(self, to_row):
 		"""
@@ -212,11 +210,10 @@ class MRFProcessor:
 		"""
 		if self.parser.current == to_row:
 			return
-		for current_row in self.parser:
-			if current_row == to_row:
+
+		while self.parser:
+			if next(self.parser) == to_row:
 				break
-		else:
-			raise StopIteration('Fast-forward failed to find row')
 
 	def _process_root(self):
 		builder = ijson.ObjectBuilder()
@@ -328,6 +325,7 @@ class MRFProcessor:
 
 		filename_hash = dicthasher(file_row)
 		file_row['filename_hash'] = filename_hash
+		file_row['url'] = url if url else loc
 
 		return file_row, plan_row
 
@@ -385,6 +383,17 @@ class MRFProcessor:
 					and (code_type, code) not in code_filter
 				):
 					log.debug(f"Skipping {code_type} {code}: not in list")
+
+					builder.value.pop()
+					builder.containers.pop()
+
+					self._ffwd(('in_network.item', 'end_map', None))
+					continue
+
+				if (
+					builder.value[-1]['negotiation_arrangement'] != 'ffs'
+				):
+					log.debug(f"Skipping {code_type} {code}: not fee-for-service")
 
 					builder.value.pop()
 					builder.containers.pop()
@@ -486,9 +495,17 @@ class MRFWriter:
 		# from addiing \r\n\n to the end of each line
 		with open(file_loc, 'a', newline = '') as f:
 			writer = csv.DictWriter(f, fieldnames = fieldnames)
+
 			if not file_exists:
 				writer.writeheader()
-			writer.writerows(rows)
+
+			if type(rows) == list:
+				writer.writerows(rows)
+
+			if type(rows) == dict:
+				row = rows
+				writer.writerow(row)
+
 
 	def _write_plan(self, root_data):
 
@@ -504,7 +521,7 @@ class MRFWriter:
 		}
 		plan_hash = dicthasher(plan_row)
 		plan_row['plan_hash'] = plan_hash
-		self._write_table([plan_row], 'plan')
+		self._write_table(plan_row, 'plan')
 		return plan_row
 
 	def _write_file(self, root_data):
@@ -515,7 +532,7 @@ class MRFWriter:
 		filename_hash = dicthasher(file_row)
 		file_row['filename_hash'] = filename_hash
 		file_row['url'] = root_data['url']
-		self._write_table([file_row], 'file')
+		self._write_table(file_row, 'file')
 		return file_row
 
 	def _write_plan_file(self, plan_row, file_row):
@@ -525,13 +542,13 @@ class MRFWriter:
 			'filename_hash': file_row['filename_hash']
 		}
 
-		self._write_table([linking_row], 'plans_files')
+		self._write_table(linking_row, 'plans_files')
 		return linking_row
 
 	def _write_code(self, item):
 
 		code_row = {
-			'negotiation_arrangement':   item['negotiation_arrangement'],
+			# 'negotiation_arrangement':   item['negotiation_arrangement'],
 			'billing_code_type':         item['billing_code_type'],
 			'billing_code_type_version': item['billing_code_type_version'],
 			'billing_code':              item['billing_code'],
@@ -539,12 +556,14 @@ class MRFWriter:
 
 		code_hash = dicthasher(code_row)
 		code_row['code_hash'] = code_hash
-		self._write_table([code_row], 'codes')
+		self._write_table(code_row, 'codes')
 		return code_row
 
 	def _write_prices(self, prices, code_hash, filename_hash):
+
 		price_rows = []
 		for price in prices:
+
 			if sc := price.get('service_code'):
 				price['service_code'] = json.dumps(sorted(sc))
 			else:
@@ -572,6 +591,7 @@ class MRFWriter:
 		return price_rows
 
 	def _write_provider_groups(self, provider_groups):
+
 		provider_group_rows = []
 		for group in provider_groups:
 			group_row = {
@@ -585,20 +605,21 @@ class MRFWriter:
 		return provider_group_rows
 
 	def _write_prices_provider_groups(self, price_rows, provider_group_rows):
-		linking_hashes = []
+
+		linking_row = []
 		for price_row, provider_group_row in itertools.product(price_rows, provider_group_rows):
 			link = {
 				'provider_group_hash':   provider_group_row['provider_group_hash'],
 				'price_hash':            price_row['price_hash'],
 			}
-			linking_hashes.append(link)
-		self._write_table(linking_hashes, 'prices_provider_groups')
-		return linking_hashes
+			linking_row.append(link)
+		self._write_table(linking_row, 'prices_provider_groups')
+		return linking_row
 
 	def write_file_and_plan(self, file_row, plan_row):
 
-		self._write_table([file_row], 'files')
-		self._write_table([plan_row], 'plans')
+		self._write_table(file_row, 'files')
+		self._write_table(plan_row, 'plans')
 
 		self._write_plan_file(plan_row, file_row)
 
