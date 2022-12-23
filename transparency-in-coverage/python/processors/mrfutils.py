@@ -64,6 +64,7 @@ class Parser:
 
 	def __init__(self, f):
 		self.__p = ijson.parse(f, use_float=True)
+		self.current = None
 
 	def __iter__(self):
 		return self
