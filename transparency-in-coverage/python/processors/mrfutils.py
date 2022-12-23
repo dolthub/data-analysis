@@ -2,7 +2,7 @@ import os
 import csv
 import hashlib
 import json
-import ijson.backends.yajl2_c as ijson
+import ijson
 import asyncio
 import aiohttp
 import itertools
@@ -12,6 +12,12 @@ import logging
 from urllib.parse import urlparse
 from pathlib      import Path
 from schema       import SCHEMA
+
+# You can remove this if necessary, but be warned
+try:
+	assert ijson.backend == 'yajl2_c'
+except AssertionError:
+	raise Exception('Extremely slow without the yajl2_c backend')
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -159,8 +165,8 @@ async def _fetch_remote_provider_reference(
 		unprocessed_data = json.loads(f)
 		unprocessed_data['provider_group_id'] = provider_group_id
 		processed_remote_provider_reference = _process_remote_provider_reference(
-			unprocessed_data,
-			npi_filter,
+			data = unprocessed_data,
+			npi_filter = npi_filter,
 		)
 		return processed_remote_provider_reference
 
@@ -181,10 +187,11 @@ async def _fetch_remote_provider_references(
 			provider_reference_loc = unfetched_provider_reference['location']
 
 			task = asyncio.wait_for(
-				_fetch_remote_provider_reference(session,
-				                                 provider_group_id,
-				                                 provider_reference_loc,
-				                                 npi_filter, ),
+				_fetch_remote_provider_reference(
+					session = session,
+				    provider_group_id = provider_group_id,
+				    provider_reference_loc = provider_reference_loc,
+				    npi_filter = npi_filter),
 				timeout = 5,
 			)
 
@@ -287,8 +294,8 @@ class MRFProcessor:
 		loop = asyncio.get_event_loop()
 		fetched_remote_provider_references = loop.run_until_complete(
 			_fetch_remote_provider_references(
-				unfetched_remote_provider_references,
-				npi_filter)
+				unfetched_provider_references = unfetched_remote_provider_references,
+				npi_filter = npi_filter)
 		)
 
 		local_provider_references.extend(
@@ -505,7 +512,6 @@ class MRFWriter:
 			if type(rows) == dict:
 				row = rows
 				writer.writerow(row)
-
 
 	def _write_plan(self, root_data):
 
