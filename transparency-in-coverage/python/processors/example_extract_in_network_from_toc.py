@@ -50,16 +50,18 @@ def insert_plan_url(plan_name, description, url):
 
 # Regular expression for capturing plan and location information
 # in the bytestrings returned by f.readlines()
-desc_loc_pat = "\"description\":\"(.+?)\",\"location\":\"(.+?)\""
-plan_pat = r'"plan_name":"(.+?)"'
 
+desc_loc_pat = re.compile(r'"description":"(.+?)","location":"(.+?)"', re.S)
+plan_pat = re.compile(r'"plan_name":"(.+?)"', re.S)
+print("\n\n")
 with MRFOpen(anthem_toc_url) as f:
     for line in f:
         line = str(line)
         if 'in-network' in line:
-            g = re.findall(desc_loc_pat, line)
-            match = re.search(plan_pat, line)
+            g = desc_loc_pat.findall(line)
+            match = plan_pat.search(line)
             plan_name = match.group(1)
+            print(f'\r{plan_name}', end="")
             for description, url in g:
                 insert_plan_url(plan_name, description, url)
                 con.commit()
