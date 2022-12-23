@@ -9,6 +9,8 @@ log = logging.getLogger('mrfutils')
 
 code_filter = import_csv_to_set('test/codes.csv')
 npi_filter = import_csv_to_set('test/npis.csv')
+code_filter = None
+npi_filter = None
 
 p = Path(__file__).parent.absolute()
 
@@ -16,8 +18,8 @@ urls = [
     f'{p}/test/test_file_1.json',
     f'{p}/test/test_file_2.json', # provider references at end
     f'{p}/test/test_file_3.json.gz',
-    f'{p}/test/test_file_4.json', # should fail
-    f'{p}/test/test_file_5.json.gz',
+    # f'{p}/test/test_file_4.json', # should fail
+    # f'{p}/test/test_file_5.json.gz',
 ]
 
 for url in tqdm(urls):

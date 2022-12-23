@@ -246,8 +246,11 @@ def process_rate(item, provider_reference_map):
 
 def process_in_network_item(item, provider_reference_map, code_filter = None):
 
-	if code_filter and item['billing_code'] not in code_filter:
-		return
+	if code_filter:
+		if item['billing_code'] not in code_filter:
+			print(item['billing_code'])
+			print(code_filter)
+			return
 
 	rates = []
 	for unprocessed_rate in item['negotiated_rates']:
