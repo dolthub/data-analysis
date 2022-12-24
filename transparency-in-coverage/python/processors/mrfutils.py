@@ -36,7 +36,7 @@ except AssertionError:
 
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 class InvalidMRF(Exception):
@@ -552,7 +552,7 @@ def _flattener(
 	filename_hash,
 	out_dir,
 	provider_reference_map: dict = None,
-	second_pass = False,
+	first_pass = True,
 ) -> tuple:
 
 	finished = False
@@ -564,8 +564,9 @@ def _flattener(
 	in_network_items = ijson.ObjectBuilder()
 
 	for prefix, event, value in parser:
+		# The order of these if/elif statements is important!
 
-		if prefix.startswith('provider_references') and not second_pass:
+		if prefix.startswith('provider_references') and first_pass:
 			# "Have we entered the provider references bloc
 			# on our first pass?
 
@@ -584,19 +585,20 @@ def _flattener(
 				if provider_reference:
 					provider_references.value.insert(1, provider_reference)
 
-		elif provider_reference_map is None and hasattr(provider_references, 'value'):
-			# "Is the provider reference map still None,
-			# but we've visited provider references?"
+			elif (prefix, event) == ('provider_references', 'end_array'):
+				provider_reference_map = _make_provider_reference_map(
+					provider_references = provider_references.value,
+					unfetched_provider_references = unfetched_provider_references,
+					npi_filter = npi_filter,)
 
-			provider_reference_map = _make_provider_reference_map(
-				provider_references = provider_references.value,
-				unfetched_provider_references = unfetched_provider_references,
-				npi_filter = npi_filter,)
+				# We don't need this anymore
+				provider_references.value.clear()
 
-			# We don't need this anymore
-			provider_references.value.clear()
+		elif prefix.startswith('in_network') and (provider_reference_map or not first_pass):
+			# We want to enter this block in two cases:
+			# either we have a provider references map
+			# or we don't and it's our second read
 
-		elif prefix.startswith('in_network') and (provider_reference_map or second_pass):
 			in_network_items.event(event, value)
 			finished = True
 
@@ -622,14 +624,13 @@ def _flattener(
 					code = in_network_item['billing_code']
 					log.debug(f'Wrote {code_type} {code}')
 
-		elif not prefix.startswith('provider_references') and \
-			not prefix.startswith('in_network'):
+		elif first_pass and not prefix.startswith('provider_references') or prefix.startswith('in_network'):
 			plan.event(event, value)
 
-	if not plan.value.get('reporting_entity_name'):
-		raise InvalidMRF
-
-	return finished, provider_reference_map, plan.value
+	if first_pass:
+		return finished, provider_reference_map, plan.value
+	else:
+		return finished, None, None
 
 
 def flatten(
@@ -653,6 +654,10 @@ def flatten(
 		)
 
 	finished, provider_reference_map, plan = result
+
+	if not plan.get('reporting_entity_name'):
+		raise InvalidMRF
+
 	if not finished:
 		log.debug('Opening file again for second pass')
 		with MRFOpen(loc) as f:
@@ -663,7 +668,7 @@ def flatten(
 				filename_hash = filename_hash,
 				out_dir = out_dir,
 				provider_reference_map = provider_reference_map,
-				second_pass = True,
+				first_pass = False,
 			)
 
 	if not url:
