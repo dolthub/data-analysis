@@ -19,7 +19,7 @@ urls = [
     f'{p}/test/test_file_2.json', # provider references at end
     f'{p}/test/test_file_3.json.gz',
     # f'{p}/test/test_file_4.json', # should fail
-    # f'{p}/test/test_file_5.json.gz',
+    f'{p}/test/test_file_5.json.gz',
 ]
 
 for url in tqdm(urls):

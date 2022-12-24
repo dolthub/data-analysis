@@ -248,8 +248,7 @@ def process_in_network_item(item, provider_reference_map, code_filter = None):
 
 	if code_filter:
 		if item['billing_code'] not in code_filter:
-			print(item['billing_code'])
-			print(code_filter)
+			log.debug(f"skipped {item['billing_code']}")
 			return
 
 	rates = []
@@ -266,9 +265,11 @@ def process_in_network_item(item, provider_reference_map, code_filter = None):
 
 
 def make_provider_reference_map(provider_references):
+
 	return {
 		p['provider_group_id']: p['provider_groups']
 		for p in provider_references
+		if p is not None
 	}
 
 
@@ -472,7 +473,7 @@ class MRFFlattener:
 		plan_row['plan_hash'] = plan_hash
 		self.plan_row = plan_row
 
-	def make_first_pass(self, f, writer):
+	def make_first_pass(self, f, writer, dry_run = True):
 
 		parser = ijson.parse(f, use_float = True)
 
@@ -503,17 +504,36 @@ class MRFFlattener:
 						provider_references.value.insert(1, provider_reference)
 
 			elif prefix.startswith('in_network'):
+
 				in_network_items.event(event, value)
 
 				if not hasattr(provider_references, 'value'):
 					continue
 
 				if not provider_references.value:
-					continue
+					if not unfetched_provider_references:
+						continue
 
-				elif provider_reference_map == None:
+				if provider_reference_map == None:
+
+					loop = asyncio.get_event_loop()
+
+					fetched_provider_references = loop.run_until_complete(
+						_fetch_remote_provider_references(
+							unfetched_provider_references = unfetched_provider_references,
+							npi_filter = self.npi_filter)
+					)
+
+					provider_references.value.extend(
+						fetched_provider_references
+					)
+
 					provider_reference_map = make_provider_reference_map(
-						provider_references.value)
+						provider_references.value
+					)
+
+					provider_references.value.clear
+
 
 				if (prefix, event) == ('in_network.item', 'end_map'):
 
@@ -526,7 +546,11 @@ class MRFFlattener:
 					)
 
 					if in_network_item:
+						log.debug('found')
+						if dry_run:
+							continue
 						writer.write_in_network_item(in_network_item, self.filename_hash)
+
 
 			else:
 				root.event(event, value)
@@ -549,6 +573,7 @@ class MRFFlattener:
 		for prefix, event, value in parser:
 
 			if prefix.startswith('in_network'):
+
 				in_network_items.event(event, value)
 
 				if (prefix, event) == ('in_network.item', 'end_map'):
