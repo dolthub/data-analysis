@@ -1,12 +1,18 @@
 """
-How this works, at a high level.
+The function
 
-It needs to connect each in-network item to a provider reference.
+def flatten()...
 
-1. We can save memory by saving the provider references to a
-temporary SQLite database after filtering them. We'll take a function
-that takes the provider references, hashes them, and saves them.
-2.
+starts grabbing objects from the MRF. No matter what the order
+the file is in, on the first pass it always grabs the plan data
+and the provider references.
+
+If the flattener encounters the in-network items after the provider
+references, it will flatten those on the first pass. Otherwise, it
+will open the file again and re-run, recycling the provider
+references that it got from the first pass.
+
+The plan data is only written after the flattener has successfully run.
 """
 import os
 import csv
@@ -18,11 +24,9 @@ import aiohttp
 import requests
 import gzip
 import logging
-import functools
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
-from contextlib import ContextDecorator
 
 # You can remove this if necessary, but be warned
 try:
@@ -39,7 +43,7 @@ class InvalidMRF(Exception):
 	pass
 
 
-class MRFOpen(ContextDecorator):
+class MRFOpen:
 	"""
 	Context manager for opening JSON(.gz) MRFs.
 	Handles local and remote gzipped and unzipped
@@ -99,44 +103,58 @@ def import_csv_to_set(filename):
 	:return:
 	"""
 	items = set()
+
 	with open(filename, 'r') as f:
 		reader = csv.reader(f)
+
 		for row in reader:
 			row = [col.strip() for col in row]
+
 			if len(row) > 1:
 				items.add(tuple(row))
+
 			else:
 				items.add(row.pop())
+
 		return items
 
 
 def make_dir(out_dir):
+
 	if not os.path.exists(out_dir):
 		os.mkdir(out_dir)
 
 
 def dicthasher(data, n_bytes = 8):
+
 	if not data:
 		raise Exception("Hashed dictionary can't be empty")
+
 	data = json.dumps(data, sort_keys=True).encode('utf-8')
 	hash_s = hashlib.sha256(data).digest()[:n_bytes]
 	hash_i = int.from_bytes(hash_s, 'little')
+
 	return hash_i
 
 
 def append_hash(item, name):
+
 	hash_ = dicthasher(item)
 	item[name] = hash_
+
 	return item
 
 
 def _filename_hash(loc):
+
 	filename = Path(loc).stem.split('.')[0]
 	filename_hash = dicthasher(filename)
+
 	return filename_hash
 
 
 def _write_table(rows, tablename, out_dir):
+
 	fieldnames = SCHEMA[tablename]
 	file_loc = f'{out_dir}/{tablename}.csv'
 	file_exists = os.path.exists(file_loc)
@@ -394,7 +412,7 @@ def _process_provider_reference(
 	return result
 
 
-def make_provider_reference_map(
+def _make_provider_reference_map(
 	provider_references,
 	unfetched_provider_references,
 	npi_filter,
@@ -474,33 +492,66 @@ def _process_in_network_item(
 	return item
 
 
-def flattener(
+def _point_optimization(in_network_items, parser, code_filter):
+
+	if hasattr(in_network_items, 'value') and in_network_items.value:
+
+		item = in_network_items.value[-1]
+		code_type = item.get('billing_code_type')
+		code = item.get('billing_code')
+		arrangement = item.get('negotiation_arrangement')
+
+		# This stops us from having to build in-network
+		# objects (which are large) when their billing codes
+		# don't fit the filter
+		if code and code_type and code_filter:
+			if (code_type, str(code)) not in code_filter:
+				log.debug(f'Skipping {code_type} {code}: filtered out')
+				while True:
+					prefix, event, _ = next(parser)
+					if (prefix, event) == ('in_network.item', 'end_map'):
+						break
+				in_network_items.value.pop()
+				in_network_items.containers.pop()
+				return
+
+		# If the code has the wrong arrangement, skip
+		if arrangement and arrangement != 'ffs':
+			log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
+			while True:
+				prefix, event, _ = next(parser)
+				if (prefix, event) == ('in_network.item', 'end_map'):
+					break
+			in_network_items.value.pop()
+			in_network_items.containers.pop()
+			return
+
+
+def _flattener(
 	fileobj,
 	npi_filter,
 	code_filter,
-	provider_reference_map,
 	filename_hash,
 	out_dir,
+	provider_reference_map = None,
+	second_pass = False,
 ) -> tuple:
 
-	provider_reference_order = None
-	# None, 'top', or 'bottom'
+	finished = False
+	unfetched_provider_references = []
 
 	parser = ijson.parse(fileobj, use_float = True)
-
 	plan = ijson.ObjectBuilder()
 	provider_references = ijson.ObjectBuilder()
 	in_network_items = ijson.ObjectBuilder()
 
-	unfetched_provider_references = []
-
 	for prefix, event, value in parser:
 
-		if prefix.startswith('provider_references') and not hasattr(flattener, 'provider_reference_map'):
+		if prefix.startswith('provider_references') and not second_pass:
 			provider_references.event(event, value)
-			provider_reference_order = 'bottom'
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
+
 				unprocessed_reference = provider_references.value.pop()
 
 				if unprocessed_reference.get('location'):
@@ -515,65 +566,29 @@ def flattener(
 				if provider_reference:
 					provider_references.value.insert(1, provider_reference)
 
-		elif prefix.startswith('in_network'):
+		elif hasattr(provider_references, 'value') and not provider_reference_map:
+
+			provider_reference_map = _make_provider_reference_map(
+				provider_references = provider_references.value,
+				unfetched_provider_references = unfetched_provider_references,
+				npi_filter = npi_filter,
+			)
+
+			# We don't need this anymore
+			provider_references.value.clear()
+
+		elif (
+			prefix.startswith('in_network')
+			and (provider_reference_map or second_pass)
+		):
+			finished = True
 			in_network_items.event(event, value)
 
-			# If we've passed through the provider_references
-			# block, provider_references.value will exist,
-			# but if we've just entered this block, we won't
-			# have fetched the remote provider refs yet.
-			if (
-				hasattr(provider_references, 'value')
-				and provider_reference_map is None
-			):
-				# Going through this path means the file is
-				# in the right order
-				provider_reference_order = 'top'
-				provider_reference_map = make_provider_reference_map(
-					provider_references = provider_references.value,
-					unfetched_provider_references = unfetched_provider_references,
-					npi_filter = npi_filter,
-				)
-
-				# We don't need this anymore
-				provider_references.value.clear()
-
-			# Point optimization #1
-			# The following code chunk can be commented out
-			# entirely. It adds some complexity but basically,
-			# we pass momentarily to the parser to get some
-			# extra control over the objects we build
-			if hasattr(in_network_items, 'value') and in_network_items.value:
-
-				item = in_network_items.value[-1]
-				code_type = item.get('billing_code_type')
-				code = item.get('billing_code')
-				arrangement = item.get('negotiation_arrangement')
-
-				# This stops us from having to build in-network
-				# objects (which are large) when their billing codes
-				# don't fit the filter
-				if code and code_type and code_filter:
-					if (code_type, str(code)) not in code_filter:
-						log.debug(f'Skipping {code_type} {code}: filtered out')
-						while True:
-							prefix, event, _ = next(parser)
-							if (prefix, event) == ('in_network.item', 'end_map'):
-								break
-						in_network_items.value.pop()
-						in_network_items.containers.pop()
-						continue
-
-				# If the code has the wrong arrangement, skip
-				if arrangement and arrangement != 'ffs':
-					log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-					while True:
-						prefix, event, _ = next(parser)
-						if (prefix, event) == ('in_network.item', 'end_map'):
-							break
-					in_network_items.value.pop()
-					in_network_items.containers.pop()
-					continue
+			# Drop down to the parser to get some
+			# extra control over the objects we build.
+			# This line can be commented out! but it's faster
+			# with it in.
+			_point_optimization(in_network_items, parser, code_filter)
 
 			if (prefix, event) == ('in_network.item', 'end_map'):
 
@@ -597,7 +612,8 @@ def flattener(
 	if not plan.value.get('reporting_entity_name'):
 		raise InvalidMRF
 
-	return provider_reference_order, provider_reference_map, plan.value
+	return finished, provider_reference_map, plan.value
+
 
 def flatten(
 	loc,
@@ -605,32 +621,31 @@ def flatten(
 	code_filter,
 	out_dir,
 	url,
-):
+) -> None:
+
 	filename_hash = _filename_hash(loc)
+
 	with MRFOpen(loc) as f:
-		result = flattener(
+		result = _flattener(
 			fileobj = f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
-			provider_reference_map  = None,
 			filename_hash = filename_hash,
 			out_dir = out_dir,
 		)
 
-	provider_reference_order, provider_reference_map, plan = result
-
-	if provider_reference_order == 'bottom':
-
-		log.debug('Found provider references at the bottom. Running again')
-
+	finished, provider_reference_map, plan = result
+	if not finished:
+		log.debug('Opening file again for second scan')
 		with MRFOpen(loc) as f:
-			flattener(
+			_flattener(
 				fileobj = f,
 				npi_filter = npi_filter,
 				code_filter = code_filter,
-				provider_reference_map = provider_reference_map,
 				filename_hash = filename_hash,
 				out_dir = out_dir,
+				provider_reference_map = provider_reference_map,
+				second_pass = True,
 			)
 
 	if not url:
