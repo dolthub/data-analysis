@@ -205,7 +205,7 @@ async def _fetch_remote_provider_references(
 		return fetched_remote_provider_references
 
 
-def process_provider_reference(item, npi_filter = None):
+def _process_provider_reference(item, npi_filter = None):
 	result = {}
 	result['provider_group_id'] = item['provider_group_id']
 	result['provider_groups'] = []
@@ -227,7 +227,7 @@ def process_provider_reference(item, npi_filter = None):
 	return result
 
 
-def process_rate(item, provider_reference_map):
+def _process_rate(item, provider_reference_map):
 	provider_groups = item.get('provider_groups', [])
 	provider_references = item.get('provider_references', [])
 
@@ -244,7 +244,7 @@ def process_rate(item, provider_reference_map):
 	return item
 
 
-def process_in_network_item(item, provider_reference_map, code_filter = None):
+def _process_in_network_item(item, provider_reference_map, code_filter = None):
 
 	if code_filter:
 		if item['billing_code'] not in code_filter:
@@ -253,7 +253,7 @@ def process_in_network_item(item, provider_reference_map, code_filter = None):
 
 	rates = []
 	for unprocessed_rate in item['negotiated_rates']:
-		rate = process_rate(unprocessed_rate, provider_reference_map)
+		rate = _process_rate(unprocessed_rate, provider_reference_map)
 		if rate:
 			rates.append(rate)
 
@@ -264,7 +264,7 @@ def process_in_network_item(item, provider_reference_map, code_filter = None):
 	return item
 
 
-def make_provider_reference_map(provider_references):
+def _make_provider_reference_map(provider_references):
 
 	return {
 		p['provider_group_id']: p['provider_groups']
@@ -496,7 +496,7 @@ class MRFFlattener:
 						unfetched_provider_references.append(unprocessed_reference)
 						continue
 
-					provider_reference = process_provider_reference(
+					provider_reference = _process_provider_reference(
 						unprocessed_reference
 					)
 
@@ -528,7 +528,7 @@ class MRFFlattener:
 						fetched_provider_references
 					)
 
-					provider_reference_map = make_provider_reference_map(
+					provider_reference_map = _make_provider_reference_map(
 						provider_references.value
 					)
 
@@ -539,7 +539,7 @@ class MRFFlattener:
 
 					unprocessed_item = in_network_items.value.pop()
 
-					in_network_item = process_in_network_item(
+					in_network_item = _process_in_network_item(
 						item = unprocessed_item,
 						code_filter = self.code_filter,
 						provider_reference_map = provider_reference_map
@@ -580,7 +580,7 @@ class MRFFlattener:
 
 					unprocessed_item = in_network_items.value.pop()
 
-					in_network_item = process_in_network_item(
+					in_network_item = _process_in_network_item(
 						item = unprocessed_item,
 						code_filter = self.code_filter,
 						provider_reference_map = self.provider_reference_map
