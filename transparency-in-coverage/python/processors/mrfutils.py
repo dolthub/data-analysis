@@ -226,7 +226,11 @@ def _make_code_row(code: dict):
 	return code_row
 
 
-def _make_price_row(price: dict, code_hash, filename_hash):
+def _make_price_row(
+	price: dict,
+	code_hash,
+	filename_hash
+):
 
 	keys = [
 		'billing_class',
@@ -260,7 +264,11 @@ def _make_price_row(price: dict, code_hash, filename_hash):
 	return price_row
 
 
-def _make_price_rows(prices, code_hash, filename_hash):
+def _make_price_rows(
+	prices: list[dict],
+    code_hash,
+	filename_hash,
+):
 
 	price_rows = []
 	for price in prices:
@@ -270,7 +278,9 @@ def _make_price_rows(prices, code_hash, filename_hash):
 	return price_rows
 
 
-def _make_provider_group_row(provider_group: dict):
+def _make_provider_group_row(
+	provider_group: dict
+):
 
 	provider_group_row = {
 		'npi_numbers': json.dumps(sorted(provider_group['npi'])),
@@ -283,7 +293,9 @@ def _make_provider_group_row(provider_group: dict):
 	return provider_group_row
 
 
-def _make_provider_group_rows(provider_groups):
+def _make_provider_group_rows(
+	provider_groups
+):
 
 	provider_group_rows = []
 	for provider_group in provider_groups:
@@ -293,7 +305,10 @@ def _make_provider_group_rows(provider_groups):
 	return provider_group_rows
 
 
-def _make_prices_provider_groups_rows(price_rows, provider_group_rows):
+def _make_prices_provider_groups_rows(
+	price_rows: list[dict],
+	provider_group_rows: list[dict]
+):
 
 	prices_provider_groups_rows = []
 	for price_row in price_rows:
@@ -309,7 +324,11 @@ def _make_prices_provider_groups_rows(price_rows, provider_group_rows):
 	return prices_provider_groups_rows
 
 
-def _write_in_network_item(in_network_item: dict, filename_hash, out_dir):
+def _write_in_network_item(
+	in_network_item: dict,
+	filename_hash,
+	out_dir
+):
 
 	code_row = _make_code_row(in_network_item)
 	_write_table(code_row, 'codes', out_dir)
@@ -333,8 +352,8 @@ def _write_in_network_item(in_network_item: dict, filename_hash, out_dir):
 async def _fetch_remote_provider_reference(
 	session,
 	provider_group_id,
-	provider_reference_loc,
-	npi_filter,
+	provider_reference_loc: str,
+	npi_filter: set,
 ):
 	async with session.get(provider_reference_loc) as response:
 
@@ -354,8 +373,8 @@ async def _fetch_remote_provider_reference(
 
 
 async def _fetch_remote_provider_references(
-	unfetched_provider_references,
-	npi_filter,
+	unfetched_provider_references: list[dict],
+	npi_filter: set,
 ):
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
@@ -385,8 +404,8 @@ async def _fetch_remote_provider_references(
 
 
 def _process_provider_reference(
-	item,
-	npi_filter,
+	item: dict,
+	npi_filter: set,
 ):
 	result = {
 		'provider_group_id' : item['provider_group_id'],
@@ -413,9 +432,9 @@ def _process_provider_reference(
 
 
 def _make_provider_reference_map(
-	provider_references,
-	unfetched_provider_references,
-	npi_filter,
+	provider_references: list[dict],
+	unfetched_provider_references: list[dict],
+	npi_filter: set,
 ):
 
 	loop = asyncio.get_event_loop()
@@ -440,8 +459,8 @@ def _make_provider_reference_map(
 
 
 def _process_rate(
-	item,
-	provider_reference_map,
+	item: dict,
+	provider_reference_map: dict,
 ):
 
 	provider_groups = item.get('provider_groups', [])
@@ -463,8 +482,8 @@ def _process_rate(
 
 
 def _process_in_network_item(
-	item,
-	provider_reference_map,
+	item: dict,
+	provider_reference_map: dict,
 	# code_filter = None
 ):
 
@@ -527,19 +546,19 @@ def _point_optimization(in_network_items, parser, code_filter):
 
 
 def _flattener(
-	fileobj,
-	npi_filter,
-	code_filter,
+	file,
+	npi_filter: set,
+	code_filter: set,
 	filename_hash,
 	out_dir,
-	provider_reference_map = None,
-	second_pass = False,
+	provider_reference_map: dict = None,
+	second_pass: bool = False,
 ) -> tuple:
 
 	finished = False
 	unfetched_provider_references = []
 
-	parser = ijson.parse(fileobj, use_float = True)
+	parser = ijson.parse(file, use_float = True)
 	plan = ijson.ObjectBuilder()
 	provider_references = ijson.ObjectBuilder()
 	in_network_items = ijson.ObjectBuilder()
@@ -617,11 +636,11 @@ def _flattener(
 
 
 def flatten(
-	loc,
-	npi_filter,
-	code_filter,
-	out_dir,
-	url,
+	loc: str,
+	npi_filter: set,
+	code_filter: set,
+	out_dir: str,
+	url: str,
 ) -> None:
 
 	make_dir(out_dir)
@@ -629,7 +648,7 @@ def flatten(
 
 	with MRFOpen(loc) as f:
 		result = _flattener(
-			fileobj = f,
+			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
 			filename_hash = filename_hash,
@@ -641,7 +660,7 @@ def flatten(
 		log.debug('Opening file again for second scan')
 		with MRFOpen(loc) as f:
 			_flattener(
-				fileobj = f,
+				file= f,
 				npi_filter = npi_filter,
 				code_filter = code_filter,
 				filename_hash = filename_hash,
