@@ -445,12 +445,13 @@ def _process_rate(
 ):
 
 	provider_groups = item.get('provider_groups', [])
-	provider_references = item.get('provider_references', [])
 
-	for provider_group_id in provider_references:
-		addl_provider_groups = provider_reference_map.get(provider_group_id)
-		if addl_provider_groups:
-			provider_groups.extend(addl_provider_groups)
+	if provider_reference_map:
+		provider_references = item.get('provider_references', [])
+		for provider_group_id in provider_references:
+			addl_provider_groups = provider_reference_map.get(provider_group_id)
+			if addl_provider_groups:
+				provider_groups.extend(addl_provider_groups)
 
 	if not provider_groups:
 		return
@@ -494,30 +495,17 @@ def _process_in_network_item(
 
 def _point_optimization(in_network_items, parser, code_filter):
 
-	if hasattr(in_network_items, 'value') and in_network_items.value:
+	item = in_network_items.value[-1]
+	code_type = item.get('billing_code_type')
+	code = item.get('billing_code')
+	arrangement = item.get('negotiation_arrangement')
 
-		item = in_network_items.value[-1]
-		code_type = item.get('billing_code_type')
-		code = item.get('billing_code')
-		arrangement = item.get('negotiation_arrangement')
-
-		# This stops us from having to build in-network
-		# objects (which are large) when their billing codes
-		# don't fit the filter
-		if code and code_type and code_filter:
-			if (code_type, str(code)) not in code_filter:
-				log.debug(f'Skipping {code_type} {code}: filtered out')
-				while True:
-					prefix, event, _ = next(parser)
-					if (prefix, event) == ('in_network.item', 'end_map'):
-						break
-				in_network_items.value.pop()
-				in_network_items.containers.pop()
-				return
-
-		# If the code has the wrong arrangement, skip
-		if arrangement and arrangement != 'ffs':
-			log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
+	# This stops us from having to build in-network
+	# objects (which are large) when their billing codes
+	# don't fit the filter
+	if code and code_type and code_filter:
+		if (code_type, str(code)) not in code_filter:
+			log.debug(f'Skipping {code_type} {code}: filtered out')
 			while True:
 				prefix, event, _ = next(parser)
 				if (prefix, event) == ('in_network.item', 'end_map'):
@@ -525,6 +513,17 @@ def _point_optimization(in_network_items, parser, code_filter):
 			in_network_items.value.pop()
 			in_network_items.containers.pop()
 			return
+
+	# If the code has the wrong arrangement, skip
+	if arrangement and arrangement != 'ffs':
+		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
+		while True:
+			prefix, event, _ = next(parser)
+			if (prefix, event) == ('in_network.item', 'end_map'):
+				break
+		in_network_items.value.pop()
+		in_network_items.containers.pop()
+		return
 
 
 def _flattener(
@@ -551,6 +550,7 @@ def _flattener(
 			provider_references.event(event, value)
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
+				# log.debug('entered provider references')
 
 				unprocessed_reference = provider_references.value.pop()
 
@@ -566,7 +566,7 @@ def _flattener(
 				if provider_reference:
 					provider_references.value.insert(1, provider_reference)
 
-		elif hasattr(provider_references, 'value') and not provider_reference_map:
+		elif getattr(provider_references, 'value', None) and not provider_reference_map:
 
 			provider_reference_map = _make_provider_reference_map(
 				provider_references = provider_references.value,
@@ -588,7 +588,8 @@ def _flattener(
 			# extra control over the objects we build.
 			# This line can be commented out! but it's faster
 			# with it in.
-			_point_optimization(in_network_items, parser, code_filter)
+			if hasattr(in_network_items, 'value') and in_network_items.value:
+				_point_optimization(in_network_items, parser, code_filter)
 
 			if (prefix, event) == ('in_network.item', 'end_map'):
 
@@ -623,6 +624,7 @@ def flatten(
 	url,
 ) -> None:
 
+	make_dir(out_dir)
 	filename_hash = _filename_hash(loc)
 
 	with MRFOpen(loc) as f:
