@@ -38,7 +38,7 @@ try:
             code_filter=code_filter,
             npi_filter=npi_filter)
 
-        flattener.make_first_pass(f, writer)
+        flattener.make_first_pass(f, writer, dry_run=False)
 
 except InvalidMRF as e:
     log.critical(e)
