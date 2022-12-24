@@ -1,3 +1,13 @@
+"""
+How this works, at a high level.
+
+It needs to connect each in-network item to a provider reference.
+
+1. We can save memory by saving the provider references to a
+temporary SQLite database after filtering them. We'll take a function
+that takes the provider references, hashes them, and saves them.
+2.
+"""
 import os
 import csv
 import hashlib
@@ -9,6 +19,7 @@ import itertools
 import requests
 import gzip
 import logging
+import functools
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
@@ -60,24 +71,6 @@ class InvalidMRF(Exception):
 
 	def __init__(self, value):
 		self.value = value
-
-
-class Parser:
-	"""
-	Wrapper for the default ijson parser.
-	Preserves the current value in a variable "current".
-	"""
-
-	def __init__(self, f):
-		self.__p = ijson.parse(f, use_float=True)
-		self.current = None
-
-	def __iter__(self):
-		return self
-
-	def __next__(self):
-		self.current = next(self.__p)
-		return self.current
 
 
 class MRFOpen:
@@ -132,22 +125,25 @@ class MRFOpen:
 		self.f.close()
 
 
-
 class MRFWriter:
 	"""Class for writing the MRF data to the appropriate
 	files in the specified schema"""
 
-	def __init__(self, out_dir, schema):
+	def __init__(self, loc, out_dir):
+		self.loc = loc
 		self.out_dir = out_dir
-		self._make_dir()
-		self.schema = schema
 
-	def _make_dir(self):
-		if not os.path.exists(self.out_dir):
-			os.mkdir(self.out_dir)
+		if not os.path.exists(out_dir):
+			os.mkdir(out_dir)
+
+	@functools.cached_property
+	def filename_hash(self):
+		filename = Path(self.loc).stem.split('.')[0]
+		filename_hash = dicthasher(filename)
+		return filename_hash
 
 	def _write_table(self, rows, tablename):
-		fieldnames = self.schema[tablename]
+		fieldnames = SCHEMA[tablename]
 		file_loc = f'{self.out_dir}/{tablename}.csv'
 		file_exists = os.path.exists(file_loc)
 
@@ -218,7 +214,7 @@ class MRFWriter:
 		self._write_table(code_row, 'codes')
 		return code_row
 
-	def _write_prices(self, prices, code_hash, filename_hash):
+	def _write_prices(self, prices, code_hash):
 
 		price_rows = []
 		for price in prices:
@@ -242,7 +238,7 @@ class MRFWriter:
 				'additional_information': price.get('additional_information'),
 				'billing_code_modifier': price['billing_code_modifier'],
 				'code_hash': code_hash,
-				'filename_hash': filename_hash,
+				'filename_hash': self.filename_hash,
 			}
 			price_row['price_hash'] = dicthasher(price_row)
 			price_rows.append(price_row)
@@ -284,14 +280,14 @@ class MRFWriter:
 
 		self._write_plan_file(plan_row, file_row)
 
-	def write_in_network_item(self, item, filename_hash):
+	def write_in_network_item(self, item):
 
 		code_row = self._write_code(item)
 		code_hash = code_row['code_hash']
 
 		for rate in item.get('negotiated_rates'):
 			prices = rate['negotiated_prices']
-			price_rows = self._write_prices(prices, code_hash, filename_hash)
+			price_rows = self._write_prices(prices, code_hash)
 
 			provider_groups = rate['provider_groups']
 			provider_group_rows = self._write_provider_groups(provider_groups)
@@ -299,42 +295,25 @@ class MRFWriter:
 			self._write_prices_provider_groups(price_rows, provider_group_rows)
 
 
-def _process_remote_provider_reference(
-	data,
-	npi_filter
-):
-	for group in data['provider_groups']:
-		group['npi'] = [str(npi) for npi in group['npi']]
-
-		if npi_filter:
-			group['npi'] = [npi for npi in group['npi'] if npi in npi_filter]
-
-	data['provider_groups'] = [
-		group for group in data['provider_groups']
-		if group['npi']]
-
-	if not data['provider_groups']:
-		return
-
-	return data
-
-
 async def _fetch_remote_provider_reference(
 	session,
 	provider_group_id,
 	provider_reference_loc,
-	npi_filter=None,
+	npi_filter,
 ):
 	async with session.get(provider_reference_loc) as response:
-		log.info(
-			f'Opened remote provider reference url:{provider_reference_loc}')
+
+		log.info(f'Opened remote provider reference url:{provider_reference_loc}')
 		assert response.status == 200
+
 		f = await response.read()
+
 		unprocessed_data = json.loads(f)
 		unprocessed_data['provider_group_id'] = provider_group_id
-		processed_remote_provider_reference = _process_remote_provider_reference(
-			data=unprocessed_data,
-			npi_filter=npi_filter,
+
+		processed_remote_provider_reference = _process_provider_reference(
+			item = unprocessed_data,
+			npi_filter = npi_filter,
 		)
 		return processed_remote_provider_reference
 
@@ -343,24 +322,21 @@ async def _fetch_remote_provider_references(
 	unfetched_provider_references,
 	npi_filter,
 ):
-	"""
-	:param unfetched_provider_references: list
-	:param npi_filter: set
-	:return:
-	"""
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
-		for unfetched_provider_reference in unfetched_provider_references:
-			provider_group_id = unfetched_provider_reference[
-				'provider_group_id']
-			provider_reference_loc = unfetched_provider_reference['location']
+
+		for unfetched_reference in unfetched_provider_references:
+
+			provider_group_id = unfetched_reference['provider_group_id']
+			provider_reference_loc = unfetched_reference['location']
 
 			task = asyncio.wait_for(
 				_fetch_remote_provider_reference(
-					session=session,
-					provider_group_id=provider_group_id,
-					provider_reference_loc=provider_reference_loc,
-					npi_filter=npi_filter),
+					session = session,
+					provider_group_id = provider_group_id,
+					provider_reference_loc = provider_reference_loc,
+					npi_filter = npi_filter,
+				),
 				timeout=5,
 			)
 
@@ -369,13 +345,18 @@ async def _fetch_remote_provider_references(
 		fetched_remote_provider_references = await asyncio.gather(*tasks)
 		fetched_remote_provider_references = list(
 			filter(lambda item: item, fetched_remote_provider_references))
+
 		return fetched_remote_provider_references
 
 
-def _process_provider_reference(item, npi_filter = None):
-	result = {}
-	result['provider_group_id'] = item['provider_group_id']
-	result['provider_groups'] = []
+def _process_provider_reference(
+	item,
+	npi_filter,
+):
+	result = {
+		'provider_group_id' : item['provider_group_id'],
+		'provider_groups'   : []
+	}
 
 	if item.get('location'):
 		return item
@@ -384,9 +365,11 @@ def _process_provider_reference(item, npi_filter = None):
 		npi = [str(n) for n in provider_group['npi']]
 		if npi_filter:
 			npi = [n for n in npi if n in npi_filter]
+		if not npi:
+			continue
 		tin = provider_group['tin']
-		if npi:
-			result['provider_groups'].append({'npi': npi, 'tin': tin})
+		provider_group = {'npi': npi, 'tin': tin}
+		result['provider_groups'].append(provider_group)
 
 	if not result['provider_groups']:
 		return
@@ -394,7 +377,38 @@ def _process_provider_reference(item, npi_filter = None):
 	return result
 
 
-def _process_rate(item, provider_reference_map):
+def make_provider_reference_map(
+	provider_references,
+	unfetched_provider_references,
+	npi_filter,
+):
+
+	loop = asyncio.get_event_loop()
+	fetched_provider_references = loop.run_until_complete(
+		_fetch_remote_provider_references(
+			unfetched_provider_references = unfetched_provider_references,
+			npi_filter = npi_filter,
+		)
+	)
+
+	provider_references.extend(
+		fetched_provider_references
+	)
+
+	provider_reference_map = {
+		p['provider_group_id']: p['provider_groups']
+		for p in provider_references
+		if p is not None
+	}
+
+	return provider_reference_map
+
+
+def _process_rate(
+	item,
+	provider_reference_map,
+):
+
 	provider_groups = item.get('provider_groups', [])
 	provider_references = item.get('provider_references', [])
 
@@ -408,21 +422,27 @@ def _process_rate(item, provider_reference_map):
 
 	item.pop('provider_references', None)
 	item['provider_groups'] = provider_groups
+
 	return item
 
 
-def _process_in_network_item(item, provider_reference_map, code_filter = None):
+def _process_in_network_item(
+	item,
+	provider_reference_map,
+	# code_filter = None
+):
 
-	if code_filter:
-		billing_code_type = item['billing_code_type']
-		billing_code = str(item['billing_code'])
-		if (billing_code_type, billing_code) not in code_filter:
-			log.debug(f"skipped {item['billing_code']} not in list")
-			return
-
-	if item['negotiation_arrangement'] != 'ffs':
-		log.debug('wrong type')
-		return
+	# the point optimization takes care of this
+	# if code_filter:
+	# 	billing_code_type = item['billing_code_type']
+	# 	billing_code = str(item['billing_code'])
+	# 	if (billing_code_type, billing_code) not in code_filter:
+	# 		log.debug(f"skipped {item['billing_code']} not in list")
+	# 		return
+	#
+	# if item['negotiation_arrangement'] != 'ffs':
+	# 	log.debug('wrong type')
+	# 	return
 
 	rates = []
 	for unprocessed_rate in item['negotiated_rates']:
@@ -437,222 +457,137 @@ def _process_in_network_item(item, provider_reference_map, code_filter = None):
 	return item
 
 
-def _make_provider_reference_map(provider_references):
-	return {
-		p['provider_group_id']: p['provider_groups']
-		for p in provider_references
-		if p is not None
-	}
+def flatten(
+	fileobj,
+	npi_filter,
+	code_filter,
+	writer,
+	provider_reference_map,
+	first_try = True
+):
+	parser = ijson.parse(fileobj, use_float = True)
+
+	root = ijson.ObjectBuilder()
+	provider_references = ijson.ObjectBuilder()
+	in_network_items = ijson.ObjectBuilder()
+
+	unfetched_provider_references = []
+
+	for prefix, event, value in parser:
+
+		if prefix.startswith('provider_references') and first_try:
+			provider_references.event(event, value)
+
+			if (prefix, event) == ('provider_references.item', 'end_map'):
+				unprocessed_reference = provider_references.value.pop()
+
+				if unprocessed_reference.get('location'):
+					unfetched_provider_references.append(unprocessed_reference)
+					continue
+
+				provider_reference = _process_provider_reference(
+					unprocessed_reference
+				)
+
+				if provider_reference:
+					provider_references.value.insert(1, provider_reference)
+
+		elif prefix.startswith('in_network'):
+			in_network_items.event(event, value)
+
+			# If we've passed through the provider_references
+			# block, provider_references.value will exist,
+			# but if we've just entered this block, we won't
+			# have fetched the remote provider refs yet.
+			if (
+				hasattr(provider_references, 'value')
+				and provider_reference_map is None
+			):
+				provider_reference_map = make_provider_reference_map(
+					provider_references = provider_references.value,
+					unfetched_provider_references = unfetched_provider_references,
+					npi_filter = npi_filter,
+				)
+
+				# We don't need this anymore
+				provider_references.value.clear()
+
+			# Point optimization #1
+			# The following code chunk can be commented out
+			# entirely. It adds some complexity but basically,
+			# we pass momentarily to the parser to get some
+			# extra control over the objects we build
+			if hasattr(in_network_items, 'value') and in_network_items.value:
+
+				item = in_network_items.value[-1]
+				code_type = item.get('billing_code_type')
+				code = item.get('billing_code')
+				arrangement = item.get('negotiation_arrangement')
+
+				# This stops us from having to build in-network
+				# objects (which are large) when their billing codes
+				# don't fit the filter
+				if code and code_type and code_filter:
+					if (code_type, str(code)) not in code_filter:
+						log.debug(f'Skipping code {code_type} {code}: filtered out')
+						while True:
+							prefix, event, _ = next(parser)
+							if (prefix, event) == ('in_network.item', 'end_map'):
+								break
+						in_network_items.value.pop()
+						in_network_items.containers.pop()
+						continue
+
+				# If the code has the wrong arrangement, skip
+				if arrangement and arrangement != 'ffs':
+					log.debug(f'Skipping: {arrangement} not ffs')
+					while True:
+						prefix, event, _ = next(parser)
+						if (prefix, event) == ('in_network.item', 'end_map'):
+							break
+					in_network_items.value.pop()
+					in_network_items.containers.pop()
+					continue
+
+			if (prefix, event) == ('in_network.item', 'end_map'):
+
+				unprocessed_item = in_network_items.value.pop()
+
+				in_network_item = _process_in_network_item(
+					item = unprocessed_item,
+					provider_reference_map = provider_reference_map
+				# 	code_filter = self.code_filter,
+				)
+
+				if in_network_item:
+					writer.write_in_network_item(in_network_item)
+
+		elif first_try:
+			root.event(event, value)
+
+	if not root.value.get('reporting_entity_name'):
+		raise InvalidMRF('This is not an MRF')
+
+	if root.value and provider_reference_map:
+		return True
+
+	return False
+
 
 
 class MRFFlattener:
 
-	def __init__(self, loc, npi_filter, code_filter):
+	def __init__(self, loc, out_dir):
 		self.loc = loc
-		self.npi_filter = npi_filter
-		self.code_filter = code_filter
-		self.root = None
-		self.provider_reference_map = None
+		self.writer = MRFWriter(loc = loc, out_dir = out_dir)
 
-		# setup filename hash
-		filename = Path(loc).stem.split('.')[0]
-		self.file_row = {'filename': filename}
-		self.filename_hash = dicthasher(self.file_row)
-		self.file_row['filename_hash'] = self.filename_hash
-		self.file_row['url'] = loc
+	def run(self, npi_filter, code_filter):
+		with MRFOpen(self.loc) as f:
+			flatten(
+				fileobj = f,
+				npi_filter = npi_filter,
+				code_filter = code_filter,
+				provider_reference_map = None,
+				writer = self.writer,
+			)
 
-	def _set_plan_row(self):
-
-		plan_row = {}
-		for key in [
-			'reporting_entity_name',
-			'reporting_entity_type',
-			'plan_name',
-			'plan_id',
-			'plan_id_type',
-			'plan_market_type',
-			'last_updated_on',
-			'version',
-		]:
-			plan_row[key] = self.root.value.get(key)
-		plan_hash = dicthasher(plan_row)
-		plan_row['plan_hash'] = plan_hash
-		self.plan_row = plan_row
-
-	def make_first_pass(self, f, writer, dry_run = True):
-
-		parser = ijson.parse(f, use_float = True)
-
-		root = ijson.ObjectBuilder()
-		provider_references = ijson.ObjectBuilder()
-		in_network_items = ijson.ObjectBuilder()
-
-		unfetched_provider_references = []
-		provider_reference_map = None
-
-		for prefix, event, value in parser:
-
-			if prefix.startswith('provider_references'):
-				provider_references.event(event, value)
-
-				if (prefix, event) == ('provider_references.item', 'end_map'):
-					unprocessed_reference = provider_references.value.pop()
-
-					if unprocessed_reference.get('location'):
-						unfetched_provider_references.append(unprocessed_reference)
-						continue
-
-					provider_reference = _process_provider_reference(
-						unprocessed_reference
-					)
-
-					if provider_reference:
-						provider_references.value.insert(1, provider_reference)
-
-			elif prefix.startswith('in_network'):
-
-				# poll to check for billing code
-				# optimization #1
-				if hasattr(in_network_items, 'value') and in_network_items.value:
-					code_type = in_network_items.value[-1].get('billing_code_type')
-					code = in_network_items.value[-1].get('billing_code')
-
-					if code and code_type and self.code_filter:
-						if (code_type, str(code)) not in self.code_filter:
-							print(f'skipping: {code_type} {code}')
-							while True:
-								prefix, event, _ = next(parser)
-								if (prefix, event) == ('in_network.item', 'end_map'):
-									break
-							in_network_items.value.pop()
-							in_network_items.containers.pop()
-							continue
-
-					# optimization #2
-					# if the code is the wrong arrangement, skip it
-					arrangement = in_network_items.value[-1].get('negotiation_arrangement')
-					if arrangement:
-						if arrangement != 'ffs':
-							print(f'skipping: {arrangement}')
-							while True:
-								prefix, event, _ = next(parser)
-								if (prefix, event) == ('in_network.item', 'end_map'):
-									break
-							in_network_items.value.pop()
-							in_network_items.containers.pop()
-							continue
-
-
-				in_network_items.event(event, value)
-
-				if not hasattr(provider_references, 'value'):
-					continue
-
-				if not provider_references.value:
-					if not unfetched_provider_references:
-						continue
-
-				if provider_reference_map == None:
-
-					loop = asyncio.get_event_loop()
-
-					fetched_provider_references = loop.run_until_complete(
-						_fetch_remote_provider_references(
-							unfetched_provider_references = unfetched_provider_references,
-							npi_filter = self.npi_filter)
-					)
-
-					provider_references.value.extend(
-						fetched_provider_references
-					)
-
-					provider_reference_map = _make_provider_reference_map(
-						provider_references.value
-					)
-
-					# we don't need this anymore, so let
-					# the garbage collector take care of it
-					provider_references.value.clear
-
-
-				if (prefix, event) == ('in_network.item', 'end_map'):
-
-					unprocessed_item = in_network_items.value.pop()
-
-					in_network_item = _process_in_network_item(
-						item = unprocessed_item,
-						code_filter = self.code_filter,
-						provider_reference_map = provider_reference_map
-					)
-
-					if in_network_item:
-						writer.write_in_network_item(in_network_item, self.filename_hash)
-
-
-			else:
-				root.event(event, value)
-
-		self.provider_reference_map = provider_reference_map
-
-		if not root.value.get('reporting_entity_name'):
-			raise InvalidMRF('This is not an MRF')
-
-		self.root = root
-		self._set_plan_row()
-		writer.write_file_and_plan(self.file_row, self.plan_row)
-
-	def make_second_pass(self, f, writer):
-
-		parser = ijson.parse(f, use_float = True)
-
-		in_network_items = ijson.ObjectBuilder()
-
-		for prefix, event, value in parser:
-
-			if prefix.startswith('in_network'):
-
-				in_network_items.event(event, value)
-
-				# poll to check for billing code
-				# optimization #1
-				if hasattr(in_network_items, 'value') and in_network_items.value:
-					code_type = in_network_items.value[-1].get('billing_code_type')
-					code = in_network_items.value[-1].get('billing_code')
-
-					if code and code_type and self.code_filter:
-						if (code_type, str(code)) not in self.code_filter:
-							print(f'skipping: {code_type} {code}')
-							while True:
-								prefix, event, _ = next(parser)
-								if (prefix, event) == ('in_network.item', 'end_map'):
-									break
-							in_network_items.value.pop()
-							in_network_items.containers.pop()
-							continue
-
-					# optimization #2
-					# if the code is the wrong arrangement, skip it
-					arrangement = in_network_items.value[-1].get('negotiation_arrangement')
-					if arrangement:
-						if arrangement != 'ffs':
-							print(f'skipping: {arrangement}')
-							while True:
-								prefix, event, _ = next(parser)
-								if (prefix, event) == ('in_network.item', 'end_map'):
-									break
-							in_network_items.value.pop()
-							in_network_items.containers.pop()
-							continue
-
-				if (prefix, event) == ('in_network.item', 'end_map'):
-
-					unprocessed_item = in_network_items.value.pop()
-
-					in_network_item = _process_in_network_item(
-						item = unprocessed_item,
-						code_filter = self.code_filter,
-						provider_reference_map = self.provider_reference_map
-					)
-
-					if in_network_item:
-						writer.write_in_network_item(in_network_item, self.filename_hash)

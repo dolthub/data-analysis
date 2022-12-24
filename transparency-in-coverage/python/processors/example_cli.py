@@ -28,17 +28,5 @@ if args.npis:
 else:
     npi_filter = None
 
-try:
-    with MRFOpen(url) as f:
-
-        writer = MRFWriter(out_dir=out_dir, schema=SCHEMA)
-
-        flattener = MRFFlattener(
-            loc=url,
-            code_filter=code_filter,
-            npi_filter=npi_filter)
-
-        flattener.make_first_pass(f, writer, dry_run=False)
-
-except InvalidMRF as e:
-    log.critical(e)
+flattener = MRFFlattener(loc=url,out_dir = out_dir)
+flattener.run(npi_filter, code_filter)
