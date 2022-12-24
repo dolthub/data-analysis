@@ -573,29 +573,25 @@ def _flattener(
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
 				unprocessed_reference = provider_references.value.pop()
-
 				if unprocessed_reference.get('location'):
-					log.debug('wrote remote')
 					unfetched_provider_references.append(unprocessed_reference)
 					continue
 
 				provider_reference = _process_provider_reference(
 					item = unprocessed_reference,
-					npi_filter = npi_filter
-				)
+					npi_filter = npi_filter)
 
 				if provider_reference:
 					provider_references.value.insert(1, provider_reference)
 
-		elif 'value' in dir(provider_references) and provider_reference_map is None:
-			# "Have we visited the provider references section
-			# but not built the map yet?"
+		elif provider_reference_map is None and hasattr(provider_references, 'value'):
+			# "Is the provider reference map still None,
+			# but we've visited provider references?"
 
 			provider_reference_map = _make_provider_reference_map(
 				provider_references = provider_references.value,
 				unfetched_provider_references = unfetched_provider_references,
-				npi_filter = npi_filter,
-			)
+				npi_filter = npi_filter,)
 
 			# We don't need this anymore
 			provider_references.value.clear()
@@ -607,18 +603,17 @@ def _flattener(
 			# Drop down to the parser to get some
 			# extra control over the objects we build.
 			# This line can be commented out! but it's faster with it in
-			if getattr(in_network_items, 'value', None):
+			if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
+				# We have to have items for this to work
 				_point_optimization(in_network_items, parser, code_filter)
 
 			if (prefix, event) == ('in_network.item', 'end_map'):
 
 				unprocessed_item = in_network_items.value.pop()
-
 				in_network_item = _process_in_network_item(
 					item = unprocessed_item,
-					provider_reference_map = provider_reference_map
-				# 	code_filter = self.code_filter,
-				)
+					# code_filter = code_filter, # these are filtered by _point_optimization
+					provider_reference_map = provider_reference_map)
 
 				if in_network_item:
 					_write_in_network_item(in_network_item, filename_hash, out_dir)
@@ -627,7 +622,8 @@ def _flattener(
 					code = in_network_item['billing_code']
 					log.debug(f'Wrote {code_type} {code}')
 
-		elif not second_pass:
+		elif not prefix.startswith('provider_references') and \
+			not prefix.startswith('in_network'):
 			plan.event(event, value)
 
 	if not plan.value.get('reporting_entity_name'):
