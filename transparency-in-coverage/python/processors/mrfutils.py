@@ -15,7 +15,6 @@ import json
 import ijson
 import asyncio
 import aiohttp
-import itertools
 import requests
 import gzip
 import logging
@@ -23,6 +22,7 @@ import functools
 from urllib.parse import urlparse
 from pathlib import Path
 from schema import SCHEMA
+from contextlib import ContextDecorator
 
 # You can remove this if necessary, but be warned
 try:
@@ -30,50 +30,16 @@ try:
 except AssertionError:
 	raise Exception('Extremely slow without the yajl2_c backend')
 
+
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
 
-file_handler = logging.FileHandler('log.txt', 'a')
-file_handler.setLevel(logging.WARNING)
-log.addHandler(file_handler)
-
-
-def import_csv_to_set(filename):
-	"""
-	Imports data as tuples from a given file.
-	Iterates over rows
-	:param filename: filename
-	:return:
-	"""
-	items = set()
-	with open(filename, 'r') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			row = [col.strip() for col in row]
-			if len(row) > 1:
-				items.add(tuple(row))
-			else:
-				items.add(row.pop())
-		return items
-
-
-def dicthasher(data, n_bytes=8):
-	if not data:
-		raise Exception("Hashed dictionary can't be empty")
-	data = json.dumps(data, sort_keys=True).encode('utf-8')
-	hash_s = hashlib.sha256(data).digest()[:n_bytes]
-	hash_i = int.from_bytes(hash_s, 'little')
-	return hash_i
-
 
 class InvalidMRF(Exception):
-	"""Returned when we hit an invalid MRF."""
-
-	def __init__(self, value):
-		self.value = value
+	pass
 
 
-class MRFOpen:
+class MRFOpen(ContextDecorator):
 	"""
 	Context manager for opening JSON(.gz) MRFs.
 	Handles local and remote gzipped and unzipped
@@ -125,174 +91,225 @@ class MRFOpen:
 		self.f.close()
 
 
-class MRFWriter:
-	"""Class for writing the MRF data to the appropriate
-	files in the specified schema"""
-
-	def __init__(self, loc, out_dir):
-		self.loc = loc
-		self.out_dir = out_dir
-
-		if not os.path.exists(out_dir):
-			os.mkdir(out_dir)
-
-	@functools.cached_property
-	def filename_hash(self):
-		filename = Path(self.loc).stem.split('.')[0]
-		filename_hash = dicthasher(filename)
-		return filename_hash
-
-	def _write_table(self, rows, tablename):
-		fieldnames = SCHEMA[tablename]
-		file_loc = f'{self.out_dir}/{tablename}.csv'
-		file_exists = os.path.exists(file_loc)
-
-		# newline = '' is to prevent Windows
-		# from addiing \r\n\n to the end of each line
-		with open(file_loc, 'a', newline='') as f:
-			writer = csv.DictWriter(f, fieldnames=fieldnames)
-
-			if not file_exists:
-				writer.writeheader()
-
-			if type(rows) == list:
-				writer.writerows(rows)
-
-			if type(rows) == dict:
-				row = rows
-				writer.writerow(row)
-
-	def _write_plan(self, root_data):
-
-		plan_row = {
-			'reporting_entity_name': root_data['reporting_entity_name'],
-			'reporting_entity_type': root_data['reporting_entity_type'],
-			'plan_name': root_data['plan_name'],
-			'plan_id': root_data['plan_id'],
-			'plan_id_type': root_data['plan_id_type'],
-			'plan_market_type': root_data['plan_market_type'],
-			'last_updated_on': root_data['last_updated_on'],
-			'version': root_data['version']
-		}
-		plan_hash = dicthasher(plan_row)
-		plan_row['plan_hash'] = plan_hash
-		self._write_table(plan_row, 'plan')
-		return plan_row
-
-	def _write_file(self, root_data):
-
-		file_row = {
-			'filename': root_data['filename']
-		}
-		filename_hash = dicthasher(file_row)
-		file_row['filename_hash'] = filename_hash
-		file_row['url'] = root_data['url']
-		self._write_table(file_row, 'file')
-		return file_row
-
-	def _write_plan_file(self, plan_row, file_row):
-
-		linking_row = {
-			'plan_hash': plan_row['plan_hash'],
-			'filename_hash': file_row['filename_hash']
-		}
-
-		self._write_table(linking_row, 'plans_files')
-		return linking_row
-
-	def _write_code(self, item):
-
-		code_row = {
-			# 'negotiation_arrangement':   item['negotiation_arrangement'],
-			'billing_code_type': item['billing_code_type'],
-			'billing_code_type_version': item['billing_code_type_version'],
-			'billing_code': item['billing_code'],
-		}
-
-		code_hash = dicthasher(code_row)
-		code_row['code_hash'] = code_hash
-		self._write_table(code_row, 'codes')
-		return code_row
-
-	def _write_prices(self, prices, code_hash):
-
-		price_rows = []
-		for price in prices:
-
-			if sc := price.get('service_code'):
-				price['service_code'] = json.dumps(sorted(sc))
+def import_csv_to_set(filename):
+	"""
+	Imports data as tuples from a given file.
+	Iterates over rows
+	:param filename: filename
+	:return:
+	"""
+	items = set()
+	with open(filename, 'r') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			row = [col.strip() for col in row]
+			if len(row) > 1:
+				items.add(tuple(row))
 			else:
-				price['service_code'] = None
+				items.add(row.pop())
+		return items
 
-			if bcm := price.get('billing_code_modifier'):
-				price['billing_code_modifier'] = json.dumps(sorted(bcm))
-			else:
-				price['billing_code_modifier'] = None
 
-			price_row = {
-				'billing_class': price['billing_class'],
-				'negotiated_type': price['negotiated_type'],
-				'expiration_date': price['expiration_date'],
-				'negotiated_rate': price['negotiated_rate'],
-				'service_code': price['service_code'],
-				'additional_information': price.get('additional_information'),
-				'billing_code_modifier': price['billing_code_modifier'],
-				'code_hash': code_hash,
-				'filename_hash': self.filename_hash,
-			}
-			price_row['price_hash'] = dicthasher(price_row)
-			price_rows.append(price_row)
-		self._write_table(price_rows, 'prices')
-		return price_rows
+def make_dir(out_dir):
+	if not os.path.exists(out_dir):
+		os.mkdir(out_dir)
 
-	def _write_provider_groups(self, provider_groups):
 
-		provider_group_rows = []
-		for group in provider_groups:
-			group_row = {
-				'npi_numbers': json.dumps(sorted(group['npi'])),
-				'tin_type': group['tin']['type'],
-				'tin_value': group['tin']['value'],
-			}
-			group_row['provider_group_hash'] = dicthasher(group_row)
-			provider_group_rows.append(group_row)
-		self._write_table(provider_group_rows, 'provider_groups')
-		return provider_group_rows
+def dicthasher(data, n_bytes = 8):
+	if not data:
+		raise Exception("Hashed dictionary can't be empty")
+	data = json.dumps(data, sort_keys=True).encode('utf-8')
+	hash_s = hashlib.sha256(data).digest()[:n_bytes]
+	hash_i = int.from_bytes(hash_s, 'little')
+	return hash_i
 
-	def _write_prices_provider_groups(self, price_rows, provider_group_rows):
 
-		linking_row = []
-		for price_row, provider_group_row in itertools.product(price_rows,
-		                                                       provider_group_rows):
-			link = {
-				'provider_group_hash': provider_group_row[
-					'provider_group_hash'],
+def append_hash(item, name):
+	hash_ = dicthasher(item)
+	item[name] = hash_
+	return item
+
+
+def _filename_hash(loc):
+	filename = Path(loc).stem.split('.')[0]
+	filename_hash = dicthasher(filename)
+	return filename_hash
+
+
+def _write_table(rows, tablename, out_dir):
+	fieldnames = SCHEMA[tablename]
+	file_loc = f'{out_dir}/{tablename}.csv'
+	file_exists = os.path.exists(file_loc)
+
+	# newline = '' is to prevent Windows
+	# from adding \r\n\n to the end of each line
+	with open(file_loc, 'a', newline='') as f:
+		writer = csv.DictWriter(f, fieldnames=fieldnames)
+
+		if not file_exists:
+			writer.writeheader()
+
+		if type(rows) == list:
+			writer.writerows(rows)
+
+		if type(rows) == dict:
+			row = rows
+			writer.writerow(row)
+
+
+def _make_plan_row(plan: dict):
+
+	keys = [
+		'reporting_entity_name',
+		'reporting_entity_type',
+		'plan_name',
+		'plan_id',
+		'plan_id_type',
+		'plan_market_type',
+		'last_updated_on',
+		'version',
+	]
+
+	plan_row = {key: plan.get(key) for key in keys}
+	plan_row = append_hash(plan_row, 'plan_hash')
+	return plan_row
+
+
+def _make_file_row(loc, url):
+
+	filename = Path(loc).stem.split('.')[0]
+	file_row = {'filename': filename}
+	file_row = append_hash(file_row, 'filename_hash')
+	file_row['url'] = url
+	return file_row
+
+
+def _make_plan_file_row(plan_row, file_row):
+
+	plan_file_row = {
+		'plan_hash': plan_row['plan_hash'],
+		'filename_hash': file_row['filename_hash']
+	}
+
+	return plan_file_row
+
+
+def _make_code_row(code: dict):
+
+	keys = [
+		'billing_code_type',
+		'billing_code_type_version',
+		'billing_code',
+	]
+
+	code_row = {key : code[key] for key in keys}
+	code_row = append_hash(code_row, 'code_hash')
+
+	return code_row
+
+
+def _make_price_row(price: dict, code_hash, filename_hash):
+
+	keys = [
+		'billing_class',
+		'negotiated_type',
+		'expiration_date',
+		'negotiated_rate',
+		'service_code',
+		'additional_information',
+	]
+
+	price_row = {key : price.get(key) for key in keys}
+
+	optional_json_keys = [
+		'service_code',
+		'billing_code_modifier',
+	]
+
+	for key in optional_json_keys:
+		if price.get(key):
+			sorted_value = sorted(price[key])
+			price_row[key] = json.dumps(sorted_value)
+
+	hashes = {
+		'code_hash': code_hash,
+		'filename_hash': filename_hash
+	}
+
+	price_row.update(hashes)
+	price_row = append_hash(price_row, 'price_hash')
+
+	return price_row
+
+
+def _make_price_rows(prices, code_hash, filename_hash):
+
+	price_rows = []
+	for price in prices:
+		price_row = _make_price_row(price, code_hash, filename_hash)
+		price_rows.append(price_row)
+
+	return price_rows
+
+
+def _make_provider_group_row(provider_group: dict):
+
+	provider_group_row = {
+		'npi_numbers': json.dumps(sorted(provider_group['npi'])),
+		'tin_type':    provider_group['tin']['type'],
+		'tin_value':   provider_group['tin']['value'],
+	}
+
+	provider_group_row = append_hash(provider_group_row, 'provider_group_hash')
+
+	return provider_group_row
+
+
+def _make_provider_group_rows(provider_groups):
+
+	provider_group_rows = []
+	for provider_group in provider_groups:
+		provider_group_row = _make_provider_group_row(provider_group)
+		provider_group_rows.append(provider_group_row)
+
+	return provider_group_rows
+
+
+def _make_prices_provider_groups_rows(price_rows, provider_group_rows):
+
+	prices_provider_groups_rows = []
+	for price_row in price_rows:
+		for provider_group_row in provider_group_rows:
+
+			prices_provider_groups_row = {
+				'provider_group_hash': provider_group_row['provider_group_hash'],
 				'price_hash': price_row['price_hash'],
 			}
-			linking_row.append(link)
-		self._write_table(linking_row, 'prices_provider_groups')
-		return linking_row
 
-	def write_file_and_plan(self, file_row, plan_row):
+			prices_provider_groups_rows.append(prices_provider_groups_row)
 
-		self._write_table(file_row, 'files')
-		self._write_table(plan_row, 'plans')
+	return prices_provider_groups_rows
 
-		self._write_plan_file(plan_row, file_row)
 
-	def write_in_network_item(self, item):
+def _write_in_network_item(in_network_item: dict, filename_hash, out_dir):
 
-		code_row = self._write_code(item)
-		code_hash = code_row['code_hash']
+	code_row = _make_code_row(in_network_item)
+	_write_table(code_row, 'codes', out_dir)
 
-		for rate in item.get('negotiated_rates'):
-			prices = rate['negotiated_prices']
-			price_rows = self._write_prices(prices, code_hash)
+	code_hash = code_row['code_hash']
 
-			provider_groups = rate['provider_groups']
-			provider_group_rows = self._write_provider_groups(provider_groups)
+	for rate in in_network_item['negotiated_rates']:
+		prices = rate['negotiated_prices']
+		provider_groups = rate['provider_groups']
 
-			self._write_prices_provider_groups(price_rows, provider_group_rows)
+		price_rows = _make_price_rows(prices, code_hash, filename_hash)
+		_write_table(price_rows, 'prices', out_dir)
+
+		provider_group_rows = _make_provider_group_rows(provider_groups)
+		_write_table(provider_group_rows, 'provider_groups', out_dir)
+
+		prices_provider_group_rows = _make_prices_provider_groups_rows(price_rows, provider_group_rows)
+		_write_table(prices_provider_group_rows, 'prices_provider_groups', out_dir)
 
 
 async def _fetch_remote_provider_reference(
@@ -457,17 +474,21 @@ def _process_in_network_item(
 	return item
 
 
-def flatten(
+def flattener(
 	fileobj,
 	npi_filter,
 	code_filter,
-	writer,
 	provider_reference_map,
-	first_try = True
-):
+	filename_hash,
+	out_dir,
+) -> tuple:
+
+	provider_reference_order = None
+	# None, 'top', or 'bottom'
+
 	parser = ijson.parse(fileobj, use_float = True)
 
-	root = ijson.ObjectBuilder()
+	plan = ijson.ObjectBuilder()
 	provider_references = ijson.ObjectBuilder()
 	in_network_items = ijson.ObjectBuilder()
 
@@ -475,8 +496,9 @@ def flatten(
 
 	for prefix, event, value in parser:
 
-		if prefix.startswith('provider_references') and first_try:
+		if prefix.startswith('provider_references') and not hasattr(flattener, 'provider_reference_map'):
 			provider_references.event(event, value)
+			provider_reference_order = 'bottom'
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
 				unprocessed_reference = provider_references.value.pop()
@@ -486,7 +508,8 @@ def flatten(
 					continue
 
 				provider_reference = _process_provider_reference(
-					unprocessed_reference
+					item = unprocessed_reference,
+					npi_filter = npi_filter
 				)
 
 				if provider_reference:
@@ -503,6 +526,9 @@ def flatten(
 				hasattr(provider_references, 'value')
 				and provider_reference_map is None
 			):
+				# Going through this path means the file is
+				# in the right order
+				provider_reference_order = 'top'
 				provider_reference_map = make_provider_reference_map(
 					provider_references = provider_references.value,
 					unfetched_provider_references = unfetched_provider_references,
@@ -529,7 +555,7 @@ def flatten(
 				# don't fit the filter
 				if code and code_type and code_filter:
 					if (code_type, str(code)) not in code_filter:
-						log.debug(f'Skipping code {code_type} {code}: filtered out')
+						log.debug(f'Skipping {code_type} {code}: filtered out')
 						while True:
 							prefix, event, _ = next(parser)
 							if (prefix, event) == ('in_network.item', 'end_map'):
@@ -540,7 +566,7 @@ def flatten(
 
 				# If the code has the wrong arrangement, skip
 				if arrangement and arrangement != 'ffs':
-					log.debug(f'Skipping: {arrangement} not ffs')
+					log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
 					while True:
 						prefix, event, _ = next(parser)
 						if (prefix, event) == ('in_network.item', 'end_map'):
@@ -560,34 +586,61 @@ def flatten(
 				)
 
 				if in_network_item:
-					writer.write_in_network_item(in_network_item)
+					code_type = in_network_item['billing_code_type']
+					code = in_network_item['billing_code']
+					log.debug(f'Writing {code_type} {code}')
+					_write_in_network_item(in_network_item, filename_hash, out_dir)
 
-		elif first_try:
-			root.event(event, value)
+		else:
+			plan.event(event, value)
 
-	if not root.value.get('reporting_entity_name'):
-		raise InvalidMRF('This is not an MRF')
+	if not plan.value.get('reporting_entity_name'):
+		raise InvalidMRF
 
-	if root.value and provider_reference_map:
-		return True
+	return provider_reference_order, provider_reference_map, plan.value
 
-	return False
+def flatten(
+	loc,
+	npi_filter,
+	code_filter,
+	out_dir,
+	url,
+):
+	filename_hash = _filename_hash(loc)
+	with MRFOpen(loc) as f:
+		result = flattener(
+			fileobj = f,
+			npi_filter = npi_filter,
+			code_filter = code_filter,
+			provider_reference_map  = None,
+			filename_hash = filename_hash,
+			out_dir = out_dir,
+		)
 
+	provider_reference_order, provider_reference_map, plan = result
 
+	if provider_reference_order == 'bottom':
 
-class MRFFlattener:
+		log.debug('Found provider references at the bottom. Running again')
 
-	def __init__(self, loc, out_dir):
-		self.loc = loc
-		self.writer = MRFWriter(loc = loc, out_dir = out_dir)
-
-	def run(self, npi_filter, code_filter):
-		with MRFOpen(self.loc) as f:
-			flatten(
+		with MRFOpen(loc) as f:
+			flattener(
 				fileobj = f,
 				npi_filter = npi_filter,
 				code_filter = code_filter,
-				provider_reference_map = None,
-				writer = self.writer,
+				provider_reference_map = provider_reference_map,
+				filename_hash = filename_hash,
+				out_dir = out_dir,
 			)
 
+	if not url:
+		url = loc
+
+	file_row = _make_file_row(loc, url)
+	_write_table(file_row, 'files', out_dir)
+
+	plan_row = _make_plan_row(plan)
+	_write_table(plan_row, 'plans', out_dir)
+
+	plan_file_row = _make_plan_file_row(plan_row, file_row)
+	_write_table(plan_file_row, 'plans_files', out_dir)
