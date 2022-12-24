@@ -566,14 +566,16 @@ def _flattener(
 	for prefix, event, value in parser:
 
 		if prefix.startswith('provider_references') and not second_pass:
+			# "Have we entered the provider references bloc
+			# on our first pass?
+
 			provider_references.event(event, value)
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
-				# log.debug('entered provider references')
-
 				unprocessed_reference = provider_references.value.pop()
 
 				if unprocessed_reference.get('location'):
+					log.debug('wrote remote')
 					unfetched_provider_references.append(unprocessed_reference)
 					continue
 
@@ -585,7 +587,9 @@ def _flattener(
 				if provider_reference:
 					provider_references.value.insert(1, provider_reference)
 
-		elif getattr(provider_references, 'value', None) and not provider_reference_map:
+		elif 'value' in dir(provider_references) and provider_reference_map is None:
+			# "Have we visited the provider references section
+			# but not built the map yet?"
 
 			provider_reference_map = _make_provider_reference_map(
 				provider_references = provider_references.value,
@@ -596,18 +600,14 @@ def _flattener(
 			# We don't need this anymore
 			provider_references.value.clear()
 
-		elif (
-			prefix.startswith('in_network')
-			and (provider_reference_map or second_pass)
-		):
-			finished = True
+		elif prefix.startswith('in_network') and (provider_reference_map or second_pass):
 			in_network_items.event(event, value)
+			finished = True
 
 			# Drop down to the parser to get some
 			# extra control over the objects we build.
-			# This line can be commented out! but it's faster
-			# with it in.
-			if hasattr(in_network_items, 'value') and in_network_items.value:
+			# This line can be commented out! but it's faster with it in
+			if getattr(in_network_items, 'value', None):
 				_point_optimization(in_network_items, parser, code_filter)
 
 			if (prefix, event) == ('in_network.item', 'end_map'):
@@ -621,10 +621,11 @@ def _flattener(
 				)
 
 				if in_network_item:
+					_write_in_network_item(in_network_item, filename_hash, out_dir)
+
 					code_type = in_network_item['billing_code_type']
 					code = in_network_item['billing_code']
-					log.debug(f'Writing {code_type} {code}')
-					_write_in_network_item(in_network_item, filename_hash, out_dir)
+					log.debug(f'Wrote {code_type} {code}')
 
 		else:
 			plan.event(event, value)
