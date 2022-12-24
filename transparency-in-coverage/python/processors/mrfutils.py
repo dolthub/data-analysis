@@ -570,6 +570,8 @@ class MRFFlattener:
 						provider_references.value
 					)
 
+					# we don't need this anymore, so let
+					# the garbage collector take care of it
 					provider_references.value.clear
 
 
@@ -610,6 +612,37 @@ class MRFFlattener:
 			if prefix.startswith('in_network'):
 
 				in_network_items.event(event, value)
+
+				# poll to check for billing code
+				# optimization #1
+				if hasattr(in_network_items, 'value') and in_network_items.value:
+					code_type = in_network_items.value[-1].get('billing_code_type')
+					code = in_network_items.value[-1].get('billing_code')
+
+					if code and code_type and self.code_filter:
+						if (code_type, str(code)) not in self.code_filter:
+							print(f'skipping: {code_type} {code}')
+							while True:
+								prefix, event, _ = next(parser)
+								if (prefix, event) == ('in_network.item', 'end_map'):
+									break
+							in_network_items.value.pop()
+							in_network_items.containers.pop()
+							continue
+
+					# optimization #2
+					# if the code is the wrong arrangement, skip it
+					arrangement = in_network_items.value[-1].get('negotiation_arrangement')
+					if arrangement:
+						if arrangement != 'ffs':
+							print(f'skipping: {arrangement}')
+							while True:
+								prefix, event, _ = next(parser)
+								if (prefix, event) == ('in_network.item', 'end_map'):
+									break
+							in_network_items.value.pop()
+							in_network_items.containers.pop()
+							continue
 
 				if (prefix, event) == ('in_network.item', 'end_map'):
 
