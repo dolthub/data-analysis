@@ -27,8 +27,10 @@ if args.npis:
 else:
     npi_filter = None
 
-flatten(loc = url,
-        url = url,
-        npi_filter = npi_filter,
-        code_filter = code_filter,
-        out_dir = out_dir)
+flatten(
+    loc = url,
+    url = url,
+    npi_filter = npi_filter,
+    code_filter = code_filter,
+    out_dir = out_dir
+)

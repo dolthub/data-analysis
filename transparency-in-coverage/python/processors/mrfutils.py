@@ -552,7 +552,7 @@ def _flattener(
 	filename_hash,
 	out_dir,
 	provider_reference_map: dict = None,
-	second_pass: bool = False,
+	second_pass = False,
 ) -> tuple:
 
 	finished = False
@@ -627,7 +627,7 @@ def _flattener(
 					code = in_network_item['billing_code']
 					log.debug(f'Wrote {code_type} {code}')
 
-		else:
+		elif not second_pass:
 			plan.event(event, value)
 
 	if not plan.value.get('reporting_entity_name'):
@@ -658,7 +658,7 @@ def flatten(
 
 	finished, provider_reference_map, plan = result
 	if not finished:
-		log.debug('Opening file again for second scan')
+		log.debug('Opening file again for second pass')
 		with MRFOpen(loc) as f:
 			_flattener(
 				file= f,
