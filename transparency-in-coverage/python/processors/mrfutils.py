@@ -569,8 +569,8 @@ def _flattener(
 		if prefix.startswith('provider_references') and first_pass:
 			# "Have we entered the provider references bloc
 			# on our first pass?
-
 			provider_references.event(event, value)
+
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
 				unprocessed_reference = provider_references.value.pop()
@@ -598,7 +598,6 @@ def _flattener(
 			# We want to enter this block in two cases:
 			# either we have a provider references map
 			# or we don't and it's our second read
-
 			in_network_items.event(event, value)
 			finished = True
 
@@ -624,13 +623,10 @@ def _flattener(
 					code = in_network_item['billing_code']
 					log.debug(f'Wrote {code_type} {code}')
 
-		elif first_pass and not prefix.startswith('provider_references') or prefix.startswith('in_network'):
+		elif not prefix.startswith('provider_references') or prefix.startswith('in_network'):
 			plan.event(event, value)
 
-	if first_pass:
-		return finished, provider_reference_map, plan.value
-	else:
-		return finished, None, None
+	return finished, provider_reference_map, plan.value
 
 
 def flatten(
