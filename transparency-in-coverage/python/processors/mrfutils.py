@@ -14,18 +14,20 @@ references that it got from the first pass.
 
 The plan data is only written after the flattener has successfully run.
 """
-import os
+import asyncio
 import csv
+import gzip
 import hashlib
 import json
-import ijson
-import asyncio
-import aiohttp
-import requests
-import gzip
 import logging
-from urllib.parse import urlparse
+import os
 from pathlib import Path
+from urllib.parse import urlparse
+
+import aiohttp
+import ijson
+import requests
+
 from schema import SCHEMA
 
 # You can remove this if necessary, but be warned
