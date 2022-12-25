@@ -393,8 +393,7 @@ async def _fetch_remote_provider_references(
 			tasks.append(task)
 
 		fetched_remote_provider_references = await asyncio.gather(*tasks)
-		fetched_remote_provider_references = list(
-			filter(lambda item: item, fetched_remote_provider_references))
+		fetched_remote_provider_references = [item for item in fetched_remote_provider_references if item]
 
 		return fetched_remote_provider_references
 
@@ -407,6 +406,7 @@ def _process_provider_group(
 
 	if npi_filter:
 		npi = [n for n in npi if n in npi_filter]
+
 	if not npi:
 		return
 
@@ -420,21 +420,19 @@ def _process_provider_reference(
 	item: dict,
 	npi_filter: set,
 ):
-	result = {
-		'provider_group_id' : item['provider_group_id'],
-		'provider_groups'   : []
-	}
-
-	if item.get('location'):
-		return item
-
+	processed_provider_groups = []
 	for provider_group in item['provider_groups']:
 		provider_group = _process_provider_group(provider_group, npi_filter)
 		if provider_group:
-			result['provider_groups'].append(provider_group)
+			processed_provider_groups.append(provider_group)
 
-	if not result['provider_groups']:
+	if not processed_provider_groups:
 		return
+
+	result = {
+		'provider_group_id' : item['provider_group_id'],
+		'provider_groups'   : processed_provider_groups
+	}
 
 	return result
 
@@ -559,7 +557,9 @@ def _point_optimization(in_network_items, parser, code_filter):
 		in_network_items.containers.pop()
 		return
 
-
+# TODO this function should be simplified, but I'm not sure how!
+# It should also be renamed. This is the most confusing part
+# of the program, I feel
 def _flattener(
 	file,
 	npi_filter: set,
@@ -570,7 +570,7 @@ def _flattener(
 	first_pass = True,
 ) -> tuple:
 
-	finished = False
+	succeeded = False
 	unfetched_provider_references = []
 
 	parser = ijson.parse(file, use_float = True)
@@ -585,7 +585,6 @@ def _flattener(
 			# "Have we entered the provider references bloc
 			# on our first pass?"
 			provider_references.event(event, value)
-
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
 				unprocessed_reference = provider_references.value.pop()
@@ -614,7 +613,7 @@ def _flattener(
 			# either we have a provider references map
 			# or we don't and it's our second read
 			in_network_items.event(event, value)
-			finished = True
+			succeeded = True
 
 			# Drop down to the parser to get some
 			# extra control over the objects we build.
@@ -639,10 +638,10 @@ def _flattener(
 					code = in_network_item['billing_code']
 					log.debug(f'Wrote {code_type} {code}')
 
-		elif not prefix.startswith('provider_references') or prefix.startswith('in_network'):
+		elif not prefix.startswith(('provider_references', 'in_network')):
 			plan.event(event, value)
 
-	return finished, provider_reference_map, plan.value
+	return succeeded, provider_reference_map, plan.value
 
 
 def flatten(
@@ -665,12 +664,12 @@ def flatten(
 			out_dir = out_dir,
 		)
 
-	finished, provider_reference_map, plan = result
+	succeeded, provider_reference_map, plan = result
 
 	if not plan.get('reporting_entity_name'):
 		raise InvalidMRF
 
-	if not finished:
+	if not succeeded:
 		log.debug('Opening file again for second pass')
 		with JSONOpen(loc) as f:
 			_flattener(
