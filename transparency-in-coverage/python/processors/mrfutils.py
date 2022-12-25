@@ -531,13 +531,12 @@ def _ffwd(parser, to_prefix, to_event):
 		if (prefix, event) == (to_prefix, to_event):
 			break
 
+
 def _local_optimization(in_network_items, parser, code_filter):
 
 	item = in_network_items.value[-1]
 	code_type = item.get('billing_code_type')
 	code = item.get('billing_code')
-	arrangement = item.get('negotiation_arrangement')
-
 	# This stops us from having to build in-network
 	# objects (which are large) when their billing codes
 	# don't fit the filter
@@ -549,6 +548,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 			in_network_items.containers.pop()
 			return
 
+	arrangement = item.get('negotiation_arrangement')
 	# If the code has the wrong arrangement, skip
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
@@ -556,6 +556,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 		in_network_items.value.pop()
 		in_network_items.containers.pop()
 		return
+
 
 # TODO this function should be simplified, but I'm not sure how!
 # It should also be renamed. This is the most confusing part
@@ -626,7 +627,7 @@ def _flattener(
 
 				unprocessed_item = in_network_items.value.pop()
 				in_network_item = _process_in_network_item(
-					item = unprocessed_item,
+					in_network_item = unprocessed_item,
 					npi_filter = npi_filter,
 					# code_filter = code_filter, # these are filtered by _point_optimization
 					provider_reference_map = provider_reference_map)
