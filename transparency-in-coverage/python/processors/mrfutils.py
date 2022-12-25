@@ -14,18 +14,20 @@ references that it got from the first pass.
 
 The plan data is only written after the flattener has successfully run.
 """
-import os
+import asyncio
 import csv
+import gzip
 import hashlib
 import json
-import ijson
-import asyncio
-import aiohttp
-import requests
-import gzip
 import logging
-from urllib.parse import urlparse
+import os
 from pathlib import Path
+from urllib.parse import urlparse
+
+import aiohttp
+import ijson
+import requests
+
 from schema import SCHEMA
 
 # You can remove this if necessary, but be warned
@@ -266,7 +268,7 @@ def _make_price_row(
 
 def _make_price_rows(
 	prices: list[dict],
-    code_hash,
+	code_hash,
 	filename_hash,
 ):
 
@@ -278,9 +280,7 @@ def _make_price_rows(
 	return price_rows
 
 
-def _make_provider_group_row(
-	provider_group: dict
-):
+def _make_provider_group_row(provider_group: dict):
 
 	provider_group_row = {
 		'npi_numbers': json.dumps(sorted(provider_group['npi'])),
@@ -293,9 +293,7 @@ def _make_provider_group_row(
 	return provider_group_row
 
 
-def _make_provider_group_rows(
-	provider_groups
-):
+def _make_provider_group_rows(provider_groups: list[dict]):
 
 	provider_group_rows = []
 	for provider_group in provider_groups:
@@ -568,7 +566,7 @@ def _flattener(
 
 		if prefix.startswith('provider_references') and first_pass:
 			# "Have we entered the provider references bloc
-			# on our first pass?
+			# on our first pass?"
 			provider_references.event(event, value)
 
 
