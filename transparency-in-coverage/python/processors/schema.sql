@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS plans (
     reporting_entity_type VARCHAR(200),
     plan_name VARCHAR(200),
     plan_id VARCHAR(10),
-    plan_id_type ENUM("ein", "hios") COLLATE utf8_general_ci,
-    plan_market_type ENUM("group", "individual") COLLATE utf8_general_ci,
+    plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
+    plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
     last_updated_on VARCHAR(20),
     version VARCHAR(20),
     PRIMARY KEY (plan_hash)
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS codes (
 --    negotiation_arrangement ENUM("ffs", "capitation", "bundle") COLLATE utf8_general_ci,
     billing_code_type_version VARCHAR(20),
     billing_code VARCHAR(14),
-    billing_code_type VARCHAR(8),
+    billing_code_type ENUM("CPT","HCPCS","ICD","MS-DRG","R-DRG","S-DRG","APS-DRG","AP-DRG","APR-DRG","APC","NDC","HIPPS","LOCAL","EAPG","CDT","RC","CSTM-ALL") utf8mb4_general_ci,
     PRIMARY KEY (code_hash)
 );
 
@@ -39,8 +39,8 @@ CREATE TABLE IF NOT EXISTS prices (
     filename_hash BIGINT UNSIGNED NOT NULL,
     code_hash BIGINT UNSIGNED NOT NULL,
     price_hash BIGINT UNSIGNED NOT NULL,
-    billing_class ENUM("professional", "institutional") COLLATE utf8_general_ci,
-    negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8_general_ci,
+    billing_class ENUM("professional", "institutional") COLLATE utf8mb4_general_ci,
+    negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8mb4_general_ci,
     service_code JSON,
     expiration_date VARCHAR(20),
     additional_information TEXT,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS prices (
 
 CREATE TABLE IF NOT EXISTS provider_groups (
     provider_group_hash BIGINT UNSIGNED,
-    tin_type ENUM("ein", "npi") COLLATE utf8_general_ci,
+    tin_type ENUM("ein", "npi") COLLATE utf8mb4_general_ci,
     tin_value VARCHAR(11),
     npi_numbers JSON,
     PRIMARY KEY (provider_group_hash)

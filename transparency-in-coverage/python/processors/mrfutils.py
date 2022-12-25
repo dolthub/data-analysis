@@ -43,7 +43,7 @@ class InvalidMRF(Exception):
 	pass
 
 
-class MRFOpen:
+class JSONOpen:
 	"""
 	Context manager for opening JSON(.gz) MRFs.
 	Handles local and remote gzipped and unzipped
@@ -640,7 +640,7 @@ def flatten(
 	make_dir(out_dir)
 	filename_hash = _filename_hash(loc)
 
-	with MRFOpen(loc) as f:
+	with JSONOpen(loc) as f:
 		result = _flattener(
 			file= f,
 			npi_filter = npi_filter,
@@ -656,7 +656,7 @@ def flatten(
 
 	if not finished:
 		log.debug('Opening file again for second pass')
-		with MRFOpen(loc) as f:
+		with JSONOpen(loc) as f:
 			_flattener(
 				file= f,
 				npi_filter = npi_filter,

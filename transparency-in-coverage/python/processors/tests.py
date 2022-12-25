@@ -1,7 +1,7 @@
 import unittest
 import aiohttp
 from mrfutils import (
-	MRFOpen,
+	JSONOpen,
 	MRFProcessor,
 	_fetch_remote_provider_reference
 )
@@ -34,7 +34,7 @@ class TestMRFProcessor(unittest.TestCase):
 	loc = 'test/test.json'
 
 	def test_provider_references_map(self):
-		with MRFOpen(self.loc) as f:
+		with JSONOpen(self.loc) as f:
 			processor = MRFProcessor(f)
 			provider_reference_map = processor.prepare_provider_references(self.npi_filter)
 
@@ -48,7 +48,7 @@ class TestMRFProcessor(unittest.TestCase):
 		self.assertTrue(provider_reference_map[2][0]['npi'] == ['1111111111'])
 
 	def test_npis(self):
-		with MRFOpen(self.loc) as f:
+		with JSONOpen(self.loc) as f:
 			processor = MRFProcessor(f)
 			provider_reference_map = processor.prepare_provider_references(self.npi_filter)
 			processor.jump_to_in_network()

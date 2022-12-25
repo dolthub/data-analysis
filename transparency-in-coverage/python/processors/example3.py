@@ -13,7 +13,7 @@ import time
 import ijson
 from tqdm import tqdm
 
-from mrfutils import InvalidMRF, MRFOpen, MRFProcessor
+from mrfutils import InvalidMRF, JSONOpen, MRFProcessor
 
 
 logging.basicConfig()
@@ -44,7 +44,7 @@ def mrfs_from_idx(index_loc):
     A generator that yields in_network URL's for use in your code
     :param index_loc:   A local/remote path to MRF resource
     """
-    with MRFOpen(index_loc) as f:
+    with JSONOpen(index_loc) as f:
         for prefix, event, value in ijson.parse(f, use_float=True):
             if (
                 prefix.endswith('location')

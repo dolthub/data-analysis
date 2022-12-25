@@ -1,6 +1,6 @@
 import ijson
 import logging
-from mrfutils import MRFOpen
+from mrfutils import JSONOpen
 
 log = logging.getLogger('mrfutils')
 log.setLevel(logging.DEBUG)
@@ -10,7 +10,7 @@ def gen_in_network_links(index_loc,):
     Gets in-network files from index.json files
     :param index.json URL:
     """
-    with MRFOpen(index_loc) as f:
+    with JSONOpen(index_loc) as f:
         count = 0
         parser = ijson.parse(f, use_float=True)
         for prefix, event, value in parser:
