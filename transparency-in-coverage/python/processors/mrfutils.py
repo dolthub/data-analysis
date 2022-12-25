@@ -14,20 +14,18 @@ references that it got from the first pass.
 
 The plan data is only written after the flattener has successfully run.
 """
-import asyncio
+import os
 import csv
-import gzip
 import hashlib
 import json
-import logging
-import os
-from pathlib import Path
-from urllib.parse import urlparse
-
-import aiohttp
 import ijson
+import asyncio
+import aiohttp
 import requests
-
+import gzip
+import logging
+from urllib.parse import urlparse
+from pathlib import Path
 from schema import SCHEMA
 
 # You can remove this if necessary, but be warned
@@ -401,6 +399,23 @@ async def _fetch_remote_provider_references(
 		return fetched_remote_provider_references
 
 
+def _process_provider_group(
+	provider_group: dict,
+	npi_filter: set,
+):
+	npi = [str(n) for n in provider_group['npi']]
+
+	if npi_filter:
+		npi = [n for n in npi if n in npi_filter]
+	if not npi:
+		return
+
+	tin = provider_group['tin']
+
+	provider_group = {'npi': npi, 'tin': tin}
+	return provider_group
+
+
 def _process_provider_reference(
 	item: dict,
 	npi_filter: set,
@@ -414,14 +429,9 @@ def _process_provider_reference(
 		return item
 
 	for provider_group in item['provider_groups']:
-		npi = [str(n) for n in provider_group['npi']]
-		if npi_filter:
-			npi = [n for n in npi if n in npi_filter]
-		if not npi:
-			continue
-		tin = provider_group['tin']
-		provider_group = {'npi': npi, 'tin': tin}
-		result['provider_groups'].append(provider_group)
+		provider_group = _process_provider_group(provider_group, npi_filter)
+		if provider_group:
+			result['provider_groups'].append(provider_group)
 
 	if not result['provider_groups']:
 		return
@@ -459,6 +469,7 @@ def _make_provider_reference_map(
 def _process_rate(
 	item: dict,
 	provider_reference_map: dict,
+	npi_filter,
 ):
 
 	provider_groups = item.get('provider_groups', [])
@@ -470,11 +481,16 @@ def _process_rate(
 			if addl_provider_groups:
 				provider_groups.extend(addl_provider_groups)
 
-	if not provider_groups:
+	processed_provider_groups = []
+	for provider_group in provider_groups:
+		processed_provider_group = _process_provider_group(provider_group, npi_filter)
+		processed_provider_groups.append(processed_provider_group)
+
+	if not processed_provider_groups:
 		return
 
 	item.pop('provider_references', None)
-	item['provider_groups'] = provider_groups
+	item['provider_groups'] = processed_provider_groups
 
 	return item
 
@@ -482,6 +498,7 @@ def _process_rate(
 def _process_in_network_item(
 	item: dict,
 	provider_reference_map: dict,
+	npi_filter: set,
 	# code_filter = None
 ):
 
@@ -499,7 +516,7 @@ def _process_in_network_item(
 
 	rates = []
 	for unprocessed_rate in item['negotiated_rates']:
-		rate = _process_rate(unprocessed_rate, provider_reference_map)
+		rate = _process_rate(unprocessed_rate, provider_reference_map, npi_filter)
 		if rate:
 			rates.append(rate)
 
@@ -611,6 +628,7 @@ def _flattener(
 				unprocessed_item = in_network_items.value.pop()
 				in_network_item = _process_in_network_item(
 					item = unprocessed_item,
+					npi_filter = npi_filter,
 					# code_filter = code_filter, # these are filtered by _point_optimization
 					provider_reference_map = provider_reference_map)
 
