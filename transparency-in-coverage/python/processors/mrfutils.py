@@ -563,7 +563,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 # TODO this function should be simplified, but I'm not sure how!
 # It should also be renamed. This is the most confusing part
 # of the program, I feel
-def _flattener(
+def _flatten_and_write_in_network_items(
 	file,
 	npi_filter: set,
 	code_filter: set,
@@ -577,6 +577,7 @@ def _flattener(
 	unfetched_provider_references = []
 
 	parser = ijson.parse(file, use_float = True)
+
 	plan = ijson.ObjectBuilder()
 	provider_references = ijson.ObjectBuilder()
 	in_network_items = ijson.ObjectBuilder()
@@ -659,7 +660,7 @@ def flatten(
 	filename_hash = _filename_hash(loc)
 
 	with JSONOpen(loc) as f:
-		result = _flattener(
+		result = _flatten_and_write_in_network_items(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
@@ -675,7 +676,7 @@ def flatten(
 	if not succeeded:
 		log.debug('Opening file again for second pass')
 		with JSONOpen(loc) as f:
-			_flattener(
+			_flatten_and_write_in_network_items(
 				file= f,
 				npi_filter = npi_filter,
 				code_filter = code_filter,
