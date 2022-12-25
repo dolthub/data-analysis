@@ -465,42 +465,41 @@ def _make_provider_reference_map(
 
 
 def _process_rate(
-	item: dict,
+	rate: dict,
 	provider_reference_map: dict,
 	npi_filter,
 ):
 
-	provider_groups = item.get('provider_groups', [])
-
-	if provider_reference_map:
-		provider_references = item.get('provider_references', [])
-		for provider_group_id in provider_references:
+	provider_groups = rate.get('provider_groups', [])
+	if provider_reference_map and rate.get('provider_references'):
+		for provider_group_id in rate['provider_references']:
 			addl_provider_groups = provider_reference_map.get(provider_group_id)
 			if addl_provider_groups:
 				provider_groups.extend(addl_provider_groups)
+		rate.pop('provider_references')
 
 	processed_provider_groups = []
 	for provider_group in provider_groups:
 		processed_provider_group = _process_provider_group(provider_group, npi_filter)
-		processed_provider_groups.append(processed_provider_group)
+		if processed_provider_group:
+			processed_provider_groups.append(processed_provider_group)
 
 	if not processed_provider_groups:
 		return
 
-	item.pop('provider_references', None)
-	item['provider_groups'] = processed_provider_groups
+	rate['provider_groups'] = processed_provider_groups
 
-	return item
+	return rate
 
 
 def _process_in_network_item(
-	item: dict,
+	in_network_item: dict,
 	provider_reference_map: dict,
 	npi_filter: set,
 	# code_filter = None
 ):
 
-	# the point optimization takes care of this
+	# the local optimization takes care of this
 	# if code_filter:
 	# 	billing_code_type = item['billing_code_type']
 	# 	billing_code = str(item['billing_code'])
@@ -513,7 +512,7 @@ def _process_in_network_item(
 	# 	return
 
 	rates = []
-	for unprocessed_rate in item['negotiated_rates']:
+	for unprocessed_rate in in_network_item['negotiated_rates']:
 		rate = _process_rate(unprocessed_rate, provider_reference_map, npi_filter)
 		if rate:
 			rates.append(rate)
@@ -521,11 +520,18 @@ def _process_in_network_item(
 	if not rates:
 		return
 
-	item['negotiated_rates'] = rates
-	return item
+	in_network_item['negotiated_rates'] = rates
+
+	return in_network_item
 
 
-def _point_optimization(in_network_items, parser, code_filter):
+def _ffwd(parser, to_prefix, to_event):
+	while True:
+		prefix, event, _ = next(parser)
+		if (prefix, event) == (to_prefix, to_event):
+			break
+
+def _local_optimization(in_network_items, parser, code_filter):
 
 	item = in_network_items.value[-1]
 	code_type = item.get('billing_code_type')
@@ -538,10 +544,7 @@ def _point_optimization(in_network_items, parser, code_filter):
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
-			while True:
-				prefix, event, _ = next(parser)
-				if (prefix, event) == ('in_network.item', 'end_map'):
-					break
+			_ffwd(parser, 'in_network.item', 'end_map')
 			in_network_items.value.pop()
 			in_network_items.containers.pop()
 			return
@@ -549,10 +552,7 @@ def _point_optimization(in_network_items, parser, code_filter):
 	# If the code has the wrong arrangement, skip
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-		while True:
-			prefix, event, _ = next(parser)
-			if (prefix, event) == ('in_network.item', 'end_map'):
-				break
+		_ffwd(parser, 'in_network.item', 'end_map')
 		in_network_items.value.pop()
 		in_network_items.containers.pop()
 		return
@@ -620,7 +620,7 @@ def _flattener(
 			# This line can be commented out! but it's faster with it in
 			if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
 				# We have to have items for this to work
-				_point_optimization(in_network_items, parser, code_filter)
+				_local_optimization(in_network_items, parser, code_filter)
 
 			if (prefix, event) == ('in_network.item', 'end_map'):
 
