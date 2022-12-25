@@ -237,7 +237,6 @@ def _make_price_row(
 		'negotiated_type',
 		'expiration_date',
 		'negotiated_rate',
-		'service_code',
 		'additional_information',
 	]
 
@@ -250,6 +249,7 @@ def _make_price_row(
 
 	for key in optional_json_keys:
 		if price.get(key):
+			price.get(key)
 			sorted_value = sorted(price[key])
 			price_row[key] = json.dumps(sorted_value)
 
