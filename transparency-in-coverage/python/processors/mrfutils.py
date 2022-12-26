@@ -645,7 +645,7 @@ def _filter_and_write_in_network_items(
 			return
 
 
-def _filter_and_flatten_file(
+def _filter_and_write_file(
 	file,
 	npi_filter: set,
 	code_filter: set,
@@ -706,7 +706,7 @@ def flatten(
 	url = url if url else loc
 
 	with JSONOpen(loc) as f:
-		result = _filter_and_flatten_file(
+		result = _filter_and_write_file(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
@@ -723,7 +723,7 @@ def flatten(
 	log.debug('Opening file again for second pass')
 
 	with JSONOpen(loc) as f:
-		_filter_and_flatten_file(
+		_filter_and_write_file(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
