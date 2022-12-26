@@ -351,6 +351,23 @@ def _write_in_network_item(
 	log.debug(f'Wrote {code_type} {code}')
 
 
+def _write_plan(
+	plan: dict,
+	loc,
+	url,
+	out_dir
+):
+
+	file_row = _make_file_row(loc, url)
+	_write_table(file_row, 'files', out_dir)
+
+	plan_row = _make_plan_row(plan)
+	_write_table(plan_row, 'plans', out_dir)
+
+	plan_file_row = _make_plan_file_row(plan_row, file_row)
+	_write_table(plan_file_row, 'plans_files', out_dir)
+
+
 async def _fetch_remote_provider_reference(
 	session,
 	provider_group_id,
@@ -443,7 +460,7 @@ def _process_provider_reference(
 	return result
 
 
-def _make_provider_reference_map(
+def _combine_local_remote_provider_references(
 	provider_references: list[dict],
 	unfetched_provider_references: list[dict],
 	npi_filter: set,
@@ -461,13 +478,7 @@ def _make_provider_reference_map(
 		fetched_provider_references
 	)
 
-	provider_reference_map = {
-		p['provider_group_id']: p['provider_groups']
-		for p in provider_references
-		if p is not None
-	}
-
-	return provider_reference_map
+	return provider_references
 
 
 def _process_rate(
@@ -563,86 +574,120 @@ def _local_optimization(in_network_items, parser, code_filter):
 		return
 
 
-# TODO this function should be simplified, but I'm not sure how!
-# It should also be renamed. This is the most confusing part
-# of the program, I feel
-def _flatten_and_write_processed_in_network_items(
+def _make_provider_reference_map(parser, npi_filter):
+
+	unfetched_provider_references = []
+	provider_references = ijson.ObjectBuilder()
+	provider_references.event('start_array', None)
+	for prefix, event, value in parser:
+		provider_references.event(event, value)
+		if (prefix, event) == ('provider_references.item', 'end_map'):
+			unprocessed_reference = provider_references.value.pop()
+			if unprocessed_reference.get('location'):
+				unfetched_provider_references.append(unprocessed_reference)
+				continue
+
+			provider_reference = _process_provider_reference(
+				item = unprocessed_reference,
+				npi_filter = npi_filter)
+
+			if provider_reference:
+				provider_references.value.insert(1, provider_reference)
+
+		elif (prefix, event) == ('provider_references', 'end_array'):
+			combined_provider_references = _combine_local_remote_provider_references(
+				provider_references = provider_references.value,
+				unfetched_provider_references = unfetched_provider_references,
+				npi_filter = npi_filter,)
+
+			provider_reference_map = {
+				p['provider_group_id']: p['provider_groups']
+				for p in combined_provider_references
+				if p is not None
+			}
+
+			return provider_reference_map
+
+
+def _make_and_write_in_network_items(
+	parser,
+	provider_reference_map,
+	npi_filter,
+	code_filter,
+	filename_hash,
+	out_dir,
+):
+
+	in_network_items = ijson.ObjectBuilder()
+	in_network_items.event('start_array', None)
+	for prefix, event, value in parser:
+		in_network_items.event(event, value)
+
+		# This line can be commented out! but it's faster with it in
+		if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
+			_local_optimization(in_network_items, parser, code_filter)
+
+		if (prefix, event) == ('in_network.item', 'end_map'):
+
+			unprocessed_in_network_item = in_network_items.value.pop()
+			processed_in_network_item = _process_in_network_item(
+				in_network_item = unprocessed_in_network_item,
+				npi_filter = npi_filter,
+				provider_reference_map = provider_reference_map)
+
+			if processed_in_network_item:
+				_write_in_network_item(processed_in_network_item, filename_hash, out_dir)
+
+		elif (prefix, event) == ('in_network', 'end_array'):
+			return
+
+
+def _filter_and_flatten_file(
 	file,
 	npi_filter: set,
 	code_filter: set,
 	filename_hash,
+	loc,
+	url,
 	out_dir,
 	provider_reference_map: dict = None,
 	first_pass = True,
 ) -> tuple:
 
-	succeeded = False
-	unfetched_provider_references = []
-
 	parser = ijson.parse(file, use_float = True)
-
 	plan = ijson.ObjectBuilder()
-	provider_references = ijson.ObjectBuilder()
-	in_network_items = ijson.ObjectBuilder()
+	wrote_in_network_items = False
 
 	for prefix, event, value in parser:
 
 		if prefix.startswith('provider_references') and first_pass:
-			provider_references.event(event, value)
+			provider_reference_map = _make_provider_reference_map(
+				parser = parser,
+				npi_filter = npi_filter,)
 
-			if (prefix, event) == ('provider_references.item', 'end_map'):
-				unprocessed_reference = provider_references.value.pop()
-				if unprocessed_reference.get('location'):
-					unfetched_provider_references.append(unprocessed_reference)
-					continue
-
-				provider_reference = _process_provider_reference(
-					item = unprocessed_reference,
-					npi_filter = npi_filter)
-
-				if provider_reference:
-					provider_references.value.insert(1, provider_reference)
-
-			elif (prefix, event) == ('provider_references', 'end_array'):
-				provider_reference_map = _make_provider_reference_map(
-					provider_references = provider_references.value,
-					unfetched_provider_references = unfetched_provider_references,
-					npi_filter = npi_filter,)
-
-				# We don't need this anymore
-				provider_references.value.clear()
-
+		# We want to enter this block in two cases: either
+		# 1. we have a provider references map or
+		# 2. we don't but it's our second pass over the file
 		elif prefix.startswith('in_network') and (provider_reference_map or not first_pass):
-			"""
-			We want to enter this block in two cases: either 
-			1. we have a provider references map or
-			2. we don't and it's our second pass over the file
-			"""
-			in_network_items.event(event, value)
-			succeeded = True
-
-			# This line can be commented out! but it's faster with it in
-			if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
-				_local_optimization(in_network_items, parser, code_filter)
-
-			if (prefix, event) == ('in_network.item', 'end_map'):
-
-				unprocessed_in_network_item = in_network_items.value.pop()
-				processed_in_network_item = _process_in_network_item(
-					in_network_item = unprocessed_in_network_item,
-					npi_filter = npi_filter,
-					provider_reference_map = provider_reference_map)
-
-				if processed_in_network_item:
-					_write_in_network_item(processed_in_network_item, filename_hash, out_dir)
+			_make_and_write_in_network_items(
+				parser = parser,
+				provider_reference_map = provider_reference_map,
+				npi_filter = npi_filter,
+				code_filter = code_filter,
+				filename_hash = filename_hash,
+				out_dir = out_dir,)
+			wrote_in_network_items = True
 
 		elif not prefix.startswith(('provider_references', 'in_network')):
 			plan.event(event, value)
 
-	# return plan information as a dictionary
-	plan = plan.value
+	if not plan.value.get('reporting_entity_name'):
+		raise InvalidMRF
 
-	return succeeded, provider_reference_map, plan
+	if wrote_in_network_items:
+		_write_plan(plan.value, loc, url, out_dir)
+
+	return wrote_in_network_items, provider_reference_map
 
 
 def flatten(
@@ -655,42 +700,36 @@ def flatten(
 
 	make_dir(out_dir)
 	filename_hash = _filename_hash(loc)
+	url = url if url else loc
 
 	with JSONOpen(loc) as f:
-		result = _flatten_and_write_processed_in_network_items(
+		result = _filter_and_flatten_file(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
 			filename_hash = filename_hash,
+			loc = loc,
+			url = url,
+			out_dir = out_dir,)
+
+	wrote_in_network_items, provider_reference_map = result
+
+	if wrote_in_network_items:
+		return
+
+	log.debug('Opening file again for second pass')
+
+	with JSONOpen(loc) as f:
+		_filter_and_flatten_file(
+			file= f,
+			npi_filter = npi_filter,
+			code_filter = code_filter,
+			filename_hash = filename_hash,
+			loc = loc,
+			url = url,
 			out_dir = out_dir,
-		)
+			provider_reference_map = provider_reference_map,
+			first_pass = False,)
 
-	succeeded, provider_reference_map, plan = result
 
-	if not plan.get('reporting_entity_name'):
-		raise InvalidMRF
 
-	if not succeeded:
-		log.debug('Opening file again for second pass')
-		with JSONOpen(loc) as f:
-			_flatten_and_write_processed_in_network_items(
-				file= f,
-				npi_filter = npi_filter,
-				code_filter = code_filter,
-				filename_hash = filename_hash,
-				out_dir = out_dir,
-				provider_reference_map = provider_reference_map,
-				first_pass = False,
-			)
-
-	if not url:
-		url = loc
-
-	file_row = _make_file_row(loc, url)
-	_write_table(file_row, 'files', out_dir)
-
-	plan_row = _make_plan_row(plan)
-	_write_table(plan_row, 'plans', out_dir)
-
-	plan_file_row = _make_plan_file_row(plan_row, file_row)
-	_write_table(plan_file_row, 'plans_files', out_dir)

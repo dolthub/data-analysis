@@ -29,4 +29,4 @@ for url in tqdm(urls):
                 code_filter = code_filter,
                 out_dir = 'example_1')
         except InvalidMRF:
-            pass
+            log.warning('Not a valid MRF.')
