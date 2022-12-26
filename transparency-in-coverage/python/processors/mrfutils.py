@@ -21,6 +21,8 @@ import hashlib
 import json
 import logging
 import os
+import functools
+from typing import Generator
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -61,7 +63,7 @@ class JSONOpen:
 		self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
 		if self.suffix not in ('.json.gz', '.json'):
-			raise InvalidMRF(f'Not JSON: {self.loc}')
+			raise InvalidMRF(f'Suffix not JSON: {self.loc}')
 
 		self.is_remote = parsed_url.scheme in ('http', 'https')
 
@@ -351,6 +353,19 @@ def _write_in_network_item(
 	log.debug(f'Wrote {code_type} {code}')
 
 
+def _write_in_network_items(
+	in_network_items: Generator[dict, None, None],
+	filename_hash,
+	out_dir,
+):
+
+	for in_network_item in in_network_items:
+		_write_in_network_item(
+			in_network_item,
+			filename_hash,
+			out_dir)
+
+
 def _write_plan(
 	plan: dict,
 	loc,
@@ -373,7 +388,7 @@ async def _fetch_remote_provider_reference(
 	provider_group_id,
 	provider_reference_loc: str,
 	npi_filter: set,
-):
+) -> dict:
 	async with session.get(provider_reference_loc) as response:
 
 		log.info(f'Opened remote provider reference url:{provider_reference_loc}')
@@ -394,7 +409,7 @@ async def _fetch_remote_provider_reference(
 async def _fetch_remote_provider_references(
 	unfetched_provider_references: list[dict],
 	npi_filter: set,
-):
+) -> list[dict]:
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
 
@@ -415,16 +430,16 @@ async def _fetch_remote_provider_references(
 
 			tasks.append(task)
 
-		fetched_remote_provider_references = await asyncio.gather(*tasks)
-		fetched_remote_provider_references = [item for item in fetched_remote_provider_references if item]
+		fetched_references = await asyncio.gather(*tasks)
+		fetched_references = [item for item in fetched_references if item]
 
-		return fetched_remote_provider_references
+		return fetched_references
 
 
 def _process_provider_group(
 	provider_group: dict,
 	npi_filter: set,
-):
+) -> dict:
 	npi = [str(n) for n in provider_group['npi']]
 
 	if npi_filter:
@@ -442,7 +457,7 @@ def _process_provider_group(
 def _process_provider_reference(
 	item: dict,
 	npi_filter: set,
-):
+) -> dict:
 	processed_provider_groups = []
 	for provider_group in item['provider_groups']:
 		provider_group = _process_provider_group(provider_group, npi_filter)
@@ -464,7 +479,7 @@ def _combine_local_remote_provider_references(
 	provider_references: list[dict],
 	unfetched_provider_references: list[dict],
 	npi_filter: set,
-):
+) -> list[dict]:
 
 	loop = asyncio.get_event_loop()
 	fetched_provider_references = loop.run_until_complete(
@@ -485,7 +500,7 @@ def _process_rate(
 	rate: dict,
 	provider_reference_map: dict,
 	npi_filter,
-):
+) -> dict:
 
 	provider_groups = rate.get('provider_groups', [])
 	if provider_reference_map and rate.get('provider_references'):
@@ -514,7 +529,7 @@ def _process_in_network_item(
 	provider_reference_map: dict,
 	npi_filter: set,
 	# code_filter = None
-):
+) -> dict:
 
 	# the local optimization takes care of this
 	# if code_filter:
@@ -548,10 +563,15 @@ def _ffwd(parser, to_prefix, to_event):
 			return
 
 
+_ffwd_in_network_item = functools.partial(_ffwd, to_prefix = 'in_network.item', to_event = 'end_map')
+_ffwd_in_network_array = functools.partial(_ffwd, to_prefix = 'in_network', to_event = 'end_array')
+
+
 def _local_optimization(in_network_items, parser, code_filter):
 	"""
 	This stops us from having to build in-network objects (which are large)
-	when their billing codes or arrangment don't fit the filter
+	when their billing codes or arrangement don't fit the filter. It's kind of a
+	hack which is why I bundled these changes into one function.
 	"""
 	item = in_network_items.value[-1]
 	code_type = item.get('billing_code_type')
@@ -560,7 +580,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
-			_ffwd(parser, 'in_network.item', 'end_map')
+			_ffwd_in_network_item(parser)
 			in_network_items.value.pop()
 			in_network_items.containers.pop()
 			return
@@ -568,7 +588,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-		_ffwd(parser, 'in_network.item', 'end_map')
+		_ffwd_in_network_item(parser)
 		in_network_items.value.pop()
 		in_network_items.containers.pop()
 		return
@@ -577,7 +597,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 def _make_provider_reference_map(
 	parser,
 	npi_filter: set,
-):
+) -> dict:
 
 	unfetched_provider_references = []
 
@@ -614,14 +634,10 @@ def _make_provider_reference_map(
 			return provider_reference_map
 
 
-def _filter_and_write_in_network_items(
+def _in_network_items(
 	parser,
-	provider_reference_map: dict,
-	npi_filter: set,
 	code_filter: set,
-	filename_hash,
-	out_dir,
-):
+) -> Generator[dict, None, None]:
 
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
@@ -634,18 +650,24 @@ def _filter_and_write_in_network_items(
 			_local_optimization(in_network_items, parser, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
-
-			unprocessed_in_network_item = in_network_items.value.pop()
-			processed_in_network_item = _process_in_network_item(
-				in_network_item = unprocessed_in_network_item,
-				npi_filter = npi_filter,
-				provider_reference_map = provider_reference_map)
-
-			if processed_in_network_item:
-				_write_in_network_item(processed_in_network_item, filename_hash, out_dir)
+			yield in_network_items.value.pop()
 
 		elif (prefix, event) == ('in_network', 'end_array'):
 			return
+
+
+def _processed_in_network_items(
+	unprocessed_items: Generator[dict, None, None],
+	provider_reference_map: dict,
+	npi_filter: set,
+) -> Generator[dict, None, None]:
+	for unprocessed_item in unprocessed_items:
+		processed_item = _process_in_network_item(
+			in_network_item = unprocessed_item,
+			npi_filter = npi_filter,
+			provider_reference_map = provider_reference_map)
+		if processed_item:
+			yield processed_item
 
 
 def _try_flatten_total_mrf(
@@ -656,7 +678,7 @@ def _try_flatten_total_mrf(
 	out_dir,
 ) -> tuple:
 
-	references_on_top = None
+	references_before_items = None
 	provider_reference_map = None
 	plan = ijson.ObjectBuilder()
 
@@ -670,23 +692,25 @@ def _try_flatten_total_mrf(
 
 		elif prefix.startswith('in_network'):
 			if provider_reference_map is None:
-				references_on_top = False
-				_ffwd(parser, 'in_network', 'end_array')
+				references_before_items = False
+				_ffwd_in_network_array(parser)
 				continue
 
-			references_on_top = True
-			_filter_and_write_in_network_items(
-				parser = parser,
+			references_before_items = True
+			unprocessed_items = _in_network_items(parser, code_filter)
+			processed_items = _processed_in_network_items(
+				unprocessed_items = unprocessed_items,
 				provider_reference_map = provider_reference_map,
-				npi_filter = npi_filter,
-				code_filter = code_filter,
+				npi_filter = npi_filter,)
+			_write_in_network_items(
+				in_network_items = processed_items,
 				filename_hash = filename_hash,
 				out_dir = out_dir,)
 
 		else:
 			plan.event(event, value)
 
-	return references_on_top, provider_reference_map, plan.value
+	return references_before_items, provider_reference_map, plan.value
 
 
 def _try_flatten_mrf_in_network_items_only(
@@ -701,11 +725,13 @@ def _try_flatten_mrf_in_network_items_only(
 	parser = ijson.parse(file, use_float = True)
 	_ffwd(parser, 'in_network', 'start_array')
 
-	_filter_and_write_in_network_items(
-		parser = parser,
+	unprocessed_items = _in_network_items(parser, code_filter, )
+	processed_items = _processed_in_network_items(
+		unprocessed_items = unprocessed_items,
 		provider_reference_map = provider_reference_map,
-		npi_filter = npi_filter,
-		code_filter = code_filter,
+		npi_filter = npi_filter,)
+	_write_in_network_items(
+		in_network_items = processed_items,
 		filename_hash = filename_hash,
 		out_dir = out_dir,)
 
@@ -730,12 +756,12 @@ def flatten_mrf(
 			filename_hash = filename_hash,
 			out_dir = out_dir,)
 
-	references_on_top, provider_reference_map, plan = result
+	references_before_items, provider_reference_map, plan = result
 
-	if references_on_top is None:
+	if references_before_items is None:
 		raise InvalidMRF
 
-	if references_on_top == True:
+	if references_before_items:
 		_write_plan(plan, loc, url, out_dir)
 		return
 
