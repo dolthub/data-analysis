@@ -346,6 +346,10 @@ def _write_in_network_item(
 		prices_provider_group_rows = _make_prices_provider_groups_rows(price_rows, provider_group_rows)
 		_write_table(prices_provider_group_rows, 'prices_provider_groups', out_dir)
 
+	code_type = in_network_item['billing_code_type']
+	code = in_network_item['billing_code']
+	log.debug(f'Wrote {code_type} {code}')
+
 
 async def _fetch_remote_provider_reference(
 	session,
@@ -528,20 +532,20 @@ def _process_in_network_item(
 
 
 def _ffwd(parser, to_prefix, to_event):
-	while True:
-		prefix, event, _ = next(parser)
+	for prefix, event, _ in parser:
 		if (prefix, event) == (to_prefix, to_event):
-			break
+			return
 
 
 def _local_optimization(in_network_items, parser, code_filter):
-
+	"""
+	This stops us from having to build in-network objects (which are large)
+	when their billing codes or arrangment don't fit the filter
+	"""
 	item = in_network_items.value[-1]
 	code_type = item.get('billing_code_type')
 	code = item.get('billing_code')
-	# This stops us from having to build in-network
-	# objects (which are large) when their billing codes
-	# don't fit the filter
+
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
@@ -551,7 +555,6 @@ def _local_optimization(in_network_items, parser, code_filter):
 			return
 
 	arrangement = item.get('negotiation_arrangement')
-	# If the code has the wrong arrangement, skip
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
 		_ffwd(parser, 'in_network.item', 'end_map')
@@ -563,7 +566,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 # TODO this function should be simplified, but I'm not sure how!
 # It should also be renamed. This is the most confusing part
 # of the program, I feel
-def _flatten_and_write_in_network_items(
+def _flatten_and_write_processed_in_network_items(
 	file,
 	npi_filter: set,
 	code_filter: set,
@@ -583,11 +586,8 @@ def _flatten_and_write_in_network_items(
 	in_network_items = ijson.ObjectBuilder()
 
 	for prefix, event, value in parser:
-		# The order of these if/elif statements is important!
 
 		if prefix.startswith('provider_references') and first_pass:
-			# "Have we entered the provider references bloc
-			# on our first pass?"
 			provider_references.event(event, value)
 
 			if (prefix, event) == ('provider_references.item', 'end_map'):
@@ -613,39 +613,36 @@ def _flatten_and_write_in_network_items(
 				provider_references.value.clear()
 
 		elif prefix.startswith('in_network') and (provider_reference_map or not first_pass):
-			# We want to enter this block in two cases:
-			# either we have a provider references map
-			# or we don't and it's our second read
+			"""
+			We want to enter this block in two cases: either 
+			1. we have a provider references map or
+			2. we don't and it's our second pass over the file
+			"""
 			in_network_items.event(event, value)
 			succeeded = True
 
-			# Drop down to the parser to get some
-			# extra control over the objects we build.
 			# This line can be commented out! but it's faster with it in
 			if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
-				# We have to have items for this to work
 				_local_optimization(in_network_items, parser, code_filter)
 
 			if (prefix, event) == ('in_network.item', 'end_map'):
 
-				unprocessed_item = in_network_items.value.pop()
-				in_network_item = _process_in_network_item(
-					in_network_item = unprocessed_item,
+				unprocessed_in_network_item = in_network_items.value.pop()
+				processed_in_network_item = _process_in_network_item(
+					in_network_item = unprocessed_in_network_item,
 					npi_filter = npi_filter,
-					# code_filter = code_filter, # these are filtered by _point_optimization
 					provider_reference_map = provider_reference_map)
 
-				if in_network_item:
-					_write_in_network_item(in_network_item, filename_hash, out_dir)
-
-					code_type = in_network_item['billing_code_type']
-					code = in_network_item['billing_code']
-					log.debug(f'Wrote {code_type} {code}')
+				if processed_in_network_item:
+					_write_in_network_item(processed_in_network_item, filename_hash, out_dir)
 
 		elif not prefix.startswith(('provider_references', 'in_network')):
 			plan.event(event, value)
 
-	return succeeded, provider_reference_map, plan.value
+	# return plan information as a dictionary
+	plan = plan.value
+
+	return succeeded, provider_reference_map, plan
 
 
 def flatten(
@@ -660,7 +657,7 @@ def flatten(
 	filename_hash = _filename_hash(loc)
 
 	with JSONOpen(loc) as f:
-		result = _flatten_and_write_in_network_items(
+		result = _flatten_and_write_processed_in_network_items(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
@@ -676,7 +673,7 @@ def flatten(
 	if not succeeded:
 		log.debug('Opening file again for second pass')
 		with JSONOpen(loc) as f:
-			_flatten_and_write_in_network_items(
+			_flatten_and_write_processed_in_network_items(
 				file= f,
 				npi_filter = npi_filter,
 				code_filter = code_filter,
