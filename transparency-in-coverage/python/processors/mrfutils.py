@@ -574,7 +574,10 @@ def _local_optimization(in_network_items, parser, code_filter):
 		return
 
 
-def _make_provider_reference_map(parser, npi_filter):
+def _make_provider_reference_map(
+	parser,
+	npi_filter: set,
+):
 
 	unfetched_provider_references = []
 	provider_references = ijson.ObjectBuilder()
@@ -609,11 +612,11 @@ def _make_provider_reference_map(parser, npi_filter):
 			return provider_reference_map
 
 
-def _make_and_write_in_network_items(
+def _filter_and_write_in_network_items(
 	parser,
-	provider_reference_map,
-	npi_filter,
-	code_filter,
+	provider_reference_map: dict,
+	npi_filter: set,
+	code_filter: set,
 	filename_hash,
 	out_dir,
 ):
@@ -669,7 +672,7 @@ def _filter_and_flatten_file(
 		# 1. we have a provider references map or
 		# 2. we don't but it's our second pass over the file
 		elif prefix.startswith('in_network') and (provider_reference_map or not first_pass):
-			_make_and_write_in_network_items(
+			_filter_and_write_in_network_items(
 				parser = parser,
 				provider_reference_map = provider_reference_map,
 				npi_filter = npi_filter,
