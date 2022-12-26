@@ -1,7 +1,7 @@
 """
 The function
 
-def flatten()...
+def flatten_mrf()...
 
 starts grabbing objects from the MRF. No matter what the order
 the file is in, on the first pass it always grabs the plan data
@@ -580,8 +580,10 @@ def _make_provider_reference_map(
 ):
 
 	unfetched_provider_references = []
+
 	provider_references = ijson.ObjectBuilder()
 	provider_references.event('start_array', None)
+
 	for prefix, event, value in parser:
 		provider_references.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
@@ -623,6 +625,7 @@ def _filter_and_write_in_network_items(
 
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
+
 	for prefix, event, value in parser:
 		in_network_items.event(event, value)
 
@@ -645,7 +648,7 @@ def _filter_and_write_in_network_items(
 			return
 
 
-def _filter_and_write_file(
+def _try_flatten_mrf(
 	file,
 	npi_filter: set,
 	code_filter: set,
@@ -693,7 +696,7 @@ def _filter_and_write_file(
 	return wrote_in_network_items, provider_reference_map
 
 
-def flatten(
+def flatten_mrf(
 	loc: str,
 	npi_filter: set,
 	code_filter: set,
@@ -706,7 +709,7 @@ def flatten(
 	url = url if url else loc
 
 	with JSONOpen(loc) as f:
-		result = _filter_and_write_file(
+		result = _try_flatten_mrf(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
@@ -723,7 +726,7 @@ def flatten(
 	log.debug('Opening file again for second pass')
 
 	with JSONOpen(loc) as f:
-		_filter_and_write_file(
+		_try_flatten_mrf(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
