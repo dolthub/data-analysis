@@ -648,33 +648,33 @@ def _filter_and_write_in_network_items(
 			return
 
 
-def _try_flatten_mrf(
+def _try_flatten_total_mrf(
 	file,
 	npi_filter: set,
 	code_filter: set,
 	filename_hash,
-	loc,
-	url,
 	out_dir,
-	provider_reference_map: dict = None,
-	first_pass = True,
 ) -> tuple:
 
-	parser = ijson.parse(file, use_float = True)
+	references_on_top = None
+	provider_reference_map = None
 	plan = ijson.ObjectBuilder()
-	wrote_in_network_items = False
 
+	parser = ijson.parse(file, use_float = True)
 	for prefix, event, value in parser:
 
-		if prefix.startswith('provider_references') and first_pass:
+		if prefix.startswith('provider_references'):
 			provider_reference_map = _make_provider_reference_map(
 				parser = parser,
 				npi_filter = npi_filter,)
 
-		# We want to enter this block in two cases: either
-		# 1. we have a provider references map or
-		# 2. we don't but it's our second pass over the file
-		elif prefix.startswith('in_network') and (provider_reference_map or not first_pass):
+		elif prefix.startswith('in_network'):
+			if provider_reference_map is None:
+				references_on_top = False
+				_ffwd(parser, 'in_network', 'end_array')
+				continue
+
+			references_on_top = True
 			_filter_and_write_in_network_items(
 				parser = parser,
 				provider_reference_map = provider_reference_map,
@@ -682,18 +682,32 @@ def _try_flatten_mrf(
 				code_filter = code_filter,
 				filename_hash = filename_hash,
 				out_dir = out_dir,)
-			wrote_in_network_items = True
 
-		elif not prefix.startswith(('provider_references', 'in_network')):
+		else:
 			plan.event(event, value)
 
-	if not plan.value.get('reporting_entity_name'):
-		raise InvalidMRF
+	return references_on_top, provider_reference_map, plan.value
 
-	if wrote_in_network_items:
-		_write_plan(plan.value, loc, url, out_dir)
 
-	return wrote_in_network_items, provider_reference_map
+def _try_flatten_mrf_in_network_items_only(
+	file,
+	npi_filter: set,
+	code_filter: set,
+	filename_hash,
+	out_dir,
+	provider_reference_map: dict = None,
+):
+
+	parser = ijson.parse(file, use_float = True)
+	_ffwd(parser, 'in_network', 'start_array')
+
+	_filter_and_write_in_network_items(
+		parser = parser,
+		provider_reference_map = provider_reference_map,
+		npi_filter = npi_filter,
+		code_filter = code_filter,
+		filename_hash = filename_hash,
+		out_dir = out_dir,)
 
 
 def flatten_mrf(
@@ -709,33 +723,35 @@ def flatten_mrf(
 	url = url if url else loc
 
 	with JSONOpen(loc) as f:
-		result = _try_flatten_mrf(
+		result = _try_flatten_total_mrf(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
 			filename_hash = filename_hash,
-			loc = loc,
-			url = url,
 			out_dir = out_dir,)
 
-	wrote_in_network_items, provider_reference_map = result
+	references_on_top, provider_reference_map, plan = result
 
-	if wrote_in_network_items:
+	if references_on_top is None:
+		raise InvalidMRF
+
+	if references_on_top == True:
+		_write_plan(plan, loc, url, out_dir)
 		return
 
-	log.debug('Opening file again for second pass')
+	log.debug('Got the provider references, now '
+	          'reopening the file to write the rest')
 
 	with JSONOpen(loc) as f:
-		_try_flatten_mrf(
+		_try_flatten_mrf_in_network_items_only(
 			file= f,
 			npi_filter = npi_filter,
 			code_filter = code_filter,
 			filename_hash = filename_hash,
-			loc = loc,
-			url = url,
 			out_dir = out_dir,
-			provider_reference_map = provider_reference_map,
-			first_pass = False,)
+			provider_reference_map = provider_reference_map)
+
+	_write_plan(plan, loc, url, out_dir)
 
 
 
