@@ -18,6 +18,7 @@ import asyncio
 import csv
 import gzip
 import hashlib
+import io
 import json
 import logging
 import os
@@ -38,6 +39,7 @@ try:
 except AssertionError:
 	raise Exception('Extremely slow without the yajl2_c backend')
 
+SENTINEL = 'SENTINEL'
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -54,20 +56,32 @@ class JSONOpen:
 	JSON files.
 	"""
 
-	def __init__(self, loc):
-		self.loc = loc
+	def __init__(self, input):
+		if type(input) == bytes:
+			self.data = input
+			self.loc = None
+		else:
+			self.loc = input
+			self.data = None
+
 		self.f = None
 		self.r = None
+		self.is_remote = None
 
-		parsed_url = urlparse(self.loc)
-		self.suffix = ''.join(Path(parsed_url.path).suffixes)
+		if self.loc:
+			print('location!!')
+			parsed_url = urlparse(self.loc)
+			self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
-		if self.suffix not in ('.json.gz', '.json'):
-			raise InvalidMRF(f'Suffix not JSON: {self.loc}')
+			if self.suffix not in ('.json.gz', '.json'):
+				raise InvalidMRF(f'Suffix not JSON: {self.loc}')
 
-		self.is_remote = parsed_url.scheme in ('http', 'https')
+			self.is_remote = parsed_url.scheme in ('http', 'https')
 
 	def __enter__(self):
+		if self.data:
+			self.f = io.BytesIO(self.data)
+			return self.f
 		if (
 			self.is_remote
 			and self.suffix == '.json.gz'
@@ -93,7 +107,7 @@ class JSONOpen:
 		return self.f
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
-		if self.is_remote:
+		if self.r and self.is_remote:
 			self.r.close()
 
 		self.f.close()
@@ -216,7 +230,7 @@ def _make_plan_file_row(plan_row, file_row):
 	return plan_file_row
 
 
-def _make_code_row(code: dict):
+def _make_code_row(in_network_item: dict):
 
 	keys = [
 		'billing_code_type',
@@ -224,7 +238,7 @@ def _make_code_row(code: dict):
 		'billing_code',
 	]
 
-	code_row = {key : code[key] for key in keys}
+	code_row = {key : in_network_item[key] for key in keys}
 	code_row = append_hash(code_row, 'code_hash')
 
 	return code_row
@@ -351,19 +365,6 @@ def _write_in_network_item(
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']
 	log.debug(f'Wrote {code_type} {code}')
-
-
-def _write_in_network_items(
-	in_network_items: Generator[dict, None, None],
-	filename_hash,
-	out_dir,
-):
-
-	for in_network_item in in_network_items:
-		_write_in_network_item(
-			in_network_item,
-			filename_hash,
-			out_dir)
 
 
 def _write_plan(
@@ -661,6 +662,7 @@ def _processed_in_network_items(
 	provider_reference_map: dict,
 	npi_filter: set,
 ) -> Generator[dict, None, None]:
+
 	for unprocessed_item in unprocessed_items:
 		processed_item = _process_in_network_item(
 			in_network_item = unprocessed_item,
@@ -670,15 +672,12 @@ def _processed_in_network_items(
 			yield processed_item
 
 
-def _try_flatten_total_mrf(
+def _gen_mrf_contents(
 	file,
 	npi_filter: set,
 	code_filter: set,
-	filename_hash,
-	out_dir,
-) -> tuple:
+) -> Generator[dict, None, None]:
 
-	references_before_items = None
 	provider_reference_map = None
 	plan = ijson.ObjectBuilder()
 
@@ -692,48 +691,77 @@ def _try_flatten_total_mrf(
 
 		elif prefix.startswith('in_network'):
 			if provider_reference_map is None:
-				references_before_items = False
 				_ffwd_in_network_array(parser)
 				continue
 
-			references_before_items = True
 			unprocessed_items = _in_network_items(parser, code_filter)
 			processed_items = _processed_in_network_items(
 				unprocessed_items = unprocessed_items,
 				provider_reference_map = provider_reference_map,
-				npi_filter = npi_filter,)
-			_write_in_network_items(
-				in_network_items = processed_items,
-				filename_hash = filename_hash,
-				out_dir = out_dir,)
+				npi_filter = npi_filter)
+			yield from processed_items
 
 		else:
 			plan.event(event, value)
 
-	return references_before_items, provider_reference_map, plan.value
+	yield SENTINEL
+	yield plan.value
+	yield provider_reference_map # can be None
 
 
-def _try_flatten_mrf_in_network_items_only(
+def _gen_mrf_in_network_contents(
 	file,
-	npi_filter: set,
 	code_filter: set,
-	filename_hash,
-	out_dir,
-	provider_reference_map: dict = None,
-):
+	npi_filter: set,
+	provider_reference_map: dict,
+) -> Generator[dict, None, None]:
 
 	parser = ijson.parse(file, use_float = True)
 	_ffwd(parser, 'in_network', 'start_array')
 
-	unprocessed_items = _in_network_items(parser, code_filter, )
+	unprocessed_items = _in_network_items(parser, code_filter)
 	processed_items = _processed_in_network_items(
 		unprocessed_items = unprocessed_items,
 		provider_reference_map = provider_reference_map,
 		npi_filter = npi_filter,)
-	_write_in_network_items(
-		in_network_items = processed_items,
-		filename_hash = filename_hash,
-		out_dir = out_dir,)
+	yield from processed_items
+
+
+def _gen_ordered_mrf_contents(
+	loc,
+	npi_filter: set = None,
+	code_filter: set = None,
+) -> Generator[dict, None, None]:
+
+	"""Returns in_network items, followed by SENTINEL, followed
+	by plan."""
+	with JSONOpen(loc) as f:
+		contents = _gen_mrf_contents(
+			file = f,
+			npi_filter = npi_filter,
+			code_filter = code_filter,)
+
+		first_value = next(contents)
+		if first_value != SENTINEL:
+			yield first_value
+			yield from contents
+			return
+
+	plan = next(contents)
+	provider_reference_map = next(contents)
+
+	if not plan.get('reporting_entity_name'):
+		raise InvalidMRF
+
+	with JSONOpen(loc) as f:
+		in_network_items = _gen_mrf_in_network_contents(
+			file = f,
+			npi_filter = npi_filter,
+			code_filter = code_filter,
+			provider_reference_map = provider_reference_map)
+		yield from in_network_items
+		yield SENTINEL
+		yield plan
 
 
 def flatten_mrf(
@@ -748,36 +776,21 @@ def flatten_mrf(
 	filename_hash = _filename_hash(loc)
 	url = url if url else loc
 
-	with JSONOpen(loc) as f:
-		result = _try_flatten_total_mrf(
-			file= f,
-			npi_filter = npi_filter,
-			code_filter = code_filter,
-			filename_hash = filename_hash,
-			out_dir = out_dir,)
+	ordered_contents = _gen_ordered_mrf_contents(
+		npi_filter,
+		code_filter,
+		loc)
 
-	references_before_items, provider_reference_map, plan = result
+	for in_network_item in ordered_contents:
 
-	if references_before_items is None:
-		raise InvalidMRF
+		if in_network_item == SENTINEL:
+			break
 
-	if references_before_items:
-		_write_plan(plan, loc, url, out_dir)
-		return
+		_write_in_network_item(
+				in_network_item,
+				filename_hash,
+				out_dir)
 
-	log.debug('Got the provider references, now '
-	          'reopening the file to write the rest')
-
-	with JSONOpen(loc) as f:
-		_try_flatten_mrf_in_network_items_only(
-			file= f,
-			npi_filter = npi_filter,
-			code_filter = code_filter,
-			filename_hash = filename_hash,
-			out_dir = out_dir,
-			provider_reference_map = provider_reference_map)
-
+	plan = next(ordered_contents)
 	_write_plan(plan, loc, url, out_dir)
-
-
 
