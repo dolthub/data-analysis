@@ -16,9 +16,6 @@ from schema import SCHEMA
 from tqdm import tqdm
 from tqdm.asyncio import tqdm as tqdma
 
-
-# import heartrate; heartrate.trace(browser=True, daemon=True)
-
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
@@ -69,7 +66,7 @@ class Parser:
 	"""
 
 	def __init__(self, f):
-		self.__p = ijson.parse(f, use_float=True)
+		self.__p = ijson.parse(f, use_float=True)#, buf_size=1073741824)
 		self.current = None
 
 	def __iter__(self):
@@ -196,7 +193,7 @@ async def _fetch_remote_provider_references(
 
 			tasks.append(task)
 
-		fetched_remote_provider_references = await tqdma.gather(*tasks)
+		fetched_remote_provider_references = await tqdma.gather(*tasks, desc="Fetching Remote Provider Refs")
 		fetched_remote_provider_references = list(filter(lambda item: item, fetched_remote_provider_references))
 		return fetched_remote_provider_references
 
@@ -243,7 +240,7 @@ class MRFProcessor:
 		unfetched_remote_provider_references = []
 		builder = ijson.ObjectBuilder()
 
-		for prefix, event, value in self.parser:
+		for prefix, event, value in tqdm(self.parser, desc="Processing Provider References"):
 
 			if (prefix, event) == ('provider_references', 'end_array'):
 				local_provider_references = builder.value
@@ -367,7 +364,7 @@ class MRFProcessor:
 		"""
 		builder = ijson.ObjectBuilder()
 
-		for prefix, event, value in tqdm(self.parser, desc="Parser"):
+		for prefix, event, value in tqdm(self.parser, desc="Gen In Network"):
 
 			if (prefix, event) == ('in_network', 'end_array'):
 				return
@@ -550,7 +547,7 @@ class MRFWriter:
 
 	def _write_prices(self, prices, code_hash, filename_hash):
 		price_rows = []
-		for price in prices:
+		for price in tqdm(prices, desc="Writing prices"):
 			if sc := price.get('service_code'):
 				price['service_code'] = json.dumps(sorted(sc))
 			else:
