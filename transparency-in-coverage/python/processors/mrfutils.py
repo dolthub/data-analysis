@@ -1,11 +1,9 @@
 """
 The function
 
-def flatten_mrf()...
+>>> def json_mrf_to_csv()...
 
-starts grabbing objects from the MRF. No matter what the order
-the file is in, on the first pass it always grabs the plan data
-and the provider references.
+flattens the data from a JSON MRF into a CSV.
 
 If the flattener encounters the in-network items after the provider
 references, it will flatten those on the first pass. Otherwise, it
@@ -22,7 +20,6 @@ import io
 import json
 import logging
 import os
-import functools
 from typing import Generator
 from pathlib import Path
 from urllib.parse import urlparse
