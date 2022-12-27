@@ -156,7 +156,8 @@ def append_hash(item, name):
 def _filename_hash(loc):
 
 	filename = Path(loc).stem.split('.')[0]
-	filename_hash = dicthasher(filename)
+	file_row = {'filename': filename}
+	filename_hash = dicthasher(file_row)
 
 	return filename_hash
 
@@ -198,6 +199,7 @@ def _make_plan_row(plan: dict):
 
 	plan_row = {key: plan.get(key) for key in keys}
 	plan_row = append_hash(plan_row, 'plan_hash')
+
 	return plan_row
 
 
@@ -207,6 +209,7 @@ def _make_file_row(loc, url):
 	file_row = {'filename': filename}
 	file_row = append_hash(file_row, 'filename_hash')
 	file_row['url'] = url
+
 	return file_row
 
 
@@ -602,6 +605,7 @@ def _make_provider_reference_map(
 			provider_reference = _process_provider_reference(
 				item = unprocessed_reference,
 				npi_filter = npi_filter)
+
 
 			if provider_reference:
 				provider_references.value.insert(1, provider_reference)

@@ -97,6 +97,15 @@ class Test(unittest.TestCase):
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
 
+	# def test_hashes_match(self):
+		# Still need to write a test for this
+		# for file in self.test_files:
+		# 	content = MRFContent(file)
+		# 	content.start()
+		# 	in_network_items = content.in_network_items
+		# 	first_item = next(in_network_items)
+		# 	assert first_item['billing_code'] == '0000'
+
 
 if __name__ == '__main__':
 	unittest.main()
