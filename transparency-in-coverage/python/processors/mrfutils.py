@@ -39,7 +39,6 @@ try:
 except AssertionError:
 	raise Exception('Extremely slow without the yajl2_c backend')
 
-SENTINEL = 'SENTINEL'
 
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
@@ -49,7 +48,7 @@ class InvalidMRF(Exception):
 	pass
 
 
-class JSONOpen:
+class JSONOpen(io.BufferedIOBase):
 	"""
 	Context manager for opening JSON(.gz) MRFs.
 	Handles local and remote gzipped and unzipped
@@ -69,7 +68,6 @@ class JSONOpen:
 		self.is_remote = None
 
 		if self.loc:
-			print('location!!')
 			parsed_url = urlparse(self.loc)
 			self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
@@ -113,13 +111,8 @@ class JSONOpen:
 		self.f.close()
 
 
-def import_csv_to_set(filename):
-	"""
-	Imports data as tuples from a given file.
-	Iterates over rows
-	:param filename: filename
-	:return:
-	"""
+def import_csv_to_set(filename: str):
+	"""Imports data as tuples from a given file."""
 	items = set()
 
 	with open(filename, 'r') as f:
@@ -338,7 +331,7 @@ def _make_prices_provider_groups_rows(
 	return prices_provider_groups_rows
 
 
-def _write_in_network_item(
+def write_in_network_item(
 	in_network_item: dict,
 	filename_hash,
 	out_dir
@@ -367,7 +360,7 @@ def _write_in_network_item(
 	log.debug(f'Wrote {code_type} {code}')
 
 
-def _write_plan(
+def write_plan(
 	plan: dict,
 	loc,
 	url,
@@ -564,10 +557,6 @@ def _ffwd(parser, to_prefix, to_event):
 			return
 
 
-_ffwd_in_network_item = functools.partial(_ffwd, to_prefix = 'in_network.item', to_event = 'end_map')
-_ffwd_in_network_array = functools.partial(_ffwd, to_prefix = 'in_network', to_event = 'end_array')
-
-
 def _local_optimization(in_network_items, parser, code_filter):
 	"""
 	This stops us from having to build in-network objects (which are large)
@@ -581,7 +570,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
-			_ffwd_in_network_item(parser)
+			_ffwd(parser, 'in_network.item', 'end_map')
 			in_network_items.value.pop()
 			in_network_items.containers.pop()
 			return
@@ -589,7 +578,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-		_ffwd_in_network_item(parser)
+		_ffwd(parser, 'in_network.item', 'end_map')
 		in_network_items.value.pop()
 		in_network_items.containers.pop()
 		return
@@ -631,8 +620,17 @@ def _make_provider_reference_map(
 				for p in combined_provider_references
 				if p is not None
 			}
-
 			return provider_reference_map
+
+
+def _plan(parser):
+	plan = ijson.ObjectBuilder()
+	for prefix, event, value in parser:
+		plan.event(event, value)
+		if value in ('provider_references', 'in_network'):
+			return plan.value
+	else:
+		raise InvalidMRF
 
 
 def _in_network_items(
@@ -642,7 +640,6 @@ def _in_network_items(
 
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
-
 	for prefix, event, value in parser:
 		in_network_items.event(event, value)
 
@@ -672,125 +669,130 @@ def _processed_in_network_items(
 			yield processed_item
 
 
-def _gen_mrf_contents(
-	file,
-	npi_filter: set,
-	code_filter: set,
-) -> Generator[dict, None, None]:
+class MRFContent:
+	"""
+	Bucket for MRF data. Assumes that the MRF is in one of the
+	following three orders:
 
-	provider_reference_map = None
-	plan = ijson.ObjectBuilder()
+	1. plan -> provider_references -> in_network (most common)
+	2. plan -> in_network (second-most common)
+	3. plan -> in_network -> provider_references (least common)
 
-	parser = ijson.parse(file, use_float = True)
-	for prefix, event, value in parser:
+	As far as I can tell, no one puts their plan data at the
+	bottom, although that's possible. If that turns out to be
+	the case this function will have to be modified a little bit
+	(but that won't be a big deal.)
 
-		if prefix.startswith('provider_references'):
-			provider_reference_map = _make_provider_reference_map(
-				parser = parser,
-				npi_filter = npi_filter,)
+	Usage:
+	>>> content = MRFContent(loc, npi_filter, code_filter)
+	>>> content.start() # fetches plan info and opens file
+	>>> content.plan # access plan information
+	>>> content.in_network_items # generates items as file is read
 
-		elif prefix.startswith('in_network'):
-			if provider_reference_map is None:
-				_ffwd_in_network_array(parser)
-				continue
+	From there you can write the items and plan information as you
+	read them in.
+	"""
 
-			unprocessed_items = _in_network_items(parser, code_filter)
-			processed_items = _processed_in_network_items(
+	def __init__(self, loc, npi_filter = None, code_filter = None):
+		self.loc = loc
+		self.code_filter = code_filter
+		self.npi_filter = npi_filter
+		self.extractor = self._extractor()
+
+	def start(self):
+		"""Opens the file, grabs the plan metadata"""
+		self.plan = next(self.extractor)
+
+	@property
+	def in_network_items(self) -> Generator[dict, None, None]:
+		yield from self.extractor
+
+	def _extractor(self) -> Generator[dict, None, None]:
+		"""
+		Generates MRF dictionaries in the order:
+		1. plan
+		2. all in-network items
+		The first time you call this function's __next__() you'll
+		get the plan information. This is what happens in start
+		>>> content.start() # advance extractor one step
+		The rest of the items are yielded afterwards
+		"""
+		with JSONOpen(self.loc) as f:
+
+			parser = ijson.parse(f, use_float = True)
+			yield _plan(parser)
+
+			prefix, _, _ = next(parser)
+			if prefix == 'provider_references':
+				provider_reference_map = _make_provider_reference_map(
+					parser = parser,
+					npi_filter = self.npi_filter,)
+
+				_ffwd(parser, 'in_network', 'start_array')
+				unprocessed_items = _in_network_items(parser, self.code_filter)
+				yield from _processed_in_network_items(
+					unprocessed_items = unprocessed_items,
+					provider_reference_map = provider_reference_map,
+					npi_filter = self.npi_filter)
+				return
+			# Enter this block if we don't find provider references
+			# Try to see if they're at the bottom
+			try:
+				_ffwd(parser, 'provider_references', 'start_array')
+				provider_reference_map = _make_provider_reference_map(
+					parser = parser,
+					npi_filter = self.npi_filter,
+				)
+			except StopIteration:
+				provider_reference_map = None
+		# Enter this block when provider references are either
+		# at the bottom or not found
+		with JSONOpen(self.loc) as f:
+			parser = ijson.parse(f, use_float = True)
+			_ffwd(parser, 'in_network', 'start_array')
+			unprocessed_items = _in_network_items(parser, self.code_filter)
+			yield from _processed_in_network_items(
 				unprocessed_items = unprocessed_items,
 				provider_reference_map = provider_reference_map,
-				npi_filter = npi_filter)
-			yield from processed_items
-
-		else:
-			plan.event(event, value)
-
-	yield SENTINEL
-	yield plan.value
-	yield provider_reference_map # can be None
+				npi_filter = self.npi_filter)
 
 
-def _gen_mrf_in_network_contents(
-	file,
-	code_filter: set,
-	npi_filter: set,
-	provider_reference_map: dict,
-) -> Generator[dict, None, None]:
-
-	parser = ijson.parse(file, use_float = True)
-	_ffwd(parser, 'in_network', 'start_array')
-
-	unprocessed_items = _in_network_items(parser, code_filter)
-	processed_items = _processed_in_network_items(
-		unprocessed_items = unprocessed_items,
-		provider_reference_map = provider_reference_map,
-		npi_filter = npi_filter,)
-	yield from processed_items
-
-
-def _gen_ordered_mrf_contents(
-	loc,
-	npi_filter: set = None,
-	code_filter: set = None,
-) -> Generator[dict, None, None]:
-
-	"""Returns in_network items, followed by SENTINEL, followed
-	by plan."""
-	with JSONOpen(loc) as f:
-		contents = _gen_mrf_contents(
-			file = f,
-			npi_filter = npi_filter,
-			code_filter = code_filter,)
-
-		first_value = next(contents)
-		if first_value != SENTINEL:
-			yield first_value
-			yield from contents
-			return
-
-	plan = next(contents)
-	provider_reference_map = next(contents)
-
-	if not plan.get('reporting_entity_name'):
-		raise InvalidMRF
-
-	with JSONOpen(loc) as f:
-		in_network_items = _gen_mrf_in_network_contents(
-			file = f,
-			npi_filter = npi_filter,
-			code_filter = code_filter,
-			provider_reference_map = provider_reference_map)
-		yield from in_network_items
-		yield SENTINEL
-		yield plan
-
-
-def flatten_mrf(
+def json_mrf_to_csv(
 	loc: str,
 	npi_filter: set,
 	code_filter: set,
 	out_dir: str,
-	url: str,
+	url: str = None,
 ) -> None:
+	"""
+	Writes MRF content to a flat file CSV in a specific schema.
+	The url parameter is optional -- if you pass only a loc,
+	we assume that the file is remote.
+
+	If you pass a loc and a URL the file is read from loc but the
+	URL that you input is used. This is just saved for bookkeeping.
+
+	!Importantly! you have to make sure that whatever file you saved
+	matches the filename that the URL returns. We index the files by
+	name, so if the name is different, the index will be wrong.
+	"""
 
 	make_dir(out_dir)
 	filename_hash = _filename_hash(loc)
-	url = url if url else loc
 
-	ordered_contents = _gen_ordered_mrf_contents(
-		npi_filter,
-		code_filter,
-		loc)
+	content = MRFContent(loc, npi_filter, code_filter)
+	content.start()
 
-	for in_network_item in ordered_contents:
+	for in_network_item in content.in_network_items:
+		write_in_network_item(
+			in_network_item = in_network_item,
+			filename_hash = filename_hash,
+			out_dir = out_dir
+		)
 
-		if in_network_item == SENTINEL:
-			break
-
-		_write_in_network_item(
-				in_network_item,
-				filename_hash,
-				out_dir)
-
-	plan = next(ordered_contents)
-	_write_plan(plan, loc, url, out_dir)
-
+	write_plan(
+		plan = content.plan,
+		loc = loc,
+		url = url if url else loc,
+		out_dir = out_dir
+	)

@@ -1,4 +1,4 @@
-from mrfutils import import_csv_to_set, flatten_mrf, InvalidMRF
+from mrfutils import import_csv_to_set, json_mrf_to_csv, InvalidMRF
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm import tqdm
 from pathlib import Path
@@ -22,7 +22,7 @@ urls = [
 for url in tqdm(urls):
     with logging_redirect_tqdm():
         try:
-            flatten_mrf(
+            json_mrf_to_csv(
                 loc = url,
                 url = url,
                 npi_filter = npi_filter,
