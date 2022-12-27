@@ -1,111 +1,111 @@
 import unittest
-import aiohttp
-from pathlib import Path
-from mrfutils import (
-	MRFOpen,
-	MRFProcessor,
-	dicthasher,
-	_fetch_remote_provider_reference
-)
+from itertools import permutations
+from mrfutils import MRFContent
 
-class TestSingleFetch(unittest.IsolatedAsyncioTestCase):
-	loc = "https://raw.githubusercontent.com/CMSgov/price-transparency-guide/master/examples/provider-reference/provider-reference.json"
-	p_ref_id = 2
-	async def test_remote_ref(self):
-		async with aiohttp.client.ClientSession() as session:
-			data = await _fetch_remote_provider_reference(
-				session,
-				self.p_ref_id,
-				self.loc,
-			)
 
-		group = data['provider_groups'][0]
-		self.assertTrue(group['npi'] == ['1111111111'])
-		self.assertTrue(group['tin']['value'] == '22-2222222')
+def generate_test_files():
+	"""
+	Generates a list of all possible permutations of a test file
+	"""
+	with open('test/test_json_strs.txt') as f:
+		lines = f.readlines()
+	plan_line = lines[0]
+	file_orders = [
+		(plan_line, lines[2], lines[1]),
+		(plan_line, lines[1], lines[2])
+	]
+	files = []
+	for file_order in file_orders:
+		filestring = '{' + ','.join(file_order) + '}'
+		files.append(bytes(filestring.encode('utf-8')))
+	return files
 
-class TestSingleFetch(unittest.IsolatedAsyncioTestCase):
-	loc = "https://raw.githubusercontent.com/CMSgov/price-transparency-guide/master/examples/provider-reference/provider-reference.json"
-	p_ref_id = 2
-	npi_filter = {'6383593489'}
-	async def test_remote_ref(self):
-		async with aiohttp.client.ClientSession() as session:
-			data = await _fetch_remote_provider_reference(
-				session,
-				self.p_ref_id,
-				self.loc,
-				self.npi_filter,
-			)
 
-		self.assertTrue(data == None)
+class Test(unittest.TestCase):
 
-# class TestTimeout(unittest.IsolatedAsyncioTestCase):
-# 	loc = "http://www.google.com:81/"
-# 	p_ref_id = 2
-# 	async def test_remote_ref(self):
-# 		async with aiohttp.client.ClientSession() as session:
-# 			data = await fetch_remote_provider_reference(
-# 				session,
-# 				self.p_ref_id,
-# 				self.loc,
-# 			)
-#
-# 		group = data['provider_groups'][0]
-# 		self.assertTrue(group['npi'] == ['1111111111'])
-# 		self.assertTrue(group['tin']['value'] == '22-2222222')
+	def setUp(self) -> None:
+		self.test_files = generate_test_files()
 
-class TestMRFObjectBuilder(unittest.TestCase):
+	def test_ordering(self):
+		for idx, file in enumerate(self.test_files):
+			content = MRFContent(file)
+			content.start()
+			in_network_items = content.in_network_items
+			first_item = next(in_network_items)
+			assert first_item['billing_code'] == '0000'
+			second_item = next(in_network_items)
+			assert second_item['billing_code'] == '1111'
+			plan = content.plan
+			assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
-	npi_filter = {'1111111111', '5555555555', '2020202020'}
-	code_filter = {('TS-TST', '0000')}
-	loc = 'test/test.json'
+	def test_npi_filtering(self):
+		npi_filter = {'9889889881'}
+		for file in self.test_files:
+			content = MRFContent(file, npi_filter = npi_filter)
+			content.start()
+			in_network_items = list(content.in_network_items)
+			assert in_network_items[0]['billing_code'] == '0000'
+			assert len(in_network_items) == 1
+			plan = content.plan
+			assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
-	def test_p_refs_map(self):
-		with MRFOpen(self.loc) as f:
-			m = MRFProcessor(f)
-			m._ffwd(('', 'map_key', 'provider_references'))
-			p_refs_map = m._make_provider_reference_map(self.npi_filter)
+	def test_remote_npi_filtering(self):
+		npi_filter = {'2222222222'}
+		for file in self.test_files:
+			content = MRFContent(file, npi_filter = npi_filter)
+			content.start()
+			in_network_items = content.in_network_items
+			first_item = next(in_network_items)
+			assert first_item['name'] == 'TEST NAME 2'
+			rates = first_item['negotiated_rates']
+			assert len(rates) == 1
+			provider_groups = rates[0]['provider_groups']
+			assert len(provider_groups) == 1
+			npis = provider_groups[0]['npi']
+			assert len(npis) == 1
+			assert npis[0] == '2222222222'
 
-		self.assertTrue(
-			p_refs_map[0][0]['npi'] == ['1111111111']
-		)
-		self.assertTrue(
-			p_refs_map[1][0]['npi'] == ['2020202020', '1111111111']
-		)
+	def test_multiple_npi_filtering(self):
+		npi_filter = {'1234567890', '4444444444'}
+		for file in self.test_files:
+			content = MRFContent(file, npi_filter = npi_filter)
+			content.start()
+			in_network_items = content.in_network_items
+			first_item = next(in_network_items)
+			assert first_item['billing_code'] == '0000'
+			rates = first_item['negotiated_rates']
+			assert len(rates) == 1
+			provider_groups = rates[0]['provider_groups']
+			assert len(provider_groups) == 3
 
-		# remote case
-		self.assertTrue(p_refs_map[2][0]['npi'] == ['1111111111'])
+	def test_code_filtering(self):
+		code_filter = {('TS-TST', '0000')}
+		for file in self.test_files:
+			content = MRFContent(file, code_filter = code_filter)
+			content.start()
+			in_network_items = content.in_network_items
+			first_item = next(in_network_items)
+			assert first_item['billing_code'] == '0000'
 
-	def test_npis(self):
-		with MRFOpen(self.loc) as f:
-			m = MRFProcessor(f)
-			root_data = m._process_root()
+	def test_combined_filtering(self):
+		code_filter = {('TS-TST', '0000')}
+		npi_filter = {'4444444444'}
+		for file in self.test_files:
+			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
+			content.start()
+			in_network_items = content.in_network_items
+			first_item = next(in_network_items)
+			assert first_item['billing_code'] == '0000'
 
-			root_data['filename'] = Path(self.loc).stem.split('.')[0]
-			root_hash_key = dicthasher(root_data)
-			root_data['root_hash_key'] = root_hash_key
+	# def test_hashes_match(self):
+		# Still need to write a test for this
+		# for file in self.test_files:
+		# 	content = MRFContent(file)
+		# 	content.start()
+		# 	in_network_items = content.in_network_items
+		# 	first_item = next(in_network_items)
+		# 	assert first_item['billing_code'] == '0000'
 
-			root_data['url'] = Path(self.loc).stem.split('.')[0]
-
-			p_refs_map = m._make_provider_reference_map(self.npi_filter)
-			m._ffwd(('', 'map_key', 'in_network'))
-			g = m.gen_in_network(self.npi_filter, self.code_filter, p_refs_map)
-			item_data = next(g)
-
-		negotiated_rates = item_data['negotiated_rates']
-
-		self.assertTrue(
-			negotiated_rates[0]['provider_groups'][0]['npi'] == ['5555555555']
-		)
-		self.assertTrue(
-			negotiated_rates[0]['provider_groups'][1]['npi'] == ['5555555555']
-		)
-		self.assertTrue(
-			negotiated_rates[0]['provider_groups'][2]['npi'] == ['1111111111']
-		)
-		self.assertTrue(
-			negotiated_rates[0]['provider_groups'][3]['npi'] == ['2020202020',
-			                                                     '1111111111']
-		)
 
 if __name__ == '__main__':
 	unittest.main()

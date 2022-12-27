@@ -5,7 +5,7 @@ JSON file.
 """
 import sqlite3
 import re
-from mrfutils import MRFOpen
+from mrfutils import JSONOpen
 
 anthem_toc_url ='https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-12-01_anthem_index.json.gz'
 dbname = "anthem-in-network.db"
@@ -53,7 +53,7 @@ def insert_plan_url(plan_name, description, url):
 desc_loc_pat = "\"description\":\"(.+?)\",\"location\":\"(.+?)\""
 plan_pat = r'"plan_name":"(.+?)"'
 
-with MRFOpen(anthem_toc_url) as f:
+with JSONOpen(anthem_toc_url) as f:
     for line in f:
         line = str(line)
         if 'in-network' in line:

@@ -1,6 +1,6 @@
 import argparse
 import logging
-from mrfutils import import_csv_to_set, flatten_mrf, InvalidMRF
+from mrfutils import import_csv_to_set, json_mrf_to_csv
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
@@ -27,13 +27,10 @@ if args.npis:
 else:
     npi_filter = None
 
-try:
-    flatten_mrf(
-        loc = url,
-        out_dir = out_dir,
-        code_filter= code_filter,
-        npi_filter= npi_filter,
-        url = url # optional, see docstring
-    )
-except InvalidMRF as e:
-    log.critical(e)
+json_mrf_to_csv(
+    loc = url,
+    url = url,
+    npi_filter = npi_filter,
+    code_filter = code_filter,
+    out_dir = out_dir
+)
