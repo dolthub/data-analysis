@@ -28,10 +28,9 @@ CREATE TABLE IF NOT EXISTS plans_files (
 
 CREATE TABLE IF NOT EXISTS codes (
     code_hash BIGINT UNSIGNED,
---    negotiation_arrangement ENUM("ffs", "capitation", "bundle") COLLATE utf8_general_ci,
     billing_code_type_version VARCHAR(20),
     billing_code VARCHAR(14),
-    billing_code_type ENUM("CPT","HCPCS","ICD","MS-DRG","R-DRG","S-DRG","APS-DRG","AP-DRG","APR-DRG","APC","NDC","HIPPS","LOCAL","EAPG","CDT","RC","CSTM-ALL") utf8mb4_general_ci,
+    billing_code_type ENUM("CPT","HCPCS","ICD","MS-DRG","R-DRG","S-DRG","APS-DRG","AP-DRG","APR-DRG","APC","NDC","HIPPS","LOCAL","EAPG","CDT","RC","CSTM-ALL"),
     PRIMARY KEY (code_hash)
 );
 
