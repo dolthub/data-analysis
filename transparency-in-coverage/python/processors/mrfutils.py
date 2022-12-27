@@ -20,7 +20,7 @@ import io
 import json
 import logging
 import os
-from typing import Generator
+from typing import Generator, List
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -29,6 +29,8 @@ import ijson
 import requests
 
 from schema import SCHEMA
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as tqdma
 
 # You can remove this if necessary, but be warned
 try:
@@ -176,7 +178,7 @@ def _write_table(rows, tablename, out_dir):
 		if not file_exists:
 			writer.writeheader()
 
-		if type(rows) == list:
+		if type(rows) == List:
 			writer.writerows(rows)
 
 		if type(rows) == dict:
@@ -276,7 +278,7 @@ def _make_price_row(
 
 
 def _make_price_rows(
-	prices: list[dict],
+	prices: List[dict],
 	code_hash,
 	filename_hash,
 ):
@@ -302,7 +304,7 @@ def _make_provider_group_row(provider_group: dict):
 	return provider_group_row
 
 
-def _make_provider_group_rows(provider_groups: list[dict]):
+def _make_provider_group_rows(provider_groups: List[dict]):
 
 	provider_group_rows = []
 	for provider_group in provider_groups:
@@ -313,8 +315,8 @@ def _make_provider_group_rows(provider_groups: list[dict]):
 
 
 def _make_prices_provider_groups_rows(
-	price_rows: list[dict],
-	provider_group_rows: list[dict]
+	price_rows: List[dict],
+	provider_group_rows: List[dict]
 ):
 
 	prices_provider_groups_rows = []
@@ -401,16 +403,14 @@ async def _fetch_remote_provider_reference(
 
 
 async def _fetch_remote_provider_references(
-	unfetched_provider_references: list[dict],
+	unfetched_provider_references: List[dict],
 	npi_filter: set,
-) -> list[dict]:
+) -> List[dict]:
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
-
-		for unfetched_reference in unfetched_provider_references:
-
-			provider_group_id = unfetched_reference['provider_group_id']
-			provider_reference_loc = unfetched_reference['location']
+		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc="Remote P refs"):
+			provider_group_id = unfetched_provider_reference['provider_group_id']
+			provider_reference_loc = unfetched_provider_reference['location']
 
 			task = asyncio.wait_for(
 				_fetch_remote_provider_reference(
@@ -424,7 +424,7 @@ async def _fetch_remote_provider_references(
 
 			tasks.append(task)
 
-		fetched_references = await asyncio.gather(*tasks)
+		fetched_references = await tqdma.gather(*tasks)
 		fetched_references = [item for item in fetched_references if item]
 
 		return fetched_references
@@ -470,10 +470,10 @@ def _process_provider_reference(
 
 
 def _combine_local_remote_provider_references(
-	provider_references: list[dict],
-	unfetched_provider_references: list[dict],
+	provider_references: List[dict],
+	unfetched_provider_references: List[dict],
 	npi_filter: set,
-) -> list[dict]:
+) -> List[dict]:
 
 	loop = asyncio.get_event_loop()
 	fetched_provider_references = loop.run_until_complete(
@@ -530,7 +530,7 @@ def _process_in_network_item(
 	# 	billing_code_type = item['billing_code_type']
 	# 	billing_code = str(item['billing_code'])
 	# 	if (billing_code_type, billing_code) not in code_filter:
-	# 		log.debug(f"skipped {item['billing_code']} not in list")
+	# 		log.debug(f"skipped {item['billing_code']} not in List")
 	# 		return
 	#
 	# if item['negotiation_arrangement'] != 'ffs':
@@ -594,7 +594,7 @@ def _make_provider_reference_map(
 	provider_references = ijson.ObjectBuilder()
 	provider_references.event('start_array', None)
 
-	for prefix, event, value in parser:
+	for prefix, event, value in tqdm(parser, desc="Provider Reference Map"):
 		provider_references.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
 			unprocessed_reference = provider_references.value.pop()
