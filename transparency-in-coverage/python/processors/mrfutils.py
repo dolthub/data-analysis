@@ -405,10 +405,11 @@ async def _fetch_remote_provider_reference(
 async def _fetch_remote_provider_references(
 	unfetched_provider_references: List[dict],
 	npi_filter: set,
+	pos: int,
 ) -> List[dict]:
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
-		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc="Remote P refs"):
+		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc=f"{pos}: Remote P refs", position=int(pos), leave=True):
 			provider_group_id = unfetched_provider_reference['provider_group_id']
 			provider_reference_loc = unfetched_provider_reference['location']
 
@@ -424,7 +425,8 @@ async def _fetch_remote_provider_references(
 
 			tasks.append(task)
 
-		fetched_references = await tqdma.gather(*tasks)
+		fetched_references = await tqdma.gather(*tasks, desc=f"{pos}: Fetching References", position=int(pos), leave=True)
+
 		fetched_references = [item for item in fetched_references if item]
 
 		return fetched_references
@@ -473,6 +475,8 @@ def _combine_local_remote_provider_references(
 	provider_references: List[dict],
 	unfetched_provider_references: List[dict],
 	npi_filter: set,
+	pos: int,
+	
 ) -> List[dict]:
 
 	loop = asyncio.get_event_loop()
@@ -480,6 +484,7 @@ def _combine_local_remote_provider_references(
 		_fetch_remote_provider_references(
 			unfetched_provider_references = unfetched_provider_references,
 			npi_filter = npi_filter,
+			pos = pos
 		)
 	)
 
@@ -569,7 +574,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
-			log.debug(f'Skipping {code_type} {code}: filtered out')
+			# log.debug(f'Skipping {code_type} {code}: filtered out')
 			_ffwd(parser, 'in_network.item', 'end_map')
 			in_network_items.value.pop()
 			in_network_items.containers.pop()
@@ -577,7 +582,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
-		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
+		# log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
 		_ffwd(parser, 'in_network.item', 'end_map')
 		in_network_items.value.pop()
 		in_network_items.containers.pop()
@@ -586,6 +591,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 
 def _make_provider_reference_map(
 	parser,
+	pos,
 	npi_filter: set,
 ) -> dict:
 
@@ -594,7 +600,7 @@ def _make_provider_reference_map(
 	provider_references = ijson.ObjectBuilder()
 	provider_references.event('start_array', None)
 
-	for prefix, event, value in tqdm(parser, desc="Provider Reference Map"):
+	for prefix, event, value in tqdm(parser, desc=f"{pos}: Provider Reference Map", position=int(pos), leave=True):
 		provider_references.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
 			unprocessed_reference = provider_references.value.pop()
@@ -614,7 +620,8 @@ def _make_provider_reference_map(
 			combined_provider_references = _combine_local_remote_provider_references(
 				provider_references = provider_references.value,
 				unfetched_provider_references = unfetched_provider_references,
-				npi_filter = npi_filter,)
+				npi_filter = npi_filter,
+				pos = pos,)
 
 			provider_reference_map = {
 				p['provider_group_id']: p['provider_groups']
@@ -636,12 +643,13 @@ def _plan(parser):
 
 def _in_network_items(
 	parser,
+	pos,
 	code_filter: set,
 ) -> Generator[dict, None, None]:
 
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
-	for prefix, event, value in parser:
+	for prefix, event, value in tqdm(parser, desc=f"{pos}: In Network Items gen", position=int(pos)):
 		in_network_items.event(event, value)
 
 		# This line can be commented out! but it's faster with it in
@@ -694,11 +702,12 @@ class MRFContent:
 	read them in.
 	"""
 
-	def __init__(self, loc, npi_filter = None, code_filter = None):
+	def __init__(self, loc, npi_filter = None, code_filter = None, pos = 0):
 		self.loc = loc
 		self.code_filter = code_filter
 		self.npi_filter = npi_filter
 		self.extractor = self._extractor()
+		self.pos = pos
 
 	def start(self):
 		"""Opens the file, grabs the plan metadata"""
@@ -727,10 +736,11 @@ class MRFContent:
 			if prefix == 'provider_references':
 				provider_reference_map = _make_provider_reference_map(
 					parser = parser,
+					pos = self.pos,
 					npi_filter = self.npi_filter,)
 
 				_ffwd(parser, 'in_network', 'start_array')
-				unprocessed_items = _in_network_items(parser, self.code_filter)
+				unprocessed_items = _in_network_items(parser, self.pos, self.code_filter)
 				yield from _processed_in_network_items(
 					unprocessed_items = unprocessed_items,
 					provider_reference_map = provider_reference_map,
@@ -742,6 +752,7 @@ class MRFContent:
 				_ffwd(parser, 'provider_references', 'start_array')
 				provider_reference_map = _make_provider_reference_map(
 					parser = parser,
+					pos = self.pos,
 					npi_filter = self.npi_filter,
 				)
 			except StopIteration:
@@ -764,6 +775,7 @@ def json_mrf_to_csv(
 	code_filter: set,
 	out_dir: str,
 	url: str = None,
+	pos: int = 0,
 ) -> None:
 	"""
 	Writes MRF content to a flat file CSV in a specific schema.
@@ -781,7 +793,7 @@ def json_mrf_to_csv(
 	make_dir(out_dir)
 	filename_hash = _filename_hash(loc)
 
-	content = MRFContent(loc, npi_filter, code_filter)
+	content = MRFContent(loc, npi_filter, code_filter, pos)
 	content.start()
 
 	for in_network_item in content.in_network_items:
