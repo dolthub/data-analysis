@@ -409,7 +409,7 @@ async def _fetch_remote_provider_references(
 ) -> List[dict]:
 	tasks = []
 	async with aiohttp.client.ClientSession() as session:
-		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc=f"{pos}: Remote P refs", position=int(pos), leave=True):
+		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc=f"{pos}: Remote P refs", position=int(pos)):
 			provider_group_id = unfetched_provider_reference['provider_group_id']
 			provider_reference_loc = unfetched_provider_reference['location']
 
@@ -425,7 +425,7 @@ async def _fetch_remote_provider_references(
 
 			tasks.append(task)
 
-		fetched_references = await tqdma.gather(*tasks, desc=f"{pos}: Fetching References", position=int(pos), leave=True)
+		fetched_references = await tqdma.gather(*tasks, desc=f"{pos}: Fetching References", position=int(pos))
 
 		fetched_references = [item for item in fetched_references if item]
 
@@ -600,7 +600,7 @@ def _make_provider_reference_map(
 	provider_references = ijson.ObjectBuilder()
 	provider_references.event('start_array', None)
 
-	for prefix, event, value in tqdm(parser, desc=f"{pos}: Provider Reference Map", position=int(pos), leave=True):
+	for prefix, event, value in tqdm(parser, desc=f"{pos}: Provider Reference Map", position=int(pos)):
 		provider_references.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
 			unprocessed_reference = provider_references.value.pop()
