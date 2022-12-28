@@ -574,7 +574,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
-			# log.debug(f'Skipping {code_type} {code}: filtered out')
+			log.debug(f'Skipping {code_type} {code}: filtered out')
 			_ffwd(parser, 'in_network.item', 'end_map')
 			in_network_items.value.pop()
 			in_network_items.containers.pop()
@@ -582,7 +582,7 @@ def _local_optimization(in_network_items, parser, code_filter):
 
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
-		# log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
+		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
 		_ffwd(parser, 'in_network.item', 'end_map')
 		in_network_items.value.pop()
 		in_network_items.containers.pop()
