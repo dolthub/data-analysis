@@ -401,14 +401,14 @@ async def _fetch_remote_provider_reference(
 		)
 		return processed_remote_provider_reference
 
-
 async def _fetch_remote_provider_references(
 	unfetched_provider_references: List[dict],
 	npi_filter: set,
 	pos: int,
 ) -> List[dict]:
 	tasks = []
-	async with aiohttp.client.ClientSession() as session:
+	connector = aiohttp.TCPConnector(limit_per_host=10)
+	async with aiohttp.client.ClientSession(connector = connector) as session:
 		for unfetched_provider_reference in tqdm(unfetched_provider_references, desc=f"{pos}: Remote P refs", position=int(pos)):
 			provider_group_id = unfetched_provider_reference['provider_group_id']
 			provider_reference_loc = unfetched_provider_reference['location']
