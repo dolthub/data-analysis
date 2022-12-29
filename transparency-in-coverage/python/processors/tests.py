@@ -15,7 +15,7 @@ class Test(unittest.TestCase):
 		for idx, file in enumerate(self.test_files):
 			content = MRFContent(file)
 			content.start()
-			in_network_items = content.in_network_items
+			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
 			second_item = next(in_network_items)
@@ -28,7 +28,7 @@ class Test(unittest.TestCase):
 		for idx, file in enumerate(self.test_files):
 			content = MRFContent(file, npi_filter = npi_filter)
 			content.start()
-			in_network_items = list(content.in_network_items)
+			in_network_items = list(content.in_network_items())
 			assert in_network_items[0]['billing_code'] == '0000'
 			assert len(in_network_items) == 1
 			plan = content.plan
@@ -39,7 +39,7 @@ class Test(unittest.TestCase):
 		for file in self.test_files:
 			content = MRFContent(file, npi_filter = npi_filter)
 			content.start()
-			in_network_items = content.in_network_items
+			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['name'] == 'TEST NAME 2'
 			rates = first_item['negotiated_rates']
@@ -55,7 +55,7 @@ class Test(unittest.TestCase):
 		for file in self.test_files:
 			content = MRFContent(file, npi_filter = npi_filter)
 			content.start()
-			in_network_items = content.in_network_items
+			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
 			rates = first_item['negotiated_rates']
@@ -68,7 +68,7 @@ class Test(unittest.TestCase):
 		for file in self.test_files:
 			content = MRFContent(file, code_filter = code_filter)
 			content.start()
-			in_network_items = content.in_network_items
+			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
 
@@ -78,7 +78,7 @@ class Test(unittest.TestCase):
 		for file in self.test_files:
 			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
 			content.start()
-			in_network_items = content.in_network_items
+			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
 

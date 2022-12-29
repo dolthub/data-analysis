@@ -528,7 +528,11 @@ def _ffwd(parser, to_prefix, to_event):
 			return
 
 
-def _skip_filtered_in_network_items(parser, in_network_items, code_filter):
+def _skip_filtered_in_network_items(
+	parser,
+	in_network_items: ijson.ObjectBuilder,
+	code_filter: dict,
+):
 	"""
 	This stops us from having to build in-network objects (which are large)
 	when their billing codes or arrangement don't fit the filter. It's kind of a
@@ -555,7 +559,7 @@ def _skip_filtered_in_network_items(parser, in_network_items, code_filter):
 		return
 
 
-def _make_provider_reference_map(
+def make_ref_map(
 	parser,
 	npi_filter: set,
 ) -> dict:
@@ -593,38 +597,13 @@ def _make_provider_reference_map(
 
 			processed_provider_references.extend(fetched_provider_references)
 
-			provider_reference_map = {
+			ref_map = {
 				p['provider_group_id']: p['provider_groups']
 				for p in processed_provider_references
 				if p is not None
 			}
 
-			return provider_reference_map
-
-
-def get_provider_reference_map(
-	parser,
-	npi_filter: set,
-):
-	try:
-		_ffwd(parser, 'provider_references', 'start_array')
-	except StopIteration:
-		return None
-
-	provider_reference_map = _make_provider_reference_map(
-		parser = parser,
-		npi_filter = npi_filter)
-	return provider_reference_map
-
-
-def plan(parser):
-	plan_ = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
-		plan_.event(event, value)
-		if value in ('provider_references', 'in_network'):
-			return plan_.value
-	else:
-		raise InvalidMRF
+			return ref_map
 
 
 def filter_in_network_items(
@@ -643,7 +622,8 @@ def filter_in_network_items(
 			_skip_filtered_in_network_items(parser, in_network_items, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
-			yield in_network_items.value.pop()
+			item = in_network_items.value.pop()
+			yield item
 
 		elif (prefix, event) == ('in_network', 'end_array'):
 			return
@@ -680,47 +660,41 @@ class MRFContent:
 		self.filename = filename
 		self.code_filter = code_filter
 		self.npi_filter = npi_filter
-		self.extractor = self._extractor()
 
 	def start(self):
-		"""Opens the file, grabs the plan metadata"""
-		self.plan = next(self.extractor)
+		self.parser  = self._parser()
+		self._set_plan()
 
-	@property
-	def in_network_items(self) -> Generator[dict, None, None]:
-		# TODO force ordering
-		yield from self.extractor
-
-	def _extractor(self) -> Generator[dict, None, None]:
-		"""
-		Assumes that plan information comes first and generates
-		data dictionaries in the following order:
-		1. plan
-		2. all in-network items
-		The first time you call this function's __next__() you'll
-		get the plan information. This is what happens in start
-		>>> content.start() # advance extractor one step
-		The rest of the items are yielded afterwards
-		"""
+	def _parser(self) -> Generator:
 		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
-			yield plan(parser)
-			ref_map = get_provider_reference_map(parser, self.npi_filter)
-			_, event, value = next(parser)
-			# only options are (map_key, in_network) or (end_map, None)
-			if (event, value) == ('map_key', 'in_network'):
-				_ffwd(parser, 'in_network', 'start_array')
-				filtered_items = filter_in_network_items(parser, self.code_filter)
-				yield from process_in_network_items(filtered_items, ref_map, self.npi_filter)
+			yield from parser
+
+	def _set_plan(self):
+		plan_ = ijson.ObjectBuilder()
+		for prefix, event, value in self.parser:
+			plan_.event(event, value)
+			if value in ('provider_references', 'in_network'):
+				self.plan = plan_.value
 				return
-		# This block is only entered if the file needs to
-		# be read a second time (the provider references are
-		# on the bottom, or don't exist)
-		with JSONOpen(self.filename) as f:
-			parser = ijson.parse(f, use_float = True)
-			_ffwd(parser, 'in_network', 'start_array')
-			filtered_items = filter_in_network_items(parser, self.code_filter)
-			yield from process_in_network_items(filtered_items, ref_map, self.npi_filter)
+		else:
+			raise InvalidMRF
+
+	def _provider_reference_map(self):
+		try:
+			_ffwd(self.parser, 'provider_references', 'start_array')
+			return make_ref_map(self.parser, self.npi_filter)
+		except StopIteration:
+			return None
+
+	def in_network_items(self) -> Generator:
+		ref_map = self._provider_reference_map()
+		if not next(self.parser) == ('', 'map_key', 'in_network'):
+			self.parser = self._parser()
+
+		_ffwd(self.parser, 'in_network', 'start_array')
+		filtered_items = filter_in_network_items(self.parser, self.code_filter)
+		yield from process_in_network_items(filtered_items, ref_map, self.npi_filter)
 
 
 def json_mrf_to_csv(
