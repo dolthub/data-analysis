@@ -497,7 +497,10 @@ async def _fetch_remote_provider_references(
 	npi_filter: set,
 ) -> list[dict]:
 	tasks = []
-	async with aiohttp.client.ClientSession() as session:
+
+	connector = aiohttp.TCPConnector(limit_per_host=30)
+
+	async with aiohttp.client.ClientSession(connector = connector) as session:
 
 		for unfetched_reference in unfetched_provider_references:
 
@@ -511,7 +514,7 @@ async def _fetch_remote_provider_references(
 					provider_reference_loc = provider_reference_loc,
 					npi_filter = npi_filter,
 				),
-				timeout = 5,
+				timeout = None,
 			)
 
 			tasks.append(task)
@@ -650,7 +653,7 @@ class MRFContent:
 	>>> content = MRFContent(filename, npi_filter, code_filter)
 	>>> content.start_conn() # fetches plan info and opens file
 	>>> content.plan # access plan information
-	>>> content.in_network_items # generates items as file is read
+	>>> content.in_network_items() # generates items as file is read
 
 	From there you can write the items and plan information as you
 	read them in.
@@ -679,14 +682,14 @@ class MRFContent:
 		else:
 			raise InvalidMRF
 
-	def _provider_reference_map(self) -> dict | None:
+	def _provider_reference_map(self) -> dict:
 		try:
 			_ffwd(self.parser, 'provider_references', 'start_array')
 			return make_ref_map(self.parser, self.npi_filter)
 		except StopIteration:
 			return None
 
-	def in_network_items(self) -> Generator | None:
+	def in_network_items(self) -> Generator:
 		ref_map = self._provider_reference_map()
 		if not next(self.parser) == ('', 'map_key', 'in_network'):
 			self.parser = self._reset_parser()
@@ -716,12 +719,13 @@ def json_mrf_to_csv(
 	name, so if the name is different, the index will be wrong.
 	"""
 
+	#TODO warn user if filename is URL
+
 	make_dir(out_dir)
 	url = url if url else filename
 
-	# Explicitly make this variable up-front
-	# since both sets of tables (in_network and plan) use it
-	# and are linked by it
+	# Explicitly make this variable up-front since both sets of tables
+	# are linked by it (in_network and plan tables)
 	filename_hash = filename_hasher(filename)
 
 	content = MRFContent(filename, npi_filter, code_filter)
@@ -730,4 +734,4 @@ def json_mrf_to_csv(
 	for in_network_item in content.in_network_items():
 		write_in_network_item(in_network_item, filename_hash, out_dir)
 
-	write_plan(content.plan, filename_hash, url, out_dir)
+	write_plan(content.plan, filename_hash, filename, url, out_dir)
