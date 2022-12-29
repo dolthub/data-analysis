@@ -16,7 +16,6 @@ import asyncio
 import csv
 import gzip
 import hashlib
-import io
 import json
 import logging
 import os
@@ -45,60 +44,50 @@ class InvalidMRF(Exception):
 	pass
 
 
-class JSONOpen(io.BufferedIOBase):
+class JSONOpen:
 	"""
 	Context manager for opening JSON(.gz) MRFs.
 	Handles local and remote gzipped and unzipped
 	JSON files.
 	"""
 
-	def __init__(self, input):
-		if type(input) == bytes:
-			self.data = input
-			self.loc = None
-		else:
-			self.loc = input
-			self.data = None
-
+	def __init__(self, filename):
+		self.filename = filename
 		self.f = None
 		self.r = None
 		self.is_remote = None
 
-		if self.loc:
-			parsed_url = urlparse(self.loc)
-			self.suffix = ''.join(Path(parsed_url.path).suffixes)
+		parsed_url = urlparse(self.filename)
+		self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
-			if self.suffix not in ('.json.gz', '.json'):
-				raise InvalidMRF(f'Suffix not JSON: {self.loc}')
+		if self.suffix not in ('.json.gz', '.json'):
+			raise InvalidMRF(f'Suffix not JSON: {self.filename}')
 
-			self.is_remote = parsed_url.scheme in ('http', 'https')
+		self.is_remote = parsed_url.scheme in ('http', 'https')
 
 	def __enter__(self):
-		if self.data:
-			self.f = io.BytesIO(self.data)
-			return self.f
 		if (
 			self.is_remote
 			and self.suffix == '.json.gz'
 		):
-			self.r = requests.get(self.loc, stream=True)
+			self.r = requests.get(self.filename, stream=True)
 			self.f = gzip.GzipFile(fileobj=self.r.raw)
 
 		elif (
 			self.is_remote
 			and self.suffix == '.json'
 		):
-			self.r = requests.get(self.loc, stream=True)
+			self.r = requests.get(self.filename, stream=True)
 			self.r.raw.decode_content = True
 			self.f = self.r.raw
 
 		elif self.suffix == '.json.gz':
-			self.f = gzip.open(self.loc, 'rb')
+			self.f = gzip.open(self.filename, 'rb')
 
 		else:
-			self.f = open(self.loc, 'rb')
+			self.f = open(self.filename, 'rb')
 
-		log.info(f'Successfully opened file: {self.loc}')
+		log.info(f'Opened file: {self.filename}')
 		return self.f
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
@@ -153,9 +142,10 @@ def append_hash(item, name):
 	return item
 
 
-def _filename_hash(loc):
+def filename_hasher(filename):
 
-	filename = Path(loc).stem.split('.')[0]
+	# retrieve/only/this_part_of_the_file.json(.gz)
+	filename = Path(filename).stem.split('.')[0]
 	file_row = {'filename': filename}
 	filename_hash = dicthasher(file_row)
 
@@ -203,24 +193,44 @@ def _make_plan_row(plan: dict):
 	return plan_row
 
 
-def _make_file_row(loc, url):
+def _make_file_row(filename, filename_hash, url):
 
-	filename = Path(loc).stem.split('.')[0]
-	file_row = {'filename': filename}
-	file_row = append_hash(file_row, 'filename_hash')
-	file_row['url'] = url
+	filename = Path(filename).stem.split('.')[0]
+	file_row = {
+		'filename': filename,
+		'filename_hash': filename_hash,
+		'url': url
+	}
 
 	return file_row
 
 
-def _make_plan_file_row(plan_row, file_row):
+def _make_plan_file_row(plan_row, filename_hash):
 
 	plan_file_row = {
 		'plan_hash': plan_row['plan_hash'],
-		'filename_hash': file_row['filename_hash']
+		'filename_hash': filename_hash,
 	}
 
 	return plan_file_row
+
+
+def write_plan(
+	plan: dict,
+	filename_hash,
+	filename,
+	url,
+	out_dir
+):
+
+	file_row = _make_file_row(filename, filename_hash, url)
+	_write_table(file_row, 'files', out_dir)
+
+	plan_row = _make_plan_row(plan)
+	_write_table(plan_row, 'plans', out_dir)
+
+	plan_file_row = _make_plan_file_row(plan_row, filename_hash)
+	_write_table(plan_file_row, 'plans_files', out_dir)
 
 
 def _make_code_row(in_network_item: dict):
@@ -258,6 +268,8 @@ def _make_price_row(
 		'billing_code_modifier',
 	]
 
+	# TODO billing code modifier can have empty strings
+	# in its JSON -- remove these before sorting
 	for key in optional_json_keys:
 		if price.get(key):
 			price.get(key)
@@ -358,23 +370,6 @@ def write_in_network_item(
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']
 	log.debug(f'Wrote {code_type} {code}')
-
-
-def write_plan(
-	plan: dict,
-	loc,
-	url,
-	out_dir
-):
-
-	file_row = _make_file_row(loc, url)
-	_write_table(file_row, 'files', out_dir)
-
-	plan_row = _make_plan_row(plan)
-	_write_table(plan_row, 'plans', out_dir)
-
-	plan_file_row = _make_plan_file_row(plan_row, file_row)
-	_write_table(plan_file_row, 'plans_files', out_dir)
 
 
 async def _fetch_remote_provider_reference(
@@ -624,6 +619,22 @@ def _make_provider_reference_map(
 			return provider_reference_map
 
 
+def get_provider_reference_map(
+	parser,
+	npi_filter: set,
+):
+	try:
+		_ffwd(parser, 'provider_references', 'start_array')
+	except StopIteration:
+		print('oops!')
+		return None
+
+	provider_reference_map = _make_provider_reference_map(
+		parser = parser,
+		npi_filter = npi_filter)
+	return provider_reference_map
+
+
 def _plan(parser):
 	plan = ijson.ObjectBuilder()
 	for prefix, event, value in parser:
@@ -670,6 +681,20 @@ def _processed_in_network_items(
 			yield processed_item
 
 
+def get_processed_in_network_items(
+	parser,
+	provider_reference_map: dict,
+	code_filter: set,
+	npi_filter: set,
+):
+	_ffwd(parser, 'in_network', 'start_array')
+	unprocessed_items = _in_network_items(parser, code_filter = code_filter)
+	yield from _processed_in_network_items(
+		unprocessed_items = unprocessed_items,
+		provider_reference_map = provider_reference_map,
+		npi_filter = npi_filter)
+
+
 class MRFContent:
 	"""
 	Bucket for MRF data. Assumes that the MRF is in one of the
@@ -685,7 +710,7 @@ class MRFContent:
 	(but that won't be a big deal.)
 
 	Usage:
-	>>> content = MRFContent(loc, npi_filter, code_filter)
+	>>> content = MRFContent(filename, npi_filter, code_filter)
 	>>> content.start() # fetches plan info and opens file
 	>>> content.plan # access plan information
 	>>> content.in_network_items # generates items as file is read
@@ -694,8 +719,8 @@ class MRFContent:
 	read them in.
 	"""
 
-	def __init__(self, loc, npi_filter = None, code_filter = None):
-		self.loc = loc
+	def __init__(self, filename, npi_filter = None, code_filter = None):
+		self.filename = filename
 		self.code_filter = code_filter
 		self.npi_filter = npi_filter
 		self.extractor = self._extractor()
@@ -710,7 +735,8 @@ class MRFContent:
 
 	def _extractor(self) -> Generator[dict, None, None]:
 		"""
-		Generates MRF dictionaries in the order:
+		Assumes that plan information comes first and generates
+		data dictionaries in the following order:
 		1. plan
 		2. all in-network items
 		The first time you call this function's __next__() you'll
@@ -718,48 +744,35 @@ class MRFContent:
 		>>> content.start() # advance extractor one step
 		The rest of the items are yielded afterwards
 		"""
-		with JSONOpen(self.loc) as f:
-
+		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
 			yield _plan(parser)
-
-			prefix, _, _ = next(parser)
-			if prefix == 'provider_references':
-				provider_reference_map = _make_provider_reference_map(
-					parser = parser,
-					npi_filter = self.npi_filter,)
-
-				_ffwd(parser, 'in_network', 'start_array')
-				unprocessed_items = _in_network_items(parser, self.code_filter)
-				yield from _processed_in_network_items(
-					unprocessed_items = unprocessed_items,
-					provider_reference_map = provider_reference_map,
-					npi_filter = self.npi_filter)
-				return
-			# Enter this block if we don't find provider references
-			# Try to see if they're at the bottom
-			try:
-				_ffwd(parser, 'provider_references', 'start_array')
-				provider_reference_map = _make_provider_reference_map(
-					parser = parser,
-					npi_filter = self.npi_filter,
-				)
-			except StopIteration:
-				provider_reference_map = None
-		# Enter this block when provider references are either
-		# at the bottom or not found
-		with JSONOpen(self.loc) as f:
-			parser = ijson.parse(f, use_float = True)
-			_ffwd(parser, 'in_network', 'start_array')
-			unprocessed_items = _in_network_items(parser, self.code_filter)
-			yield from _processed_in_network_items(
-				unprocessed_items = unprocessed_items,
-				provider_reference_map = provider_reference_map,
+			provider_reference_map = get_provider_reference_map(
+				parser,
 				npi_filter = self.npi_filter)
+			_, event, value = next(parser)
+			# only options are (map_key, in_network) or (end_map, None)
+			if (event, value) == ('map_key', 'in_network'):
+				yield from get_processed_in_network_items(
+					parser = parser,
+					provider_reference_map = provider_reference_map,
+					code_filter = self.code_filter,
+					npi_filter = self.npi_filter,)
+				return
+		# This block is only entered if the file needs to
+		# be read a second time (the provider references are
+		# on the bottom, or don't exist)
+		with JSONOpen(self.filename) as f:
+			parser = ijson.parse(f, use_float = True)
+			yield from get_processed_in_network_items(
+				parser = parser,
+				provider_reference_map = provider_reference_map,
+				code_filter = self.code_filter,
+				npi_filter = self.npi_filter,)
 
 
 def json_mrf_to_csv(
-	loc: str,
+	filename: str,
 	npi_filter: set,
 	code_filter: set,
 	out_dir: str,
@@ -779,9 +792,12 @@ def json_mrf_to_csv(
 	"""
 
 	make_dir(out_dir)
-	filename_hash = _filename_hash(loc)
 
-	content = MRFContent(loc, npi_filter, code_filter)
+	# Explicitly make this variable up-front
+	# since both sets of tables (in_network and plan) use it
+	filename_hash = filename_hasher(filename)
+
+	content = MRFContent(filename, npi_filter, code_filter)
 	content.start()
 
 	for in_network_item in content.in_network_items:
@@ -793,7 +809,8 @@ def json_mrf_to_csv(
 
 	write_plan(
 		plan = content.plan,
-		loc = loc,
-		url = url if url else loc,
-		out_dir = out_dir
+		filename_hash = filename_hash,
+		filename = filename,
+		url = url if url else filename,
+		out_dir = out_dir,
 	)

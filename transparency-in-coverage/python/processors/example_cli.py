@@ -1,3 +1,12 @@
+"""
+Example for how to use the functions in mrfutils.py
+
+>>> python3 example_cli.py --url <your_url> --npis <csvfile> --codes <csvfile>
+
+If you plan on importing files with separate URLs, you can feed the URL
+to the URL parameter of `json_mrf_to_csv`. Just add an additional command
+line argument to do that.
+"""
 import argparse
 import logging
 from mrfutils import import_csv_to_set, json_mrf_to_csv
@@ -8,7 +17,7 @@ log.setLevel(logging.DEBUG)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-u', '--url')
-parser.add_argument('-o', '--out', default = 'out_dir')
+parser.add_argument('-o', '--out', default = 'csv_output')
 parser.add_argument('-c', '--codes')
 parser.add_argument('-n', '--npis')
 
@@ -28,8 +37,8 @@ else:
     npi_filter = None
 
 json_mrf_to_csv(
-    loc = url,
-    url = url,
+    filename = url,
+    # url = url,
     npi_filter = npi_filter,
     code_filter = code_filter,
     out_dir = out_dir
