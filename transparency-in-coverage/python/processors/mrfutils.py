@@ -648,7 +648,7 @@ class MRFContent:
 
 	Usage:
 	>>> content = MRFContent(filename, npi_filter, code_filter)
-	>>> content.start() # fetches plan info and opens file
+	>>> content.start_conn() # fetches plan info and opens file
 	>>> content.plan # access plan information
 	>>> content.in_network_items # generates items as file is read
 
@@ -661,36 +661,35 @@ class MRFContent:
 		self.code_filter = code_filter
 		self.npi_filter = npi_filter
 
-	def start(self):
-		self.parser  = self._parser()
-		self._set_plan()
+	def start_conn(self):
+		self.parser = self._reset_parser()
+		self.plan   = self._plan()
 
-	def _parser(self) -> Generator:
+	def _reset_parser(self) -> Generator:
 		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
 			yield from parser
 
-	def _set_plan(self):
+	def _plan(self) -> dict:
 		plan_ = ijson.ObjectBuilder()
 		for prefix, event, value in self.parser:
 			plan_.event(event, value)
 			if value in ('provider_references', 'in_network'):
-				self.plan = plan_.value
-				return
+				return plan_.value
 		else:
 			raise InvalidMRF
 
-	def _provider_reference_map(self):
+	def _provider_reference_map(self) -> dict | None:
 		try:
 			_ffwd(self.parser, 'provider_references', 'start_array')
 			return make_ref_map(self.parser, self.npi_filter)
 		except StopIteration:
 			return None
 
-	def in_network_items(self) -> Generator:
+	def in_network_items(self) -> Generator | None:
 		ref_map = self._provider_reference_map()
 		if not next(self.parser) == ('', 'map_key', 'in_network'):
-			self.parser = self._parser()
+			self.parser = self._reset_parser()
 
 		_ffwd(self.parser, 'in_network', 'start_array')
 		filtered_items = filter_in_network_items(self.parser, self.code_filter)
@@ -718,25 +717,17 @@ def json_mrf_to_csv(
 	"""
 
 	make_dir(out_dir)
+	url = url if url else filename
 
 	# Explicitly make this variable up-front
 	# since both sets of tables (in_network and plan) use it
+	# and are linked by it
 	filename_hash = filename_hasher(filename)
 
 	content = MRFContent(filename, npi_filter, code_filter)
-	content.start()
+	content.start_conn()
 
-	for in_network_item in content.in_network_items:
-		write_in_network_item(
-			in_network_item = in_network_item,
-			filename_hash = filename_hash,
-			out_dir = out_dir
-		)
+	for in_network_item in content.in_network_items():
+		write_in_network_item(in_network_item, filename_hash, out_dir)
 
-	write_plan(
-		plan = content.plan,
-		filename_hash = filename_hash,
-		filename = filename,
-		url = url if url else filename,
-		out_dir = out_dir,
-	)
+	write_plan(content.plan, filename_hash, url, out_dir)

@@ -14,7 +14,7 @@ class Test(unittest.TestCase):
 	def test_ordering(self):
 		for idx, file in enumerate(self.test_files):
 			content = MRFContent(file)
-			content.start()
+			content.start_conn()
 			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
@@ -27,7 +27,7 @@ class Test(unittest.TestCase):
 		npi_filter = {'9889889881'}
 		for idx, file in enumerate(self.test_files):
 			content = MRFContent(file, npi_filter = npi_filter)
-			content.start()
+			content.start_conn()
 			in_network_items = list(content.in_network_items())
 			assert in_network_items[0]['billing_code'] == '0000'
 			assert len(in_network_items) == 1
@@ -38,7 +38,7 @@ class Test(unittest.TestCase):
 		npi_filter = {'2222222222'}
 		for file in self.test_files:
 			content = MRFContent(file, npi_filter = npi_filter)
-			content.start()
+			content.start_conn()
 			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['name'] == 'TEST NAME 2'
@@ -54,7 +54,7 @@ class Test(unittest.TestCase):
 		npi_filter = {'1234567890', '4444444444'}
 		for file in self.test_files:
 			content = MRFContent(file, npi_filter = npi_filter)
-			content.start()
+			content.start_conn()
 			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
@@ -67,7 +67,7 @@ class Test(unittest.TestCase):
 		code_filter = {('TS-TST', '0000')}
 		for file in self.test_files:
 			content = MRFContent(file, code_filter = code_filter)
-			content.start()
+			content.start_conn()
 			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
@@ -77,7 +77,7 @@ class Test(unittest.TestCase):
 		npi_filter = {'4444444444'}
 		for file in self.test_files:
 			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
-			content.start()
+			content.start_conn()
 			in_network_items = content.in_network_items()
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
