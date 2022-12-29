@@ -643,8 +643,8 @@ def _plan(parser):
 
 def _in_network_items(
 	parser,
-	pos,
 	code_filter: set,
+	pos: type,
 ) -> Generator[dict, None, None]:
 
 	in_network_items = ijson.ObjectBuilder()
@@ -740,7 +740,7 @@ class MRFContent:
 					npi_filter = self.npi_filter,)
 
 				_ffwd(parser, 'in_network', 'start_array')
-				unprocessed_items = _in_network_items(parser, self.pos, self.code_filter)
+				unprocessed_items = _in_network_items(parser, self.code_filter, self.pos)
 				yield from _processed_in_network_items(
 					unprocessed_items = unprocessed_items,
 					provider_reference_map = provider_reference_map,
@@ -762,7 +762,7 @@ class MRFContent:
 		with JSONOpen(self.loc) as f:
 			parser = ijson.parse(f, use_float = True)
 			_ffwd(parser, 'in_network', 'start_array')
-			unprocessed_items = _in_network_items(parser, self.code_filter)
+			unprocessed_items = _in_network_items(parser, self.code_filter, self.pos)
 			yield from _processed_in_network_items(
 				unprocessed_items = unprocessed_items,
 				provider_reference_map = provider_reference_map,
