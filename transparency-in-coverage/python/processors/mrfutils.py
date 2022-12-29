@@ -464,7 +464,7 @@ def _process_provider_reference(
 	return result
 
 
-def _combine_local_remote_provider_references(
+def _combine_provider_references(
 	provider_references: list[dict],
 	unfetched_provider_references: list[dict],
 	npi_filter: set,
@@ -517,20 +517,7 @@ def _process_in_network_item(
 	in_network_item: dict,
 	provider_reference_map: dict,
 	npi_filter: set,
-	# code_filter = None
 ) -> dict:
-
-	# the local optimization takes care of this
-	# if code_filter:
-	# 	billing_code_type = item['billing_code_type']
-	# 	billing_code = str(item['billing_code'])
-	# 	if (billing_code_type, billing_code) not in code_filter:
-	# 		log.debug(f"skipped {item['billing_code']} not in list")
-	# 		return
-	#
-	# if item['negotiation_arrangement'] != 'ffs':
-	# 	log.debug('wrong type')
-	# 	return
 
 	rates = []
 	for unprocessed_rate in in_network_item['negotiated_rates']:
@@ -552,7 +539,7 @@ def _ffwd(parser, to_prefix, to_event):
 			return
 
 
-def _local_optimization(in_network_items, parser, code_filter):
+def _skip_filtered_in_network_items(in_network_items, parser, code_filter):
 	"""
 	This stops us from having to build in-network objects (which are large)
 	when their billing codes or arrangement don't fit the filter. It's kind of a
@@ -601,12 +588,11 @@ def _make_provider_reference_map(
 				item = unprocessed_reference,
 				npi_filter = npi_filter)
 
-
 			if provider_reference:
 				provider_references.value.insert(1, provider_reference)
 
 		elif (prefix, event) == ('provider_references', 'end_array'):
-			combined_provider_references = _combine_local_remote_provider_references(
+			combined_provider_references = _combine_provider_references(
 				provider_references = provider_references.value,
 				unfetched_provider_references = unfetched_provider_references,
 				npi_filter = npi_filter,)
@@ -626,7 +612,6 @@ def get_provider_reference_map(
 	try:
 		_ffwd(parser, 'provider_references', 'start_array')
 	except StopIteration:
-		print('oops!')
 		return None
 
 	provider_reference_map = _make_provider_reference_map(
@@ -645,10 +630,12 @@ def _plan(parser):
 		raise InvalidMRF
 
 
-def _in_network_items(
+def filter_in_network_items(
 	parser,
 	code_filter: set,
 ) -> Generator[dict, None, None]:
+
+	_ffwd(parser, 'in_network', 'start_array')
 
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
@@ -657,7 +644,7 @@ def _in_network_items(
 
 		# This line can be commented out! but it's faster with it in
 		if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
-			_local_optimization(in_network_items, parser, code_filter)
+			_skip_filtered_in_network_items(in_network_items, parser, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
 			yield in_network_items.value.pop()
@@ -666,7 +653,7 @@ def _in_network_items(
 			return
 
 
-def _processed_in_network_items(
+def process_in_network_items(
 	unprocessed_items: Generator[dict, None, None],
 	provider_reference_map: dict,
 	npi_filter: set,
@@ -681,20 +668,10 @@ def _processed_in_network_items(
 			yield processed_item
 
 
-def get_processed_in_network_items(
-	parser,
-	provider_reference_map: dict,
-	code_filter: set,
-	npi_filter: set,
-):
-	_ffwd(parser, 'in_network', 'start_array')
-	unprocessed_items = _in_network_items(parser, code_filter = code_filter)
-	yield from _processed_in_network_items(
-		unprocessed_items = unprocessed_items,
-		provider_reference_map = provider_reference_map,
-		npi_filter = npi_filter)
-
-
+# Basic pipeline
+# MRF -> read header -> filter provider refs -> read in-network items
+# read in-network items: filter items -> process items
+#
 class MRFContent:
 	"""
 	Bucket for MRF data. Assumes that the MRF is in one of the
@@ -753,10 +730,12 @@ class MRFContent:
 			_, event, value = next(parser)
 			# only options are (map_key, in_network) or (end_map, None)
 			if (event, value) == ('map_key', 'in_network'):
-				yield from get_processed_in_network_items(
+				unprocessed_items = filter_in_network_items(
 					parser = parser,
+					code_filter = self.code_filter)
+				yield from process_in_network_items(
+					unprocessed_items = unprocessed_items,
 					provider_reference_map = provider_reference_map,
-					code_filter = self.code_filter,
 					npi_filter = self.npi_filter,)
 				return
 		# This block is only entered if the file needs to
@@ -764,10 +743,12 @@ class MRFContent:
 		# on the bottom, or don't exist)
 		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
-			yield from get_processed_in_network_items(
+			unprocessed_items = filter_in_network_items(
 				parser = parser,
+				code_filter = self.code_filter)
+			yield from process_in_network_items(
+				unprocessed_items = unprocessed_items,
 				provider_reference_map = provider_reference_map,
-				code_filter = self.code_filter,
 				npi_filter = self.npi_filter,)
 
 
@@ -783,7 +764,7 @@ def json_mrf_to_csv(
 	The url parameter is optional -- if you pass only a loc,
 	we assume that the file is remote.
 
-	If you pass a loc and a URL the file is read from loc but the
+	If you pass a filename and a URL, the file is read from filename but the
 	URL that you input is used. This is just saved for bookkeeping.
 
 	!Importantly! you have to make sure that whatever file you saved
