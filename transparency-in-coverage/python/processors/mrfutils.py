@@ -22,6 +22,7 @@ import os
 from typing import Generator
 from pathlib import Path
 from urllib.parse import urlparse
+from functools import partial
 
 import aiohttp
 import ijson
@@ -372,6 +373,102 @@ def write_in_network_item(
 	log.debug(f'Wrote {code_type} {code}')
 
 
+def process_arr(func, arr, *args, **kwargs):
+	processed_arr = []
+	for item in arr:
+		if processed_item := func(item, *args, **kwargs):
+			processed_arr.append(processed_item)
+	return processed_arr
+
+
+def process_provider_group(
+	provider_group: dict,
+	npi_filter: set,
+) -> dict:
+	npi = [str(n) for n in provider_group['npi']]
+
+	if npi_filter:
+		npi = [n for n in npi if n in npi_filter]
+
+	if npi:
+		tin = provider_group['tin']
+		provider_group = {'npi': npi, 'tin': tin}
+		return provider_group
+
+
+def process_provider_reference(
+	provider_reference: dict,
+	npi_filter: set,
+) -> dict:
+
+	provider_groups = process_provider_groups(
+		provider_reference['provider_groups'],
+		npi_filter
+	)
+
+	if provider_groups:
+		provider_reference = {
+			'provider_group_id' : provider_reference['provider_group_id'],
+			'provider_groups'   : provider_groups
+		}
+		return provider_reference
+
+
+def process_in_network_item(
+	in_network_item: dict,
+	provider_reference_map: dict,
+	npi_filter: set,
+) -> dict:
+
+	rates = process_rates(
+		in_network_item['negotiated_rates'],
+		provider_reference_map,
+		npi_filter)
+
+	if rates:
+		in_network_item['negotiated_rates'] = rates
+		return in_network_item
+
+
+def process_rate(
+	rate: dict,
+	provider_reference_map: dict,
+	npi_filter: set,
+) -> dict:
+
+	provider_groups = rate.get('provider_groups', [])
+	if provider_reference_map and rate.get('provider_references'):
+		for provider_group_id in rate['provider_references']:
+			addl_provider_groups = provider_reference_map.get(provider_group_id)
+			if addl_provider_groups:
+				provider_groups.extend(addl_provider_groups)
+		rate.pop('provider_references')
+
+	processed_provider_groups = process_provider_groups(provider_groups, npi_filter)
+
+	if processed_provider_groups:
+		rate['provider_groups'] = processed_provider_groups
+		return rate
+
+
+def process_in_network_items(
+	in_network_items,
+	provider_reference_map: dict,
+	npi_filter: set,
+) -> Generator[dict, None, None]:
+
+	for item in in_network_items:
+		processed_item = process_in_network_item(item, provider_reference_map, npi_filter)
+		if processed_item:
+			yield processed_item
+
+
+# process_provider_references = partial(process_arr, process_provider_reference)
+process_provider_groups     = partial(process_arr, process_provider_group)
+process_rates               = partial(process_arr, process_rate)
+# process_in_network_items    = partial(process_arr, process_in_network_item)
+
+
 async def _fetch_remote_provider_reference(
 	session,
 	provider_group_id,
@@ -379,17 +476,18 @@ async def _fetch_remote_provider_reference(
 	npi_filter: set,
 ) -> dict:
 	async with session.get(provider_reference_loc) as response:
-
 		log.info(f'Opened remote provider reference url:{provider_reference_loc}')
 		assert response.status == 200
 
 		f = await response.read()
 
-		unprocessed_data = json.loads(f)
-		unprocessed_data['provider_group_id'] = provider_group_id
+		remote_reference = json.loads(f)
+		remote_reference['provider_group_id'] = provider_group_id
 
-		processed_remote_provider_reference = _process_provider_reference(
-			item = unprocessed_data,
+		# return remote_reference
+
+		processed_remote_provider_reference = process_provider_reference(
+			provider_reference = remote_reference,
 			npi_filter = npi_filter,
 		)
 		return processed_remote_provider_reference
@@ -414,7 +512,7 @@ async def _fetch_remote_provider_references(
 					provider_reference_loc = provider_reference_loc,
 					npi_filter = npi_filter,
 				),
-				timeout=5,
+				timeout = 5,
 			)
 
 			tasks.append(task)
@@ -423,45 +521,6 @@ async def _fetch_remote_provider_references(
 		fetched_references = [item for item in fetched_references if item]
 
 		return fetched_references
-
-
-def _process_provider_group(
-	provider_group: dict,
-	npi_filter: set,
-) -> dict:
-	npi = [str(n) for n in provider_group['npi']]
-
-	if npi_filter:
-		npi = [n for n in npi if n in npi_filter]
-
-	if not npi:
-		return
-
-	tin = provider_group['tin']
-
-	provider_group = {'npi': npi, 'tin': tin}
-	return provider_group
-
-
-def _process_provider_reference(
-	item: dict,
-	npi_filter: set,
-) -> dict:
-	processed_provider_groups = []
-	for provider_group in item['provider_groups']:
-		provider_group = _process_provider_group(provider_group, npi_filter)
-		if provider_group:
-			processed_provider_groups.append(provider_group)
-
-	if not processed_provider_groups:
-		return
-
-	result = {
-		'provider_group_id' : item['provider_group_id'],
-		'provider_groups'   : processed_provider_groups
-	}
-
-	return result
 
 
 def _combine_provider_references(
@@ -474,63 +533,10 @@ def _combine_provider_references(
 	fetched_provider_references = loop.run_until_complete(
 		_fetch_remote_provider_references(
 			unfetched_provider_references = unfetched_provider_references,
-			npi_filter = npi_filter,
-		)
+			npi_filter = npi_filter,)
 	)
-
-	provider_references.extend(
-		fetched_provider_references
-	)
-
-	return provider_references
-
-
-def _process_rate(
-	rate: dict,
-	provider_reference_map: dict,
-	npi_filter,
-) -> dict:
-
-	provider_groups = rate.get('provider_groups', [])
-	if provider_reference_map and rate.get('provider_references'):
-		for provider_group_id in rate['provider_references']:
-			addl_provider_groups = provider_reference_map.get(provider_group_id)
-			if addl_provider_groups:
-				provider_groups.extend(addl_provider_groups)
-		rate.pop('provider_references')
-
-	processed_provider_groups = []
-	for provider_group in provider_groups:
-		processed_provider_group = _process_provider_group(provider_group, npi_filter)
-		if processed_provider_group:
-			processed_provider_groups.append(processed_provider_group)
-
-	if not processed_provider_groups:
-		return
-
-	rate['provider_groups'] = processed_provider_groups
-
-	return rate
-
-
-def _process_in_network_item(
-	in_network_item: dict,
-	provider_reference_map: dict,
-	npi_filter: set,
-) -> dict:
-
-	rates = []
-	for unprocessed_rate in in_network_item['negotiated_rates']:
-		rate = _process_rate(unprocessed_rate, provider_reference_map, npi_filter)
-		if rate:
-			rates.append(rate)
-
-	if not rates:
-		return
-
-	in_network_item['negotiated_rates'] = rates
-
-	return in_network_item
+	provider_references.extend(fetched_provider_references)
+	yield from provider_references
 
 
 def _ffwd(parser, to_prefix, to_event):
@@ -539,7 +545,7 @@ def _ffwd(parser, to_prefix, to_event):
 			return
 
 
-def _skip_filtered_in_network_items(in_network_items, parser, code_filter):
+def _skip_filtered_in_network_items(parser, in_network_items, code_filter):
 	"""
 	This stops us from having to build in-network objects (which are large)
 	when their billing codes or arrangement don't fit the filter. It's kind of a
@@ -584,8 +590,8 @@ def _make_provider_reference_map(
 				unfetched_provider_references.append(unprocessed_reference)
 				continue
 
-			provider_reference = _process_provider_reference(
-				item = unprocessed_reference,
+			provider_reference = process_provider_reference(
+				provider_reference = unprocessed_reference,
 				npi_filter = npi_filter)
 
 			if provider_reference:
@@ -599,7 +605,7 @@ def _make_provider_reference_map(
 
 			provider_reference_map = {
 				p['provider_group_id']: p['provider_groups']
-				for p in combined_provider_references
+				for p in list(combined_provider_references)
 				if p is not None
 			}
 			return provider_reference_map
@@ -620,12 +626,12 @@ def get_provider_reference_map(
 	return provider_reference_map
 
 
-def _plan(parser):
-	plan = ijson.ObjectBuilder()
+def plan(parser):
+	plan_ = ijson.ObjectBuilder()
 	for prefix, event, value in parser:
-		plan.event(event, value)
+		plan_.event(event, value)
 		if value in ('provider_references', 'in_network'):
-			return plan.value
+			return plan_.value
 	else:
 		raise InvalidMRF
 
@@ -640,32 +646,18 @@ def filter_in_network_items(
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
 	for prefix, event, value in parser:
+
 		in_network_items.event(event, value)
 
 		# This line can be commented out! but it's faster with it in
 		if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
-			_skip_filtered_in_network_items(in_network_items, parser, code_filter)
+			_skip_filtered_in_network_items(parser, in_network_items, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
 			yield in_network_items.value.pop()
 
 		elif (prefix, event) == ('in_network', 'end_array'):
 			return
-
-
-def process_in_network_items(
-	unprocessed_items: Generator[dict, None, None],
-	provider_reference_map: dict,
-	npi_filter: set,
-) -> Generator[dict, None, None]:
-
-	for unprocessed_item in unprocessed_items:
-		processed_item = _process_in_network_item(
-			in_network_item = unprocessed_item,
-			npi_filter = npi_filter,
-			provider_reference_map = provider_reference_map)
-		if processed_item:
-			yield processed_item
 
 
 # Basic pipeline
@@ -708,6 +700,7 @@ class MRFContent:
 
 	@property
 	def in_network_items(self) -> Generator[dict, None, None]:
+		# TODO force ordering
 		yield from self.extractor
 
 	def _extractor(self) -> Generator[dict, None, None]:
@@ -723,7 +716,7 @@ class MRFContent:
 		"""
 		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
-			yield _plan(parser)
+			yield plan(parser)
 			provider_reference_map = get_provider_reference_map(
 				parser,
 				npi_filter = self.npi_filter)
@@ -734,7 +727,7 @@ class MRFContent:
 					parser = parser,
 					code_filter = self.code_filter)
 				yield from process_in_network_items(
-					unprocessed_items = unprocessed_items,
+					unprocessed_items,
 					provider_reference_map = provider_reference_map,
 					npi_filter = self.npi_filter,)
 				return
@@ -747,7 +740,7 @@ class MRFContent:
 				parser = parser,
 				code_filter = self.code_filter)
 			yield from process_in_network_items(
-				unprocessed_items = unprocessed_items,
+				unprocessed_items,
 				provider_reference_map = provider_reference_map,
 				npi_filter = self.npi_filter,)
 

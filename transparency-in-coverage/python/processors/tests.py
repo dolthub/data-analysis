@@ -30,7 +30,6 @@ class Test(unittest.TestCase):
 			content.start()
 			in_network_items = list(content.in_network_items)
 			assert in_network_items[0]['billing_code'] == '0000'
-
 			assert len(in_network_items) == 1
 			plan = content.plan
 			assert plan['reporting_entity_name'] == 'TEST ENTITY'
