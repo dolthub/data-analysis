@@ -644,7 +644,7 @@ def _plan(parser):
 def _in_network_items(
 	parser,
 	code_filter: set,
-	pos: type,
+	pos: int,
 ) -> Generator[dict, None, None]:
 
 	in_network_items = ijson.ObjectBuilder()
