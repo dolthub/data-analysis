@@ -373,14 +373,6 @@ def write_in_network_item(
 	log.debug(f'Wrote {code_type} {code}')
 
 
-def process_arr(func, arr, *args, **kwargs):
-	processed_arr = []
-	for item in arr:
-		if processed_item := func(item, *args, **kwargs):
-			processed_arr.append(processed_item)
-	return processed_arr
-
-
 def process_provider_group(
 	provider_group: dict,
 	npi_filter: set,
@@ -463,6 +455,14 @@ def process_in_network_items(
 			yield processed_item
 
 
+def process_arr(func, arr, *args, **kwargs):
+	processed_arr = []
+	for item in arr:
+		if processed_item := func(item, *args, **kwargs):
+			processed_arr.append(processed_item)
+	return processed_arr
+
+
 # process_provider_references = partial(process_arr, process_provider_reference)
 process_provider_groups     = partial(process_arr, process_provider_group)
 process_rates               = partial(process_arr, process_rate)
@@ -484,13 +484,12 @@ async def _fetch_remote_provider_reference(
 		remote_reference = json.loads(f)
 		remote_reference['provider_group_id'] = provider_group_id
 
-		# return remote_reference
-
-		processed_remote_provider_reference = process_provider_reference(
+		provider_reference = process_provider_reference(
 			provider_reference = remote_reference,
 			npi_filter = npi_filter,
 		)
-		return processed_remote_provider_reference
+
+		return provider_reference
 
 
 async def _fetch_remote_provider_references(
@@ -521,22 +520,6 @@ async def _fetch_remote_provider_references(
 		fetched_references = [item for item in fetched_references if item]
 
 		return fetched_references
-
-
-def _combine_provider_references(
-	provider_references: list[dict],
-	unfetched_provider_references: list[dict],
-	npi_filter: set,
-) -> list[dict]:
-
-	loop = asyncio.get_event_loop()
-	fetched_provider_references = loop.run_until_complete(
-		_fetch_remote_provider_references(
-			unfetched_provider_references = unfetched_provider_references,
-			npi_filter = npi_filter,)
-	)
-	provider_references.extend(fetched_provider_references)
-	yield from provider_references
 
 
 def _ffwd(parser, to_prefix, to_event):
@@ -578,6 +561,7 @@ def _make_provider_reference_map(
 ) -> dict:
 
 	unfetched_provider_references = []
+	processed_provider_references = []
 
 	provider_references = ijson.ObjectBuilder()
 	provider_references.event('start_array', None)
@@ -592,22 +576,29 @@ def _make_provider_reference_map(
 
 			provider_reference = process_provider_reference(
 				provider_reference = unprocessed_reference,
-				npi_filter = npi_filter)
+				npi_filter = npi_filter
+			)
 
 			if provider_reference:
-				provider_references.value.insert(1, provider_reference)
+				processed_provider_references.append(provider_reference)
 
 		elif (prefix, event) == ('provider_references', 'end_array'):
-			combined_provider_references = _combine_provider_references(
-				provider_references = provider_references.value,
-				unfetched_provider_references = unfetched_provider_references,
-				npi_filter = npi_filter,)
+
+			loop = asyncio.get_event_loop()
+			fetched_provider_references = loop.run_until_complete(
+				_fetch_remote_provider_references(
+					unfetched_provider_references = unfetched_provider_references,
+					npi_filter = npi_filter,)
+			)
+
+			processed_provider_references.extend(fetched_provider_references)
 
 			provider_reference_map = {
 				p['provider_group_id']: p['provider_groups']
-				for p in list(combined_provider_references)
+				for p in processed_provider_references
 				if p is not None
 			}
+
 			return provider_reference_map
 
 
@@ -641,8 +632,6 @@ def filter_in_network_items(
 	code_filter: set,
 ) -> Generator[dict, None, None]:
 
-	_ffwd(parser, 'in_network', 'start_array')
-
 	in_network_items = ijson.ObjectBuilder()
 	in_network_items.event('start_array', None)
 	for prefix, event, value in parser:
@@ -663,7 +652,6 @@ def filter_in_network_items(
 # Basic pipeline
 # MRF -> read header -> filter provider refs -> read in-network items
 # read in-network items: filter items -> process items
-#
 class MRFContent:
 	"""
 	Bucket for MRF data. Assumes that the MRF is in one of the
@@ -717,32 +705,22 @@ class MRFContent:
 		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
 			yield plan(parser)
-			provider_reference_map = get_provider_reference_map(
-				parser,
-				npi_filter = self.npi_filter)
+			ref_map = get_provider_reference_map(parser, self.npi_filter)
 			_, event, value = next(parser)
 			# only options are (map_key, in_network) or (end_map, None)
 			if (event, value) == ('map_key', 'in_network'):
-				unprocessed_items = filter_in_network_items(
-					parser = parser,
-					code_filter = self.code_filter)
-				yield from process_in_network_items(
-					unprocessed_items,
-					provider_reference_map = provider_reference_map,
-					npi_filter = self.npi_filter,)
+				_ffwd(parser, 'in_network', 'start_array')
+				filtered_items = filter_in_network_items(parser, self.code_filter)
+				yield from process_in_network_items(filtered_items, ref_map, self.npi_filter)
 				return
 		# This block is only entered if the file needs to
 		# be read a second time (the provider references are
 		# on the bottom, or don't exist)
 		with JSONOpen(self.filename) as f:
 			parser = ijson.parse(f, use_float = True)
-			unprocessed_items = filter_in_network_items(
-				parser = parser,
-				code_filter = self.code_filter)
-			yield from process_in_network_items(
-				unprocessed_items,
-				provider_reference_map = provider_reference_map,
-				npi_filter = self.npi_filter,)
+			_ffwd(parser, 'in_network', 'start_array')
+			filtered_items = filter_in_network_items(parser, self.code_filter)
+			yield from process_in_network_items(filtered_items, ref_map, self.npi_filter)
 
 
 def json_mrf_to_csv(
