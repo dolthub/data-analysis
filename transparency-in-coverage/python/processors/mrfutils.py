@@ -498,7 +498,7 @@ async def _fetch_remote_provider_references(
 ) -> list[dict]:
 	tasks = []
 
-	connector = aiohttp.TCPConnector(limit_per_host=30)
+	connector = aiohttp.TCPConnector(limit_per_host=10000)
 
 	async with aiohttp.client.ClientSession(connector = connector) as session:
 
@@ -527,7 +527,9 @@ async def _fetch_remote_provider_references(
 
 def _ffwd(parser, to_prefix, to_event):
 	for prefix, event, _ in parser:
-		if (prefix, event) == (to_prefix, to_event):
+		# Short circuit evaluation is better than tuple
+		# comparison
+		if prefix == to_prefix and event == to_event:
 			return
 
 
