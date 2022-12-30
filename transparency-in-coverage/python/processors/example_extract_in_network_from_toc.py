@@ -35,6 +35,8 @@ def main():
     desc_loc_pat = "\"description\":\"(.+?)\",\"location\":\"(.+?)\""
     plan_pat = r'"plan_name":"(.+?)"'
 
+    seen_urls = dict()
+
     with JSONOpen(anthem_toc_url) as f:
         for line in f:
             line = str(line)
@@ -43,8 +45,11 @@ def main():
                 match = re.search(plan_pat, line)
                 plan_name = match.group(1)
                 for description, url in g:
-                    insert_file_url(cnx, url)
-                    cnx.commit()
+                    if not url in seen_urls:
+                        print(url)
+                        insert_file_url(cnx, url)
+                        cnx.commit()
+                        seen_urls[url] = True
 
 if __name__ == "__main__":
     main()
