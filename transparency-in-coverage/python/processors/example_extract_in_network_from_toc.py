@@ -22,6 +22,7 @@ def insert_file_url(cnx, url):
     o = urlparse(url)
     filename = o.path.split('/')[-1]
     filename_hash = _filename_hash(filename)
+    filename = filename.replace('.gz', '').replace('.json', '')
 
     cur.execute("INSERT IGNORE files (filename_hash, filename, url) VALUES (%s, %s, %s)", (filename_hash, filename, url))
 
