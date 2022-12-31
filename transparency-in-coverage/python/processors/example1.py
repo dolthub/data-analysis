@@ -6,7 +6,7 @@ from pathlib import Path
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm import tqdm
 
-from exporters import CSVExporter
+from exporters import SQLDumpExporter
 from mrfutils import import_csv_to_set, json_mrf_to_csv, InvalidMRF
 
 log = logging.getLogger("mrfutils")
@@ -23,7 +23,7 @@ urls = [
     f"{p}/test/test_file_4.json",  # should fail
 ]
 
-exporter = CSVExporter("example1")
+exporter = SQLDumpExporter("dump.sql")
 exporter.start()
 
 for url in tqdm(urls):
