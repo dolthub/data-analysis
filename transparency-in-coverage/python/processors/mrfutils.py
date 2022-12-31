@@ -406,53 +406,54 @@ def process_provider_reference(
 		return provider_reference
 
 
-def process_in_network_item(
-	in_network_item: dict,
+def replace_provider_references_in_rates(
+	rates: list[dict],
 	provider_reference_map: dict,
-	npi_filter: set,
-) -> dict:
-
-	rates = process_rates(
-		in_network_item['negotiated_rates'],
-		provider_reference_map,
-		npi_filter)
-
-	if rates:
-		in_network_item['negotiated_rates'] = rates
-		return in_network_item
-
-
-def process_rate(
-	rate: dict,
-	provider_reference_map: dict,
-	npi_filter: set,
-) -> dict:
-
-	provider_groups = rate.get('provider_groups', [])
-	if provider_reference_map and rate.get('provider_references'):
-		for provider_group_id in rate['provider_references']:
-			addl_provider_groups = provider_reference_map.get(provider_group_id)
-			if addl_provider_groups:
+):
+	for rate in rates:
+		provider_groups = rate.get('provider_groups', [])
+		if provider_reference_map and rate.get('provider_references'):
+			for provider_group_id in rate['provider_references']:
+				addl_provider_groups = provider_reference_map.get(provider_group_id, [])
 				provider_groups.extend(addl_provider_groups)
-		rate.pop('provider_references')
+			rate.pop('provider_references')
+		rate['provider_groups'] = provider_groups
+	return rates
 
+
+def replace_provider_references(
+	in_network_items: Generator,
+	provider_reference_map: dict,
+):
+	for in_network_item in in_network_items:
+		in_network_item['negotiated_rates'] = replace_provider_references_in_rates(
+			in_network_item['negotiated_rates'],
+			provider_reference_map)
+		yield in_network_item
+
+
+def npi_filter_in_network(
+	in_network_items: Generator,
+	npi_filter: set,
+):
+	for in_network_item in in_network_items:
+		rates = filter_npis_from_rates(in_network_item['negotiated_rates'], npi_filter)
+		if rates:
+			in_network_item['negotiated_rates'] = rates
+			yield in_network_item
+
+
+def filter_npis_from_rate(
+	rate: dict,
+	npi_filter: set,
+) -> dict:
+
+	provider_groups = rate['provider_groups']
 	processed_provider_groups = process_provider_groups(provider_groups, npi_filter)
 
 	if processed_provider_groups:
 		rate['provider_groups'] = processed_provider_groups
 		return rate
-
-
-def process_in_network_items(
-	in_network_items,
-	provider_reference_map: dict,
-	npi_filter: set,
-) -> Generator[dict, None, None]:
-
-	for item in in_network_items:
-		processed_item = process_in_network_item(item, provider_reference_map, npi_filter)
-		if processed_item:
-			yield processed_item
 
 
 def process_arr(func, arr, *args, **kwargs):
@@ -465,7 +466,7 @@ def process_arr(func, arr, *args, **kwargs):
 
 # process_provider_references = partial(process_arr, process_provider_reference)
 process_provider_groups     = partial(process_arr, process_provider_group)
-process_rates               = partial(process_arr, process_rate)
+filter_npis_from_rates      = partial(process_arr, filter_npis_from_rate)
 # process_in_network_items    = partial(process_arr, process_in_network_item)
 
 
@@ -525,7 +526,7 @@ async def _fetch_remote_provider_references(
 		return fetched_references
 
 
-def _ffwd(parser, to_prefix, to_event):
+def ffwd(parser, to_prefix, to_event):
 	for prefix, event, _ in parser:
 		# Short circuit evaluation is better than tuple
 		# comparison
@@ -552,7 +553,7 @@ def _skip_filtered_in_network_items(
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
-			_ffwd(parser, 'in_network.item', 'end_map')
+			ffwd(parser, 'in_network.item', 'end_map')
 			builder.value.pop()
 			builder.containers.pop()
 			return
@@ -560,7 +561,7 @@ def _skip_filtered_in_network_items(
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-		_ffwd(parser, 'in_network.item', 'end_map')
+		ffwd(parser, 'in_network.item', 'end_map')
 		builder.value.pop()
 		builder.containers.pop()
 		return
@@ -613,10 +614,10 @@ def make_ref_map(
 			return ref_map
 
 
-def filter_in_network_items(
+def code_filter_in_network(
 	parser,
 	code_filter: set,
-) -> Generator[dict, None, None]:
+) -> Generator:
 
 	builder = ijson.ObjectBuilder()
 	builder.event('start_array', None)
@@ -631,9 +632,6 @@ def filter_in_network_items(
 		if (prefix, event) == ('in_network.item', 'end_map'):
 			item = builder.value.pop()
 			yield item
-
-		elif (prefix, event) == ('in_network', 'end_array'):
-			return
 
 
 # Basic pipeline
@@ -669,39 +667,48 @@ class MRFContent:
 		self.npi_filter = npi_filter
 
 	def start_conn(self):
-		self.parser = self._reset_parser()
-		self.plan   = self._plan()
+		self.parser = self.reset_parser()
+		self.set_plan()
 
-	def _reset_parser(self) -> Generator:
+	def reset_parser(self) -> Generator:
 		with JSONOpen(self.filename) as f:
-			parser = ijson.parse(f, use_float = True)
-			yield from parser
+			yield from ijson.parse(f, use_float = True)
 
-	def _plan(self) -> dict:
+	def set_plan(self) -> dict:
 		builder = ijson.ObjectBuilder()
 		for prefix, event, value in self.parser:
 			builder.event(event, value)
 			if value in ('provider_references', 'in_network'):
-				return builder.value
+				self.plan = builder.value
+				break
 		else:
 			raise InvalidMRF
 
-	def _provider_reference_map(self) -> dict:
+	def prepare_in_network_state(self) -> None:
+		# Normally ordered case
+		if next(self.parser) == ('provider_references', 'start_array', None):
+			self.ref_map = make_ref_map(self.parser, self.npi_filter)
+			ffwd(self.parser, 'in_network', 'start_array')
+			return
 		try:
-			_ffwd(self.parser, 'provider_references', 'start_array')
-			ref_map = make_ref_map(self.parser, self.npi_filter)
-			if not next(self.parser) == ('', 'map_key', 'in_network'):
-				self.parser = self._reset_parser()
-			return ref_map
+			# Check for provider references at bottom
+			ffwd(self.parser, 'provider_references', 'start_array')
 		except StopIteration:
-			self.parser = self._reset_parser()
+			# StopIteration -> they don't exist
+			self.ref_map = None
+		else:
+			# Collect them
+			self.ref_map = make_ref_map(self.parser, self.npi_filter)
+		finally:
+			self.parser = self.reset_parser()
+			ffwd(self.parser, 'in_network', 'start_array')
 
 	def in_network_items(self) -> Generator:
-		ref_map = self._provider_reference_map()
-		_ffwd(self.parser, 'in_network', 'start_array')
-		filtered_items   = filter_in_network_items(self.parser, self.code_filter)
-		processed_items = process_in_network_items(filtered_items, ref_map, self.npi_filter)
-		yield from processed_items
+		self.prepare_in_network_state()
+		code_filtered_items = code_filter_in_network(self.parser, self.code_filter)
+		replaced_items      = replace_provider_references(code_filtered_items, self.ref_map)
+		npi_filtered_items  = npi_filter_in_network(replaced_items, self.npi_filter)
+		return npi_filtered_items
 
 
 def json_mrf_to_csv(

@@ -82,6 +82,16 @@ class Test(unittest.TestCase):
 			first_item = next(in_network_items)
 			assert first_item['billing_code'] == '0000'
 
+	def test_not_in_list(self):
+		code_filter = {('TS-TST', '0000')}
+		# code_filter = None
+		npi_filter = {'NOTINLIST'}
+		for file in self.test_files:
+			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
+			content.start_conn()
+			in_network_items = content.in_network_items()
+			assert len(list(in_network_items)) == 0
+
 	# def test_hashes_match(self):
 	# 	Still need to write a test for this
 	# 	for file in self.test_files:
