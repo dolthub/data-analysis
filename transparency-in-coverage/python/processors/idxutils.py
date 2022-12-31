@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import ijson
 import logging
 from mrfutils import JSONOpen
@@ -24,3 +26,14 @@ def gen_in_network_links(index_loc,):
                 count += 1
 
     log.debug(f'Found: {count} in-network files.')
+
+def get_unique_in_network_urls(toc_url, limit=None):
+    seen_urls = dict()
+
+    for url in gen_in_network_links(toc_url):
+        seen_urls[url] = True
+
+        if limit is not None and len(seen_urls) >= limit:
+            break
+
+    return list(seen_urls.keys())
