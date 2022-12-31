@@ -50,6 +50,7 @@ def clean_url(input_url):
     cleaned_url = (parsed_url[1] + parsed_url[2]).strip()
     return cleaned_url
 
+
 def hashdict(data_dict):
     if not data_dict:
         raise ValueError
@@ -58,6 +59,7 @@ def hashdict(data_dict):
     dict_as_bytes = json.dumps(sorted_tups).encode("utf-8")
     dict_hash = hashlib.sha256(dict_as_bytes).hexdigest()[:16]
     return dict_hash
+
 
 def rows_to_file(rows, output_dir):
     for row in rows:
@@ -111,10 +113,14 @@ def innetwork_to_rows(obj, root_hash_key):
             neg_price_vals = {
                 "billing_class": neg_price["billing_class"],
                 "negotiated_type": neg_price["negotiated_type"],
-                "service_code": sc if (sc := neg_price.get("service_code", None)) else None,
+                "service_code": sc
+                if (sc := neg_price.get("service_code", None))
+                else None,
                 "expiration_date": neg_price["expiration_date"],
                 "additional_information": neg_price.get("additional_information", None),
-                "billing_code_modifier": bcm if (bcm := neg_price.get("billing_code_modifier", None)) else None,
+                "billing_code_modifier": bcm
+                if (bcm := neg_price.get("billing_code_modifier", None))
+                else None,
                 "negotiated_rate": neg_price["negotiated_rate"],
                 "root_hash_key": root_hash_key,
                 "in_network_hash_key": in_network_hash_key,

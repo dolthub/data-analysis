@@ -16,7 +16,7 @@ cur.execute("CREATE TABLE IF NOT EXISTS fetched_index_files(url PRIMARY KEY UNIQ
 mrfs_url = "https://www.bluecrossnc.com/about-us/policies-and-best-practices/transparency-coverage-mrf"
 
 r = requests.get(mrfs_url)
-soup = BeautifulSoup(r.content, features = "lxml")
+soup = BeautifulSoup(r.content, features="lxml")
 
 links = soup.find_all("a")
 urls = []
@@ -30,7 +30,7 @@ async def fetch_url_sizes(table, urls):
     Simple async function for getting all the file sizes in a list of urls
     and writing those to a SQLite table
     """
-    
+
     session = aiohttp.ClientSession()
     fs = [session.head(url) for url in urls]
 
@@ -40,9 +40,10 @@ async def fetch_url_sizes(table, urls):
         size = int(resp.headers.get("content-length", -1))
         cur.execute(f"""INSERT OR IGNORE INTO {table} VALUES ("{url}", {size})""")
         con.commit()
-        
+
     await session.close()
-            
+
+
 # Get all the MRF files on the main BCBS page
 asyncio.run(fetch_url_sizes("index_files", urls))
 
@@ -53,17 +54,25 @@ for url in tqdm(index_file_urls):
 
     url = url[0]
 
-    if cur.execute(f"""SELECT url FROM fetched_index_files where url = "{url}" """).fetchone() is None:
+    if (
+        cur.execute(
+            f"""SELECT url FROM fetched_index_files where url = "{url}" """
+        ).fetchone()
+        is None
+    ):
 
-        resp = requests.get(url, stream = True)
-        size_mb = int(resp.headers["Content-Length"])/1_000_000
+        resp = requests.get(url, stream=True)
+        size_mb = int(resp.headers["Content-Length"]) / 1_000_000
 
         if size_mb > 1_000:
             print(f"\nCannot download file of size: {size_mb} MB. Do this manually.")
             print(url)
             continue
 
-        urls = [file["location"] for file in r.json()["reporting_structure"][0]["in_network_files"]]
+        urls = [
+            file["location"]
+            for file in r.json()["reporting_structure"][0]["in_network_files"]
+        ]
 
         asyncio.run(fetch_url_sizes("in_network_files", urls))
 
