@@ -23,7 +23,7 @@ urls = [
     f"{p}/test/test_file_4.json",  # should fail
 ]
 
-exporter = CSVExporter("out_dir")
+exporter = CSVExporter("example1")
 exporter.start()
 
 for url in tqdm(urls):
