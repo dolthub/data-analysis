@@ -689,18 +689,19 @@ class MRFContent:
 	def _provider_reference_map(self) -> dict:
 		try:
 			_ffwd(self.parser, 'provider_references', 'start_array')
-			return make_ref_map(self.parser, self.npi_filter)
+			ref_map = make_ref_map(self.parser, self.npi_filter)
+			if not next(self.parser) == ('', 'map_key', 'in_network'):
+				self.parser = self._reset_parser()
+			return ref_map
 		except StopIteration:
 			self.parser = self._reset_parser()
 
 	def in_network_items(self) -> Generator:
 		ref_map = self._provider_reference_map()
-		if not next(self.parser) == ('', 'map_key', 'in_network'):
-			self.parser = self._reset_parser()
-
 		_ffwd(self.parser, 'in_network', 'start_array')
-		filtered_items = filter_in_network_items(self.parser, self.code_filter)
-		yield from process_in_network_items(filtered_items, ref_map, self.npi_filter)
+		filtered_items   = filter_in_network_items(self.parser, self.code_filter)
+		processed_items = process_in_network_items(filtered_items, ref_map, self.npi_filter)
+		yield from processed_items
 
 
 def json_mrf_to_csv(
