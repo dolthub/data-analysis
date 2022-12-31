@@ -28,6 +28,7 @@ import aiohttp
 import ijson
 import requests
 
+from exporters import AbstractExporter
 from schema import SCHEMA
 
 # You can remove this if necessary, but be warned
@@ -121,12 +122,6 @@ def import_csv_to_set(filename: str):
         return items
 
 
-def make_dir(out_dir):
-
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
-
-
 def dicthasher(data, n_bytes=8):
 
     if not data:
@@ -154,28 +149,6 @@ def _filename_hash(loc):
     filename_hash = dicthasher(file_row)
 
     return filename_hash
-
-
-def _write_table(rows, tablename, out_dir):
-
-    fieldnames = SCHEMA[tablename]
-    file_loc = f"{out_dir}/{tablename}.csv"
-    file_exists = os.path.exists(file_loc)
-
-    # newline = '' is to prevent Windows
-    # from adding \r\n\n to the end of each line
-    with open(file_loc, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-
-        if not file_exists:
-            writer.writeheader()
-
-        if type(rows) == list:
-            writer.writerows(rows)
-
-        if type(rows) == dict:
-            row = rows
-            writer.writerow(row)
 
 
 def _make_plan_row(plan: dict):
@@ -317,44 +290,43 @@ def _make_prices_provider_groups_rows(
     return prices_provider_groups_rows
 
 
-def write_in_network_item(in_network_item: dict, filename_hash, out_dir):
+def write_in_network_item(in_network_item: dict, filename_hash, exporter):
     code_row = _make_code_row(in_network_item)
-    _write_table(code_row, "codes", out_dir)
+    exporter.writer_row("codes", code_row)
 
     code_hash = code_row["code_hash"]
 
     for rate in in_network_item["negotiated_rates"]:
-        prices = rate["negotiated_prices"]
         provider_groups = rate["provider_groups"]
-
-        price_rows = _make_price_rows(prices, code_hash, filename_hash)
-        _write_table(price_rows, "prices", out_dir)
-
         provider_group_rows = _make_provider_group_rows(provider_groups)
-        _write_table(provider_group_rows, "provider_groups", out_dir)
+        exporter.write_rows("provider_groups", provider_group_rows)
+
+        prices = rate["negotiated_prices"]
+        price_rows = _make_price_rows(prices, code_hash, filename_hash)
+        exporter.write_rows("prices", price_rows)
 
         prices_provider_group_rows = _make_prices_provider_groups_rows(
             price_rows, provider_group_rows
         )
-        _write_table(prices_provider_group_rows, "prices_provider_groups", out_dir)
+        exporter.writer_rows("prices_provider_groups", prices_provider_group_rows)
 
     code_type = in_network_item["billing_code_type"]
     code = in_network_item["billing_code"]
     log.debug(f"Wrote {code_type} {code}")
 
 
-def write_plan(plan: dict, loc, url, out_dir):
+def write_plan(plan: dict, loc, url, exporter):
     plan_row = _make_plan_row(plan)
-    _write_table(plan_row, "plans", out_dir)
+    exporter.write_row("plans", plan_row)
 
     file_row = _make_file_row(loc, url)
-    _write_table(file_row, "files", out_dir)
+    exporter.write_row("files", file_row)
 
     plan_row = _make_plan_row(plan)
-    _write_table(plan_row, "plans", out_dir)
+    exporter.write_row("plans", plan_row)
 
     plan_file_row = _make_plan_file_row(plan_row, file_row)
-    _write_table(plan_file_row, "plans_files", out_dir)
+    exporter.write_row("plans_files", plan_file_row)
 
 
 async def _fetch_remote_provider_reference(
@@ -744,7 +716,7 @@ def json_mrf_to_csv(
     loc: str,
     npi_filter: set,
     code_filter: set,
-    out_dir: str,
+    exporter: AbstractExporter,
     url: str = None,
 ) -> None:
     """
@@ -766,11 +738,11 @@ def json_mrf_to_csv(
     content = MRFContent(loc, npi_filter, code_filter)
     content.start()
 
-    write_plan(plan=content.plan, loc=loc, url=url if url else loc, out_dir=out_dir)
+    write_plan(plan=content.plan, loc=loc, url=url if url else loc, exporter=exporter)
 
     for in_network_item in content.in_network_items:
         write_in_network_item(
             in_network_item=in_network_item,
             filename_hash=filename_hash,
-            out_dir=out_dir,
+            exporter=exporter,
         )
