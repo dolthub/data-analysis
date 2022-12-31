@@ -30,7 +30,7 @@ class CSVExporter(AbstractExporter):
         self.out_dir = out_dir
 
     def start(self):
-        os.makedirs(out_dir, exist_ok=True)
+        os.makedirs(self.out_dir, exist_ok=True)
 
     def _get_file_for_table(self, tablename):
         is_new_file = False
@@ -70,7 +70,7 @@ class CSVExporter(AbstractExporter):
 
     def finalise(self):
         for out_f in self._files.values():
-            ouf_f.close()
+            out_f.close()
 
         self._files = None
         self._csv_writers = None
