@@ -336,7 +336,6 @@ def write_in_network_item(
 	filename_hash,
 	out_dir
 ):
-
 	code_row = _make_code_row(in_network_item)
 	_write_table(code_row, 'codes', out_dir)
 
@@ -366,12 +365,11 @@ def write_plan(
 	url,
 	out_dir
 ):
+	plan_row = _make_plan_row(plan)
+	_write_table(plan_row, 'plans', out_dir)
 
 	file_row = _make_file_row(loc, url)
 	_write_table(file_row, 'files', out_dir)
-
-	plan_row = _make_plan_row(plan)
-	_write_table(plan_row, 'plans', out_dir)
 
 	plan_file_row = _make_plan_file_row(plan_row, file_row)
 	_write_table(plan_file_row, 'plans_files', out_dir)
@@ -784,6 +782,13 @@ def json_mrf_to_csv(
 	content = MRFContent(loc, npi_filter, code_filter)
 	content.start()
 
+	write_plan(
+		plan = content.plan,
+		loc = loc,
+		url = url if url else loc,
+		out_dir = out_dir
+	)
+
 	for in_network_item in content.in_network_items:
 		write_in_network_item(
 			in_network_item = in_network_item,
@@ -791,9 +796,3 @@ def json_mrf_to_csv(
 			out_dir = out_dir
 		)
 
-	write_plan(
-		plan = content.plan,
-		loc = loc,
-		url = url if url else loc,
-		out_dir = out_dir
-	)
