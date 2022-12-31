@@ -5,6 +5,7 @@ import os
 
 from schema import SCHEMA
 
+
 class AbstractExporter(object):
     def start(self):
         raise NotImplementedError()
@@ -17,6 +18,7 @@ class AbstractExporter(object):
 
     def finalise(self):
         raise NotImplementedError()
+
 
 class CSVExporter(AbstractExporter):
     out_dir = None
@@ -36,7 +38,7 @@ class CSVExporter(AbstractExporter):
         if out_f is None:
             file_loc = os.path.join(self.out_dir, tablename + ".csv")
             is_new_file = not os.path.exists(file_loc)
-            out_f = open(file_loc, 'a', encoding='utf-8')
+            out_f = open(file_loc, "a", encoding="utf-8")
             self._files[tablename] = out_f
 
         return out_f, is_new_file
@@ -46,13 +48,15 @@ class CSVExporter(AbstractExporter):
         if csv_writer is None:
             out_f, is_new_file = self._get_file_for_table(tablename)
             fieldnames = SCHEMA[tablename]
-            csv_writer = csv.DictWriter(out_f, fieldnames=fieldnames, lineterminator='\n')
+            csv_writer = csv.DictWriter(
+                out_f, fieldnames=fieldnames, lineterminator="\n"
+            )
             if is_new_file:
                 csv_writer.writeheader()
             self._csv_writers[tablename] = csv_writer
 
         return csv_writer
-    
+
     def write_row(self, tablename, row):
         csv_writer = self._get_csvwriter_for_table(tablename)
         csv_writer.writerow(row)
@@ -70,4 +74,3 @@ class CSVExporter(AbstractExporter):
 
         self._files = None
         self._csv_writers = None
-
