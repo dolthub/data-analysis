@@ -20,7 +20,7 @@ dialysis = [
     ("CPT", "90935"),
     ("CPT", "90937"),
     ("CPT", "90940"),
-    ]
+]
 
 create_output_dir(output_dir, overwrite=False)
 
@@ -29,5 +29,5 @@ try:
         args.url, output_dir=output_dir, code_list=dialysis, npi_list=npi_set
     )
 except Exception as e:
-    logger.warn(f'Failed for {args.url}')
+    logger.warn(f"Failed for {args.url}")
     logger.warn(e)

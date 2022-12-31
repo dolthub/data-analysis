@@ -3,14 +3,14 @@ import logging
 from mrfutils import import_csv_to_set, json_mrf_to_csv
 
 logging.basicConfig()
-log = logging.getLogger('mrfutils')
+log = logging.getLogger("mrfutils")
 log.setLevel(logging.DEBUG)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-u', '--url')
-parser.add_argument('-o', '--out', default = 'out_dir')
-parser.add_argument('-c', '--codes')
-parser.add_argument('-n', '--npis')
+parser.add_argument("-u", "--url")
+parser.add_argument("-o", "--out", default="out_dir")
+parser.add_argument("-c", "--codes")
+parser.add_argument("-n", "--npis")
 
 args = parser.parse_args()
 
@@ -28,9 +28,5 @@ else:
     npi_filter = None
 
 json_mrf_to_csv(
-    loc = url,
-    url = url,
-    npi_filter = npi_filter,
-    code_filter = code_filter,
-    out_dir = out_dir
+    loc=url, url=url, npi_filter=npi_filter, code_filter=code_filter, out_dir=out_dir
 )

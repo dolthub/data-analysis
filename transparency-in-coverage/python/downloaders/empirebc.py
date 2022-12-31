@@ -20,12 +20,13 @@ urls = set()
 for file in json_data["reporting_structure"][0]["in_network_files"]:
     urls.add(file["location"])
 
+
 async def fetch_url_sizes(table, urls):
     """
     Simple async function for getting all the file sizes in a list of urls
     and writing those to a SQLite table
     """
-    
+
     session = aiohttp.ClientSession()
     fs = [session.head(url) for url in urls]
 
@@ -35,8 +36,9 @@ async def fetch_url_sizes(table, urls):
         size = int(resp.headers.get("content-length", -1))
         cur.execute(f"""INSERT OR IGNORE INTO {table} VALUES ("{url}", {size})""")
         con.commit()
-        
+
     await session.close()
+
 
 print("Fetching URLs and their sizes...")
 asyncio.run(fetch_url_sizes("in_network_files", urls))
