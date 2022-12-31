@@ -322,9 +322,6 @@ def write_plan(plan: dict, loc, url, exporter):
     file_row = _make_file_row(loc, url)
     exporter.write_row("files", file_row)
 
-    plan_row = _make_plan_row(plan)
-    exporter.write_row("plans", plan_row)
-
     plan_file_row = _make_plan_file_row(plan_row, file_row)
     exporter.write_row("plans_files", plan_file_row)
 
