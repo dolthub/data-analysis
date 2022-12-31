@@ -732,7 +732,6 @@ def json_mrf_to_csv(
     name, so if the name is different, the index will be wrong.
     """
 
-    make_dir(out_dir)
     filename_hash = _filename_hash(loc)
 
     content = MRFContent(loc, npi_filter, code_filter)
