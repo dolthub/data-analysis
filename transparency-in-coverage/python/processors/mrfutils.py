@@ -531,6 +531,8 @@ def _ffwd(parser, to_prefix, to_event):
 		# comparison
 		if prefix == to_prefix and event == to_event:
 			return
+	else:
+		raise StopIteration
 
 
 def _skip_filtered_in_network_items(
@@ -689,7 +691,7 @@ class MRFContent:
 			_ffwd(self.parser, 'provider_references', 'start_array')
 			return make_ref_map(self.parser, self.npi_filter)
 		except StopIteration:
-			return None
+			self.parser = self._reset_parser()
 
 	def in_network_items(self) -> Generator:
 		ref_map = self._provider_reference_map()
