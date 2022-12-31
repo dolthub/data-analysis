@@ -537,7 +537,7 @@ def _ffwd(parser, to_prefix, to_event):
 
 def _skip_filtered_in_network_items(
 	parser,
-	in_network_items: ijson.ObjectBuilder,
+	builder: ijson.ObjectBuilder,
 	code_filter: dict,
 ):
 	"""
@@ -545,7 +545,7 @@ def _skip_filtered_in_network_items(
 	when their billing codes or arrangement don't fit the filter. It's kind of a
 	hack which is why I bundled these changes into one function.
 	"""
-	item = in_network_items.value[-1]
+	item = builder.value[-1]
 	code_type = item.get('billing_code_type')
 	code = item.get('billing_code')
 
@@ -553,16 +553,16 @@ def _skip_filtered_in_network_items(
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
 			_ffwd(parser, 'in_network.item', 'end_map')
-			in_network_items.value.pop()
-			in_network_items.containers.pop()
+			builder.value.pop()
+			builder.containers.pop()
 			return
 
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
 		_ffwd(parser, 'in_network.item', 'end_map')
-		in_network_items.value.pop()
-		in_network_items.containers.pop()
+		builder.value.pop()
+		builder.containers.pop()
 		return
 
 
@@ -574,13 +574,13 @@ def make_ref_map(
 	unfetched_provider_references = []
 	processed_provider_references = []
 
-	provider_references = ijson.ObjectBuilder()
-	provider_references.event('start_array', None)
+	builder = ijson.ObjectBuilder()
+	builder.event('start_array', None)
 
 	for prefix, event, value in parser:
-		provider_references.event(event, value)
+		builder.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
-			unprocessed_reference = provider_references.value.pop()
+			unprocessed_reference = builder.value.pop()
 			if unprocessed_reference.get('location'):
 				unfetched_provider_references.append(unprocessed_reference)
 				continue
@@ -618,18 +618,18 @@ def filter_in_network_items(
 	code_filter: set,
 ) -> Generator[dict, None, None]:
 
-	in_network_items = ijson.ObjectBuilder()
-	in_network_items.event('start_array', None)
+	builder = ijson.ObjectBuilder()
+	builder.event('start_array', None)
 	for prefix, event, value in parser:
 
-		in_network_items.event(event, value)
+		builder.event(event, value)
 
 		# This line can be commented out! but it's faster with it in
-		if hasattr(in_network_items, 'value') and len(in_network_items.value) > 0:
-			_skip_filtered_in_network_items(parser, in_network_items, code_filter)
+		if hasattr(builder, 'value') and len(builder.value) > 0:
+			_skip_filtered_in_network_items(parser, builder, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
-			item = in_network_items.value.pop()
+			item = builder.value.pop()
 			yield item
 
 		elif (prefix, event) == ('in_network', 'end_array'):
@@ -678,11 +678,11 @@ class MRFContent:
 			yield from parser
 
 	def _plan(self) -> dict:
-		plan_ = ijson.ObjectBuilder()
+		builder = ijson.ObjectBuilder()
 		for prefix, event, value in self.parser:
-			plan_.event(event, value)
+			builder.event(event, value)
 			if value in ('provider_references', 'in_network'):
-				return plan_.value
+				return builder.value
 		else:
 			raise InvalidMRF
 
