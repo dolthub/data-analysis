@@ -25,6 +25,9 @@ just because typing out the full-length names gives me a headache.
 * in-network --> in_network
 * negotiated_rates --> rates
 
+For the time being I set the tab width to be 8 spaces to force
+myself to be more concise with my functions.
+
 """
 import asyncio
 import csv
@@ -208,7 +211,7 @@ def plan_row_from_dict(plan: dict):
 	return plan_row
 
 
-def file_row_from_dict(filename, filename_hash, url):
+def file_row_from_filename(filename, filename_hash, url):
 
 	filename = Path(filename).stem.split('.')[0]
 	file_row = {
@@ -220,7 +223,7 @@ def file_row_from_dict(filename, filename_hash, url):
 	return file_row
 
 
-def plan_file_row_from_dict(plan_row, filename_hash):
+def plan_file_row_from_row(plan_row, filename_hash):
 
 	plan_file_row = {
 		'plan_hash': plan_row['plan_hash'],
@@ -238,13 +241,13 @@ def write_plan(
 	out_dir
 ):
 
-	file_row = file_row_from_dict(filename, filename_hash, url)
+	file_row = file_row_from_filename(filename, filename_hash, url)
 	write_table(file_row, 'files', out_dir)
 
 	plan_row = plan_row_from_dict(plan)
 	write_table(plan_row, 'plans', out_dir)
 
-	plan_file_row = plan_file_row_from_dict(plan_row, filename_hash)
+	plan_file_row = plan_file_row_from_row(plan_row, filename_hash)
 	write_table(plan_file_row, 'plans_files', out_dir)
 
 
@@ -429,9 +432,9 @@ def replace_rates(
 		return rates
 
 	for rate in rates:
-		if rate.get('provider_references'):
+		if group_ids := rate.get('provider_references'):
 			groups = rate.get('provider_groups', [])
-			for group_id in rate['provider_references']:
+			for group_id in group_ids:
 				addl_groups = reference_map.get(group_id, [])
 				groups.extend(addl_groups)
 			rate.pop('provider_references')
@@ -556,10 +559,12 @@ async def fetch_remote_reference(
 	reference = json.loads(data)
 	return reference
 
-
-async def process_remote_reference(
+# TODO I hate this function name
+# and think this needs to be broken down into
+# smaller funcs
+async def append_processed_remote_reference(
 	queue: asyncio.Queue,
-	references: list,
+	processed_references: list,
 	npi_filter: set,
 ):
 	while True:
@@ -567,14 +572,12 @@ async def process_remote_reference(
 			# Get a "work item" out of the queue.
 			session, url, group_id = await queue.get()
 
-			# Handle the response
 			reference = await fetch_remote_reference(session, url)
 			reference['provider_group_id'] = group_id
-
 			reference = process_reference(reference, npi_filter)
 
 			if reference:
-				references.append(reference)
+				processed_references.append(reference)
 
 		except AssertionError:
 			# Response status was 404 or something
@@ -584,10 +587,20 @@ async def process_remote_reference(
 			queue.task_done()
 
 
+# TODO I don't like that we process the refs separately
 async def make_reference_map(
 	references: Generator,
 	npi_filter: set
 ):
+	"""
+	Processes all provider references and return a map like:
+	{
+		1: [group1, group2, ...],
+		2: [group1, group2, ...],
+	}
+	where each provider group has been filtered to only contain
+	the NPIs contained in `npi_filter`.
+	"""
 	# Create a queue that we will use to store our "workload".
 	queue = asyncio.Queue()
 
@@ -597,7 +610,7 @@ async def make_reference_map(
 	processed_references = []
 
 	for i in range(100):
-		coro = process_remote_reference(queue, processed_references, npi_filter)
+		coro = append_processed_remote_reference(queue, processed_references, npi_filter)
 		task = asyncio.create_task(coro)
 		tasks.append(task)
 
@@ -627,8 +640,8 @@ async def make_reference_map(
 	await asyncio.gather(*tasks, return_exceptions=True)
 
 	reference_map = {
-		p['provider_group_id']:p['provider_groups']
-		for p in processed_references
+		reference['provider_group_id']: reference['provider_groups']
+		for reference in processed_references
 	}
 
 	return reference_map
@@ -650,8 +663,8 @@ def gen_in_network_items(
 			skip_item_by_code(parser, builder, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
-			item = builder.value.pop()
-			yield item
+			in_network_item = builder.value.pop()
+			yield in_network_item
 
 		if (prefix, event) == ('in_network', 'end_array'):
 			return
@@ -707,7 +720,19 @@ class MRFContent:
 		else:
 			raise InvalidMRF
 
-	async def prepare_references(self) -> None:
+	async def set_references(self) -> None:
+		"""
+		Probably the most WTF function. All this does is collect the provider
+		references, but the problem is they can either be at the 2nd position,
+		3rd position, or not in the file at all.
+
+		This just goes through the cases in order. If they're in the 2nd position,
+		return and go on as normal -- this is the Normally Ordered case.
+
+		Next we look at the bottom of the file. If we hit a StopIteration, we know
+		that they don't exist. If we don't, we process them there. Either way,
+		we have to restart the parser here.
+		"""
 		# Normally ordered case
 		references = gen_references(self.parser)
 		if next(self.parser) == ('provider_references', 'start_array', None):
@@ -726,8 +751,9 @@ class MRFContent:
 			self.parser = self.start_parser()
 
 	def in_network_items(self) -> Generator:
-		asyncio.run(self.prepare_references())
+		asyncio.run(self.set_references())
 		ffwd(self.parser, 'in_network', 'start_array')
+
 		in_network_items = gen_in_network_items(self.parser, self.code_filter)
 		replaced_items   = replace_in_network_rates(in_network_items, self.reference_map)
 		processed_items  = process_in_network(replaced_items, self.npi_filter)
