@@ -673,7 +673,7 @@ def gen_in_network_items(
 			in_network_item = builder.value.pop()
 			yield in_network_item
 
-		if (prefix, event) == ('in_network', 'end_array'):
+		elif (prefix, event) == ('in_network', 'end_array'):
 			return
 
 
