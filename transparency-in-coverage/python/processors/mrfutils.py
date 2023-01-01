@@ -470,62 +470,6 @@ filter_npis_from_rates      = partial(process_arr, filter_npis_from_rate)
 # process_in_network_items    = partial(process_arr, process_in_network_item)
 
 
-async def _fetch_remote_provider_reference(
-	session,
-	provider_group_id,
-	provider_reference_loc: str,
-	npi_filter: set,
-) -> dict:
-	async with session.get(provider_reference_loc) as response:
-		log.info(f'Opened remote provider reference url:{provider_reference_loc}')
-		assert response.status == 200
-
-		f = await response.read()
-
-		remote_reference = json.loads(f)
-		remote_reference['provider_group_id'] = provider_group_id
-
-		provider_reference = process_provider_reference(
-			provider_reference = remote_reference,
-			npi_filter = npi_filter,
-		)
-
-		return provider_reference
-
-
-async def _fetch_remote_provider_references(
-	unfetched_provider_references: list[dict],
-	npi_filter: set,
-) -> list[dict]:
-	tasks = []
-
-	connector = aiohttp.TCPConnector(limit_per_host=10000)
-
-	async with aiohttp.client.ClientSession(connector = connector) as session:
-
-		for unfetched_reference in unfetched_provider_references:
-
-			provider_group_id = unfetched_reference['provider_group_id']
-			provider_reference_loc = unfetched_reference['location']
-
-			task = asyncio.wait_for(
-				_fetch_remote_provider_reference(
-					session = session,
-					provider_group_id = provider_group_id,
-					provider_reference_loc = provider_reference_loc,
-					npi_filter = npi_filter,
-				),
-				timeout = None,
-			)
-
-			tasks.append(task)
-
-		fetched_references = await asyncio.gather(*tasks)
-		fetched_references = [item for item in fetched_references if item]
-
-		return fetched_references
-
-
 def ffwd(parser, to_prefix, to_event):
 	for prefix, event, _ in parser:
 		# Short circuit evaluation is better than tuple
@@ -567,13 +511,7 @@ def _skip_filtered_in_network_items(
 		return
 
 
-def make_ref_map(
-	parser,
-	npi_filter: set,
-) -> dict:
-
-	unfetched_provider_references = []
-	processed_provider_references = []
+def gen_provider_references(parser) -> Generator:
 
 	builder = ijson.ObjectBuilder()
 	builder.event('start_array', None)
@@ -581,37 +519,80 @@ def make_ref_map(
 	for prefix, event, value in parser:
 		builder.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
-			unprocessed_reference = builder.value.pop()
-			if unprocessed_reference.get('location'):
-				unfetched_provider_references.append(unprocessed_reference)
-				continue
-
-			provider_reference = process_provider_reference(
-				provider_reference = unprocessed_reference,
-				npi_filter = npi_filter
-			)
-
-			if provider_reference:
-				processed_provider_references.append(provider_reference)
+			provider_reference = builder.value.pop()
+			yield provider_reference
 
 		elif (prefix, event) == ('provider_references', 'end_array'):
+			return
 
-			loop = asyncio.get_event_loop()
-			fetched_provider_references = loop.run_until_complete(
-				_fetch_remote_provider_references(
-					unfetched_provider_references = unfetched_provider_references,
-					npi_filter = npi_filter,)
-			)
 
-			processed_provider_references.extend(fetched_provider_references)
+async def worker(
+	queue: asyncio.Queue,
+	provider_references: list,
+	npi_filter: set,
+):
+	while True:
+		# Get a "work item" out of the queue.
+		try:
+			session, url, provider_group_id = await queue.get()
+			response  = await session.get(url)
+			assert response.status == 200
+			data      = await response.read()
+			json_data = json.loads(data)
+			log.debug(f'Opened remote provider reference: {url}')
+			json_data['provider_group_id'] = provider_group_id
+			provider_reference = process_provider_reference(json_data, npi_filter)
+			if provider_reference:
+				provider_references.append(provider_reference)
+		except AssertionError as err:
+			# Response status was 404 or something
+			log.debug(f'Encountered bad response status: {response.status}')
+			pass
+		except Exception as err:
+			raise
+			# provider_references.append(err)
+		finally:
+			# Notify the queue that the "work item" has been processed.
+			queue.task_done()
 
-			ref_map = {
-				p['provider_group_id']: p['provider_groups']
-				for p in processed_provider_references
-				if p is not None
-			}
 
-			return ref_map
+async def make_provider_references(items: Generator, npi_filter: set):
+	# Create a queue that we will use to store our "workload".
+	queue = asyncio.Queue()
+	tasks = []
+	provider_references = []
+
+	for i in range(10_000):
+		task = asyncio.create_task(worker(queue, provider_references, npi_filter))
+		tasks.append(task)
+
+	async with aiohttp.client.ClientSession() as session:
+		for item in items:
+			if url := item.get('location'):
+				provider_group_id = item['provider_group_id']
+				queue.put_nowait((session, url, provider_group_id))
+				continue
+			processed_item = process_provider_reference(item, npi_filter)
+
+			if processed_item:
+				provider_references.append(processed_item)
+
+		await queue.join()
+
+	# Cancel our worker tasks
+	for task in tasks:
+		task.cancel()
+
+	# Wait until all worker tasks are cancelled.
+	await asyncio.gather(*tasks, return_exceptions=True)
+
+	ref_map = {
+		p['provider_group_id']:p['provider_groups']
+		for p in provider_references
+		# if p is not None
+	}
+
+	return ref_map
 
 
 def code_filter_in_network(
@@ -684,10 +665,11 @@ class MRFContent:
 		else:
 			raise InvalidMRF
 
-	def prepare_in_network_state(self) -> None:
+	async def prepare_in_network_state(self) -> None:
 		# Normally ordered case
+		provider_reference_items = gen_provider_references(self.parser)
 		if next(self.parser) == ('provider_references', 'start_array', None):
-			self.ref_map = make_ref_map(self.parser, self.npi_filter)
+			self.ref_map = await make_provider_references(provider_reference_items, self.npi_filter)
 			ffwd(self.parser, 'in_network', 'start_array')
 			return
 		try:
@@ -698,13 +680,13 @@ class MRFContent:
 			self.ref_map = None
 		else:
 			# Collect them
-			self.ref_map = make_ref_map(self.parser, self.npi_filter)
+			self.ref_map = await make_provider_references(provider_reference_items, self.npi_filter)
 		finally:
 			self.parser = self.reset_parser()
 			ffwd(self.parser, 'in_network', 'start_array')
 
 	def in_network_items(self) -> Generator:
-		self.prepare_in_network_state()
+		asyncio.run(self.prepare_in_network_state())
 		code_filtered_items = code_filter_in_network(self.parser, self.code_filter)
 		replaced_items      = replace_provider_references(code_filtered_items, self.ref_map)
 		npi_filtered_items  = npi_filter_in_network(replaced_items, self.npi_filter)
