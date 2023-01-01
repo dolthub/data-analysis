@@ -429,8 +429,12 @@ def replace_rates(
 	reference_map: dict,
 ):
 	if not reference_map:
+		# TODO look into this
+		# If there's no map, and there's only a reference and if there
+		# are no provider groups we can forget about the whole rate
 		for rate in rates:
 			rate.pop('provider_references', None)
+		rates = [rate for rate in rates if rate.get('provider_groups')]
 		return rates
 
 	for rate in rates:
@@ -494,7 +498,7 @@ process_rates      = partial(process_arr, process_rate)
 # process_in_network_items    = partial(process_arr, process_in_network_item)
 
 
-def ffwd(parser, to_prefix, to_event):
+def ffwd(parser: Generator, to_prefix: str, to_event: str):
 	for prefix, event, _ in parser:
 		if prefix == to_prefix and event == to_event:
 			break
@@ -503,7 +507,7 @@ def ffwd(parser, to_prefix, to_event):
 
 
 def skip_item_by_code(
-	parser,
+	parser: Generator,
 	builder: ijson.ObjectBuilder,
 	code_filter: set,
 ):
@@ -533,7 +537,7 @@ def skip_item_by_code(
 		return
 
 
-def gen_references(parser) -> Generator:
+def gen_references(parser: Generator) -> Generator:
 
 	builder = ijson.ObjectBuilder()
 	builder.event('start_array', None)
@@ -560,6 +564,7 @@ async def fetch_remote_reference(
 	data = await response.read()
 	reference = json.loads(data)
 	return reference
+
 
 # TODO I hate this function name
 # and think this needs to be broken down into
@@ -611,7 +616,7 @@ async def make_reference_map(
 	tasks = []
 	processed_references = []
 
-	for i in range(100):
+	for i in range(200):
 		coro = append_processed_remote_reference(queue, processed_references, npi_filter)
 		task = asyncio.create_task(coro)
 		tasks.append(task)
@@ -650,7 +655,7 @@ async def make_reference_map(
 
 
 def gen_in_network_items(
-	parser,
+	parser: Generator,
 	code_filter: set,
 ) -> Generator:
 
