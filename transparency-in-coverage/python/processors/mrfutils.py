@@ -11,6 +11,20 @@ will open the file again and re-run, recycling the provider
 references that it got from the first pass.
 
 The plan data is only written after the flattener has successfully run.
+
+Naming conventions
+##################
+
+MRS contain a lot of objects with long names. I use these names as vars
+just because typing out the full-length names gives me a headache.
+
+* top-level information --> plan
+* provider_references --> references
+* provider_groups --> groups (there are no other groups)
+* provider_group_id --> group_id
+* in-network --> in_network
+* negotiated_rates --> rates
+
 """
 import asyncio
 import csv
@@ -153,7 +167,7 @@ def filename_hasher(filename):
 	return filename_hash
 
 
-def _write_table(rows, tablename, out_dir):
+def write_table(rows, tablename, out_dir):
 
 	fieldnames = SCHEMA[tablename]
 	file_loc = f'{out_dir}/{tablename}.csv'
@@ -175,7 +189,7 @@ def _write_table(rows, tablename, out_dir):
 			writer.writerow(row)
 
 
-def _make_plan_row(plan: dict):
+def plan_row_from_dict(plan: dict):
 
 	keys = [
 		'reporting_entity_name',
@@ -194,7 +208,7 @@ def _make_plan_row(plan: dict):
 	return plan_row
 
 
-def _make_file_row(filename, filename_hash, url):
+def file_row_from_dict(filename, filename_hash, url):
 
 	filename = Path(filename).stem.split('.')[0]
 	file_row = {
@@ -206,7 +220,7 @@ def _make_file_row(filename, filename_hash, url):
 	return file_row
 
 
-def _make_plan_file_row(plan_row, filename_hash):
+def plan_file_row_from_dict(plan_row, filename_hash):
 
 	plan_file_row = {
 		'plan_hash': plan_row['plan_hash'],
@@ -224,17 +238,17 @@ def write_plan(
 	out_dir
 ):
 
-	file_row = _make_file_row(filename, filename_hash, url)
-	_write_table(file_row, 'files', out_dir)
+	file_row = file_row_from_dict(filename, filename_hash, url)
+	write_table(file_row, 'files', out_dir)
 
-	plan_row = _make_plan_row(plan)
-	_write_table(plan_row, 'plans', out_dir)
+	plan_row = plan_row_from_dict(plan)
+	write_table(plan_row, 'plans', out_dir)
 
-	plan_file_row = _make_plan_file_row(plan_row, filename_hash)
-	_write_table(plan_file_row, 'plans_files', out_dir)
+	plan_file_row = plan_file_row_from_dict(plan_row, filename_hash)
+	write_table(plan_file_row, 'plans_files', out_dir)
 
 
-def _make_code_row(in_network_item: dict):
+def code_row_from_dict(in_network_item: dict):
 
 	keys = [
 		'billing_code_type',
@@ -248,7 +262,7 @@ def _make_code_row(in_network_item: dict):
 	return code_row
 
 
-def _make_price_row(
+def price_row_from_dict(
 	price: dict,
 	code_hash,
 	filename_hash
@@ -288,7 +302,7 @@ def _make_price_row(
 	return price_row
 
 
-def _make_price_rows(
+def price_rows_from_dicts(
 	prices: list[dict],
 	code_hash,
 	filename_hash,
@@ -296,52 +310,52 @@ def _make_price_rows(
 
 	price_rows = []
 	for price in prices:
-		price_row = _make_price_row(price, code_hash, filename_hash)
+		price_row = price_row_from_dict(price, code_hash, filename_hash)
 		price_rows.append(price_row)
 
 	return price_rows
 
 
-def _make_provider_group_row(provider_group: dict):
+def group_row_from_dict(group: dict):
 
-	provider_group_row = {
-		'npi_numbers': json.dumps(sorted(provider_group['npi'])),
-		'tin_type':    provider_group['tin']['type'],
-		'tin_value':   provider_group['tin']['value'],
+	group_row = {
+		'npi_numbers': json.dumps(sorted(group['npi'])),
+		'tin_type':    group['tin']['type'],
+		'tin_value':   group['tin']['value'],
 	}
 
-	provider_group_row = append_hash(provider_group_row, 'provider_group_hash')
+	group_row = append_hash(group_row, 'provider_group_hash')
 
-	return provider_group_row
+	return group_row
 
 
-def _make_provider_group_rows(provider_groups: list[dict]):
+def group_rows_from_dicts(groups: list[dict]):
 
 	provider_group_rows = []
-	for provider_group in provider_groups:
-		provider_group_row = _make_provider_group_row(provider_group)
+	for provider_group in groups:
+		provider_group_row = group_row_from_dict(provider_group)
 		provider_group_rows.append(provider_group_row)
 
 	return provider_group_rows
 
 
-def _make_prices_provider_groups_rows(
+def prices_groups_rows_from_dicts(
 	price_rows: list[dict],
-	provider_group_rows: list[dict]
+	group_rows: list[dict]
 ):
 
-	prices_provider_groups_rows = []
+	prices_groups_rows = []
 	for price_row in price_rows:
-		for provider_group_row in provider_group_rows:
+		for group_row in group_rows:
 
-			prices_provider_groups_row = {
-				'provider_group_hash': provider_group_row['provider_group_hash'],
+			prices_groups_row = {
+				'provider_group_hash': group_row['provider_group_hash'],
 				'price_hash': price_row['price_hash'],
 			}
 
-			prices_provider_groups_rows.append(prices_provider_groups_row)
+			prices_groups_rows.append(prices_groups_row)
 
-	return prices_provider_groups_rows
+	return prices_groups_rows
 
 
 def write_in_network_item(
@@ -350,8 +364,8 @@ def write_in_network_item(
 	out_dir
 ):
 
-	code_row = _make_code_row(in_network_item)
-	_write_table(code_row, 'codes', out_dir)
+	code_row = code_row_from_dict(in_network_item)
+	write_table(code_row, 'codes', out_dir)
 
 	code_hash = code_row['code_hash']
 
@@ -359,100 +373,105 @@ def write_in_network_item(
 		prices = rate['negotiated_prices']
 		provider_groups = rate['provider_groups']
 
-		price_rows = _make_price_rows(prices, code_hash, filename_hash)
-		_write_table(price_rows, 'prices', out_dir)
+		price_rows = price_rows_from_dicts(prices, code_hash, filename_hash)
+		write_table(price_rows, 'prices', out_dir)
 
-		provider_group_rows = _make_provider_group_rows(provider_groups)
-		_write_table(provider_group_rows, 'provider_groups', out_dir)
+		group_rows = group_rows_from_dicts(provider_groups)
+		write_table(group_rows, 'provider_groups', out_dir)
 
-		prices_provider_group_rows = _make_prices_provider_groups_rows(price_rows, provider_group_rows)
-		_write_table(prices_provider_group_rows, 'prices_provider_groups', out_dir)
+		prices_groups_rows = prices_groups_rows_from_dicts(price_rows, group_rows)
+		write_table(prices_groups_rows, 'prices_provider_groups', out_dir)
 
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']
 	log.debug(f'Wrote {code_type} {code}')
 
 
-def process_provider_group(
-	provider_group: dict,
-	npi_filter: set,
-) -> dict:
-	npi = [str(n) for n in provider_group['npi']]
-
-	if npi_filter:
-		npi = [n for n in npi if n in npi_filter]
-
-	if npi:
-		tin = provider_group['tin']
-		provider_group = {'npi': npi, 'tin': tin}
-		return provider_group
-
-
-def process_provider_reference(
-	provider_reference: dict,
+def process_group(
+	group: dict,
 	npi_filter: set,
 ) -> dict:
 
-	provider_groups = process_provider_groups(
-		provider_reference['provider_groups'],
-		npi_filter
-	)
+	group['npi'] = [str(n) for n in group['npi']]
 
-	if provider_groups:
-		provider_reference = {
-			'provider_group_id' : provider_reference['provider_group_id'],
-			'provider_groups'   : provider_groups
+	if not npi_filter:
+		return group
+
+	group['npi'] = [n for n in group['npi'] if n in npi_filter]
+
+	if group['npi']:
+		return group
+
+
+def process_reference(
+	reference: dict,
+	npi_filter: set,
+) -> dict:
+
+	groups = reference['provider_groups']
+	groups = process_groups(groups, npi_filter)
+
+	if groups:
+		reference = {
+			'provider_group_id' : reference['provider_group_id'],
+			'provider_groups'   : groups
 		}
-		return provider_reference
+		return reference
 
 
-def replace_provider_references_in_rates(
+def replace_rates(
 	rates: list[dict],
-	provider_reference_map: dict,
+	reference_map: dict,
 ):
+	if not reference_map:
+		for rate in rates:
+			rate.pop('provider_references', None)
+		return rates
+
 	for rate in rates:
-		provider_groups = rate.get('provider_groups', [])
-		if provider_reference_map and rate.get('provider_references'):
-			for provider_group_id in rate['provider_references']:
-				addl_provider_groups = provider_reference_map.get(provider_group_id, [])
-				provider_groups.extend(addl_provider_groups)
+		if rate.get('provider_references'):
+			groups = rate.get('provider_groups', [])
+			for group_id in rate['provider_references']:
+				addl_groups = reference_map.get(group_id, [])
+				groups.extend(addl_groups)
 			rate.pop('provider_references')
-		rate['provider_groups'] = provider_groups
+			rate['provider_groups'] = groups
 	return rates
 
 
-def replace_provider_references(
+def replace_in_network_rates(
 	in_network_items: Generator,
-	provider_reference_map: dict,
+	reference_map: dict,
 ):
 	for in_network_item in in_network_items:
-		in_network_item['negotiated_rates'] = replace_provider_references_in_rates(
-			in_network_item['negotiated_rates'],
-			provider_reference_map)
+		rates = in_network_item['negotiated_rates']
+		rates = replace_rates(rates, reference_map)
+		in_network_item['negotiated_rates'] = rates
 		yield in_network_item
 
 
-def npi_filter_in_network(
+def process_in_network(
 	in_network_items: Generator,
 	npi_filter: set,
 ):
 	for in_network_item in in_network_items:
-		rates = filter_npis_from_rates(in_network_item['negotiated_rates'], npi_filter)
+		rates = in_network_item['negotiated_rates']
+		rates = process_rates(rates, npi_filter)
 		if rates:
 			in_network_item['negotiated_rates'] = rates
 			yield in_network_item
 
 
-def filter_npis_from_rate(
+def process_rate(
 	rate: dict,
 	npi_filter: set,
 ) -> dict:
 
-	provider_groups = rate['provider_groups']
-	processed_provider_groups = process_provider_groups(provider_groups, npi_filter)
+	groups = rate['provider_groups']
+	groups = process_groups(groups, npi_filter)
 
-	if processed_provider_groups:
-		rate['provider_groups'] = processed_provider_groups
+	if groups:
+		rate['provider_groups'] = groups
 		return rate
 
 
@@ -465,25 +484,23 @@ def process_arr(func, arr, *args, **kwargs):
 
 
 # process_provider_references = partial(process_arr, process_provider_reference)
-process_provider_groups     = partial(process_arr, process_provider_group)
-filter_npis_from_rates      = partial(process_arr, filter_npis_from_rate)
+process_groups     = partial(process_arr, process_group)
+process_rates      = partial(process_arr, process_rate)
 # process_in_network_items    = partial(process_arr, process_in_network_item)
 
 
 def ffwd(parser, to_prefix, to_event):
 	for prefix, event, _ in parser:
-		# Short circuit evaluation is better than tuple
-		# comparison
 		if prefix == to_prefix and event == to_event:
-			return
+			break
 	else:
 		raise StopIteration
 
 
-def _skip_filtered_in_network_items(
+def skip_item_by_code(
 	parser,
 	builder: ijson.ObjectBuilder,
-	code_filter: dict,
+	code_filter: set,
 ):
 	"""
 	This stops us from having to build in-network objects (which are large)
@@ -511,7 +528,7 @@ def _skip_filtered_in_network_items(
 		return
 
 
-def gen_provider_references(parser) -> Generator:
+def gen_references(parser) -> Generator:
 
 	builder = ijson.ObjectBuilder()
 	builder.event('start_array', None)
@@ -519,65 +536,88 @@ def gen_provider_references(parser) -> Generator:
 	for prefix, event, value in parser:
 		builder.event(event, value)
 		if (prefix, event) == ('provider_references.item', 'end_map'):
-			provider_reference = builder.value.pop()
-			yield provider_reference
+			reference = builder.value.pop()
+			yield reference
 
 		elif (prefix, event) == ('provider_references', 'end_array'):
 			return
 
 
-async def worker(
+async def fetch_remote_reference(
+	session: aiohttp.client.ClientSession,
+	url: str,
+):
+	response = await session.get(url)
+	assert response.status == 200
+
+	log.debug(f'Opened remote provider reference: {url}')
+
+	data = await response.read()
+	reference = json.loads(data)
+	return reference
+
+
+async def process_remote_reference(
 	queue: asyncio.Queue,
-	provider_references: list,
+	references: list,
 	npi_filter: set,
 ):
 	while True:
-		# Get a "work item" out of the queue.
 		try:
-			session, url, provider_group_id = await queue.get()
-			response  = await session.get(url)
-			assert response.status == 200
-			data      = await response.read()
-			json_data = json.loads(data)
-			log.debug(f'Opened remote provider reference: {url}')
-			json_data['provider_group_id'] = provider_group_id
-			provider_reference = process_provider_reference(json_data, npi_filter)
-			if provider_reference:
-				provider_references.append(provider_reference)
-		except AssertionError as err:
+			# Get a "work item" out of the queue.
+			session, url, group_id = await queue.get()
+
+			# Handle the response
+			reference = await fetch_remote_reference(session, url)
+			reference['provider_group_id'] = group_id
+
+			reference = process_reference(reference, npi_filter)
+
+			if reference:
+				references.append(reference)
+
+		except AssertionError:
 			# Response status was 404 or something
-			log.debug(f'Encountered bad response status: {response.status}')
-			pass
-		except Exception as err:
-			raise
-			# provider_references.append(err)
+			log.debug(f'Encountered bad response status')
 		finally:
 			# Notify the queue that the "work item" has been processed.
 			queue.task_done()
 
 
-async def make_provider_references(items: Generator, npi_filter: set):
+async def make_reference_map(
+	references: Generator,
+	npi_filter: set
+):
 	# Create a queue that we will use to store our "workload".
 	queue = asyncio.Queue()
-	tasks = []
-	provider_references = []
 
-	for i in range(10_000):
-		task = asyncio.create_task(worker(queue, provider_references, npi_filter))
+	# Tasks hold the consumers. reference is appended to
+	# by consumers and by the main loop of this function
+	tasks = []
+	processed_references = []
+
+	for i in range(100):
+		coro = process_remote_reference(queue, processed_references, npi_filter)
+		task = asyncio.create_task(coro)
 		tasks.append(task)
 
 	async with aiohttp.client.ClientSession() as session:
-		for item in items:
-			if url := item.get('location'):
-				provider_group_id = item['provider_group_id']
-				queue.put_nowait((session, url, provider_group_id))
+		for reference in references:
+			if url := reference.get('location'):
+				group_id = reference['provider_group_id']
+				queue.put_nowait((session, url, group_id))
 				continue
-			processed_item = process_provider_reference(item, npi_filter)
 
-			if processed_item:
-				provider_references.append(processed_item)
+			reference = process_reference(reference, npi_filter)
+			if reference:
+				processed_references.append(reference)
 
+		# Block until all items in the queue have been received and processed
 		await queue.join()
+
+	# To understand why this sleep is here, see:
+	# https://docs.aiohttp.org/en/stable/client_advanced.html#graceful-shutdown
+	await asyncio.sleep(.250)
 
 	# Cancel our worker tasks
 	for task in tasks:
@@ -586,33 +626,35 @@ async def make_provider_references(items: Generator, npi_filter: set):
 	# Wait until all worker tasks are cancelled.
 	await asyncio.gather(*tasks, return_exceptions=True)
 
-	ref_map = {
+	reference_map = {
 		p['provider_group_id']:p['provider_groups']
-		for p in provider_references
-		# if p is not None
+		for p in processed_references
 	}
 
-	return ref_map
+	return reference_map
 
 
-def code_filter_in_network(
+def gen_in_network_items(
 	parser,
 	code_filter: set,
 ) -> Generator:
 
 	builder = ijson.ObjectBuilder()
 	builder.event('start_array', None)
-	for prefix, event, value in parser:
 
+	for prefix, event, value in parser:
 		builder.event(event, value)
 
 		# This line can be commented out! but it's faster with it in
 		if hasattr(builder, 'value') and len(builder.value) > 0:
-			_skip_filtered_in_network_items(parser, builder, code_filter)
+			skip_item_by_code(parser, builder, code_filter)
 
 		if (prefix, event) == ('in_network.item', 'end_map'):
 			item = builder.value.pop()
 			yield item
+
+		if (prefix, event) == ('in_network', 'end_array'):
+			return
 
 
 # Basic pipeline
@@ -648,14 +690,14 @@ class MRFContent:
 		self.npi_filter = npi_filter
 
 	def start_conn(self):
-		self.parser = self.reset_parser()
+		self.parser = self.start_parser()
 		self.set_plan()
 
-	def reset_parser(self) -> Generator:
+	def start_parser(self) -> Generator:
 		with JSONOpen(self.filename) as f:
 			yield from ijson.parse(f, use_float = True)
 
-	def set_plan(self) -> dict:
+	def set_plan(self):
 		builder = ijson.ObjectBuilder()
 		for prefix, event, value in self.parser:
 			builder.event(event, value)
@@ -665,32 +707,31 @@ class MRFContent:
 		else:
 			raise InvalidMRF
 
-	async def prepare_in_network_state(self) -> None:
+	async def prepare_references(self) -> None:
 		# Normally ordered case
-		provider_reference_items = gen_provider_references(self.parser)
+		references = gen_references(self.parser)
 		if next(self.parser) == ('provider_references', 'start_array', None):
-			self.ref_map = await make_provider_references(provider_reference_items, self.npi_filter)
-			ffwd(self.parser, 'in_network', 'start_array')
+			self.reference_map = await make_reference_map(references, self.npi_filter)
 			return
 		try:
 			# Check for provider references at bottom
 			ffwd(self.parser, 'provider_references', 'start_array')
 		except StopIteration:
 			# StopIteration -> they don't exist
-			self.ref_map = None
+			self.reference_map = None
 		else:
 			# Collect them
-			self.ref_map = await make_provider_references(provider_reference_items, self.npi_filter)
+			self.reference_map = await make_reference_map(references, self.npi_filter)
 		finally:
-			self.parser = self.reset_parser()
-			ffwd(self.parser, 'in_network', 'start_array')
+			self.parser = self.start_parser()
 
 	def in_network_items(self) -> Generator:
-		asyncio.run(self.prepare_in_network_state())
-		code_filtered_items = code_filter_in_network(self.parser, self.code_filter)
-		replaced_items      = replace_provider_references(code_filtered_items, self.ref_map)
-		npi_filtered_items  = npi_filter_in_network(replaced_items, self.npi_filter)
-		return npi_filtered_items
+		asyncio.run(self.prepare_references())
+		ffwd(self.parser, 'in_network', 'start_array')
+		in_network_items = gen_in_network_items(self.parser, self.code_filter)
+		replaced_items   = replace_in_network_rates(in_network_items, self.reference_map)
+		processed_items  = process_in_network(replaced_items, self.npi_filter)
+		yield from processed_items
 
 
 def json_mrf_to_csv(

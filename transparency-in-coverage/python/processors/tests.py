@@ -1,5 +1,5 @@
 import unittest
-from mrfutils import (MRFContent, process_provider_group)
+from mrfutils import (MRFContent, process_group)
 
 files = [
 	'test/test_file_ordered.json',
@@ -15,7 +15,7 @@ class Test(unittest.TestCase):
 
 	def test_process_provider_group(self):
 		provider_group = sample_provider_reference['provider_groups'][0]
-		provider_group = process_provider_group(provider_group, {'9889889881'})
+		provider_group = process_group(provider_group, {'9889889881'})
 		assert provider_group['npi'] == ['9889889881']
 
 	def test_ordering(self):
@@ -69,35 +69,35 @@ class Test(unittest.TestCase):
 			assert len(rates) == 1
 			provider_groups = rates[0]['provider_groups']
 			assert len(provider_groups) == 3
-	#
-	# def test_code_filtering(self):
-	# 	code_filter = {('TS-TST', '0000')}
-	# 	for file in self.test_files:
-	# 		content = MRFContent(file, code_filter = code_filter)
-	# 		content.start_conn()
-	# 		in_network_items = content.in_network_items()
-	# 		first_item = next(in_network_items)
-	# 		assert first_item['billing_code'] == '0000'
-	#
-	# def test_combined_filtering(self):
-	# 	code_filter = {('TS-TST', '0000')}
-	# 	npi_filter = {'4444444444'}
-	# 	for file in self.test_files:
-	# 		content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
-	# 		content.start_conn()
-	# 		in_network_items = content.in_network_items()
-	# 		first_item = next(in_network_items)
-	# 		assert first_item['billing_code'] == '0000'
-	#
-	# def test_not_in_list(self):
-	# 	code_filter = {('TS-TST', '0000')}
-	# 	# code_filter = None
-	# 	npi_filter = {'NOTINLIST'}
-	# 	for file in self.test_files:
-	# 		content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
-	# 		content.start_conn()
-	# 		in_network_items = content.in_network_items()
-	# 		assert len(list(in_network_items)) == 0
+
+	def test_code_filtering(self):
+		code_filter = {('TS-TST', '0000')}
+		for file in self.test_files:
+			content = MRFContent(file, code_filter = code_filter)
+			content.start_conn()
+			in_network_items = content.in_network_items()
+			first_item = next(in_network_items)
+			assert first_item['billing_code'] == '0000'
+
+	def test_combined_filtering(self):
+		code_filter = {('TS-TST', '0000')}
+		npi_filter = {'4444444444'}
+		for file in self.test_files:
+			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
+			content.start_conn()
+			in_network_items = content.in_network_items()
+			first_item = next(in_network_items)
+			assert first_item['billing_code'] == '0000'
+
+	def test_not_in_list(self):
+		code_filter = {('TS-TST', '0000')}
+		# code_filter = None
+		npi_filter = {'NOTINLIST'}
+		for file in self.test_files:
+			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
+			content.start_conn()
+			in_network_items = content.in_network_items()
+			assert len(list(in_network_items)) == 0
 
 	# def test_hashes_match(self):
 	# 	Still need to write a test for this
