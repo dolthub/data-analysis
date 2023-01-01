@@ -1,4 +1,7 @@
 """
+All you really need to know
+###########################
+
 The function
 
 >>> def json_mrf_to_csv()...
@@ -6,17 +9,17 @@ The function
 flattens the data from a JSON MRF into a CSV.
 
 If the flattener encounters the in-network items after the provider
-references, it will flatten those on the first pass. Otherwise, it
-will open the file again and re-run, recycling the provider
-references that it got from the first pass.
+references, it will flatten those on the first pass. Otherwise, it will open
+the file again and re-run, recycling the provider references that it got from
+the first pass.
 
 The plan data is only written after the flattener has successfully run.
 
 Naming conventions
 ##################
 
-MRS contain a lot of objects with long names. I use these names as vars
-just because typing out the full-length names gives me a headache.
+MRS contain a lot of objects with long names. I use these names as vars just
+because typing out the full-length names gives me a headache.
 
 * top-level information --> plan
 * provider_references --> references
@@ -25,8 +28,8 @@ just because typing out the full-length names gives me a headache.
 * in-network --> in_network
 * negotiated_rates --> rates
 
-For the time being I set the tab width to be 8 spaces to force
-myself to be more concise with my functions.
+For the time being I set the tab width to be 8 spaces to force myself to be
+more concise with my functions.
 
 """
 import asyncio
@@ -141,7 +144,6 @@ def make_dir(out_dir):
 
 
 def dicthasher(data, n_bytes = 8):
-
 	if not data:
 		raise Exception("Hashed dictionary can't be empty")
 
@@ -675,17 +677,17 @@ def gen_in_network_items(
 # read in-network items: filter items -> process items
 class MRFContent:
 	"""
-	Bucket for MRF data. Assumes that the MRF is in one of the
-	following three orders:
+	Bucket for MRF data. Assumes that the MRF is in one of the following
+	three orders:
 
 	1. plan -> provider_references -> in_network (most common)
 	2. plan -> in_network (second-most common)
 	3. plan -> in_network -> provider_references (least common)
 
-	As far as I can tell, no one puts their plan data at the
-	bottom, although that's possible. If that turns out to be
-	the case this function will have to be modified a little bit
-	(but that won't be a big deal.)
+	As far as I can tell, no one puts their plan data at the bottom,
+	although that's possible. If that turns out to be the case this
+	function will have to be modified a little bit (but that won't be a
+	big deal.)
 
 	Usage:
 	>>> content = MRFContent(filename, npi_filter, code_filter)
@@ -722,27 +724,43 @@ class MRFContent:
 
 	async def set_references(self) -> None:
 		"""
-		Probably the most WTF function. All this does is collect the provider
-		references, but the problem is they can either be at the 2nd position,
-		3rd position, or not in the file at all.
+		Probably looks pretty WTF. All this does is collect the
+		provider references (and reset the parsing stream if need be.)
+		The problem is they can either be located in one of three
+		places:
 
-		This just goes through the cases in order. If they're in the 2nd position,
-		return and go on as normal -- this is the Normally Ordered case.
+		1. {
+			...
+			'provider_references': <-- here (most common)
+			'in_network': ...
+		}
+		2. {
+			...
+			'in_network': ...
+			'provider_references': <-- here (rarely)
+		}
+		3. {
+			...
+			'in_network': ...
+		} (aka nowhere, semi-common)
 
-		Next we look at the bottom of the file. If we hit a StopIteration, we know
-		that they don't exist. If we don't, we process them there. Either way,
-		we have to restart the parser here.
+		This function checks in order (1, 2, 3). First we look for
+		case (1). If we don't find it, we try case (2), and if we hit a
+		StopIteration, we know we have case (3).
+
+		In cases (2) and (3) we have to restart the parser since the
+		in-network items are now above us.
 		"""
-		# Normally ordered case
+		# Case (1)
 		references = gen_references(self.parser)
 		if next(self.parser) == ('provider_references', 'start_array', None):
 			self.reference_map = await make_reference_map(references, self.npi_filter)
 			return
 		try:
-			# Check for provider references at bottom
+			# Check for case (2)
 			ffwd(self.parser, 'provider_references', 'start_array')
 		except StopIteration:
-			# StopIteration -> they don't exist
+			# StopIteration -> they don't exist (3)
 			self.reference_map = None
 		else:
 			# Collect them
@@ -751,6 +769,13 @@ class MRFContent:
 			self.parser = self.start_parser()
 
 	def in_network_items(self) -> Generator:
+		"""
+		Generator pipeline for returning processed in-network items.
+
+		gen_in_network_items -> Generator of filtered items
+		replace_in_network_rates -> Generator of items w/ rates subbed
+		process_in_network -> Generator of items with npis removed
+		"""
 		asyncio.run(self.set_references())
 		ffwd(self.parser, 'in_network', 'start_array')
 
