@@ -173,7 +173,7 @@ def filename_hasher(filename):
 
 
 def write_table(
-	rows: list[dict],
+	rows: list[dict] | dict,
 	tablename: str,
 	out_dir: str,
 ) -> None:
@@ -373,6 +373,7 @@ def prices_groups_rows_from_dicts(
 def write_in_network_item(
 	in_network_item: dict,
 	filename_hash,
+	reference_map,
 	out_dir
 ) -> None:
 
@@ -383,12 +384,17 @@ def write_in_network_item(
 
 	for rate in in_network_item['negotiated_rates']:
 		prices = rate['negotiated_prices']
-		provider_groups = rate['provider_groups']
+		groups = rate.get('provider_groups', [])
+		references = rate.get('provider_references', [])
+
+		for reference in references:
+			if addl_groups := reference_map.get(reference):
+				groups.extend(addl_groups)
 
 		price_rows = price_rows_from_dicts(prices, code_hash, filename_hash)
 		write_table(price_rows, 'prices', out_dir)
 
-		group_rows = group_rows_from_dicts(provider_groups)
+		group_rows = group_rows_from_dicts(groups)
 		write_table(group_rows, 'provider_groups', out_dir)
 
 		prices_groups_rows = prices_groups_rows_from_dicts(price_rows, group_rows)
@@ -431,40 +437,40 @@ def process_reference(
 		return reference
 
 
-def replace_rates(
-	rates: list[dict],
-	reference_map: dict,
-) -> list[dict]:
-	if not reference_map:
-		# TODO look into this
-		# If there's no map, and there's only a reference and if there
-		# are no provider groups we can forget about the whole rate
-		for rate in rates:
-			rate.pop('provider_references', None)
-		rates = [rate for rate in rates if rate.get('provider_groups')]
-		return rates
+# def replace_rates(
+# 	rates: list[dict],
+# 	reference_map: dict,
+# ) -> list[dict]:
+# 	if not reference_map:
+# 		# TODO look into this
+# 		# If there's no map, and there's only a reference and if there
+# 		# are no provider groups we can forget about the whole rate
+# 		for rate in rates:
+# 			rate.pop('provider_references', None)
+# 		rates = [rate for rate in rates if rate.get('provider_groups')]
+# 		return rates
+#
+# 	for rate in rates:
+# 		if group_ids := rate.get('provider_references'):
+# 			groups = rate.get('provider_groups', [])
+# 			for group_id in group_ids:
+# 				addl_groups = reference_map.get(group_id, [])
+# 				groups.extend(addl_groups)
+# 			# rate.pop('provider_references')
+# 			rate['provider_groups'] = groups
+# 	return rates
 
-	for rate in rates:
-		if group_ids := rate.get('provider_references'):
-			groups = rate.get('provider_groups', [])
-			for group_id in group_ids:
-				addl_groups = reference_map.get(group_id, [])
-				groups.extend(addl_groups)
-			rate.pop('provider_references')
-			rate['provider_groups'] = groups
-	return rates
 
-
-def replace_in_network_rates(
-	in_network_items: Generator,
-	reference_map: dict,
-) -> Generator:
-	for in_network_item in in_network_items:
-		rates = in_network_item['negotiated_rates']
-		rates = replace_rates(rates, reference_map)
-		if rates:
-			in_network_item['negotiated_rates'] = rates
-			yield in_network_item
+# def replace_in_network_rates(
+# 	in_network_items: Generator,
+# 	reference_map: dict,
+# ) -> Generator:
+# 	for in_network_item in in_network_items:
+# 		rates = in_network_item['negotiated_rates']
+# 		# rates = replace_rates(rates, reference_map)
+# 		if rates:
+# 			in_network_item['negotiated_rates'] = rates
+# 			yield in_network_item
 
 
 def process_in_network(
@@ -484,11 +490,11 @@ def process_rate(
 	npi_filter: set,
 ) -> dict:
 
-	groups = rate['provider_groups']
-	groups = process_groups(groups, npi_filter)
+	if groups := rate.get('provider_groups'):
+		rate['provider_groups'] = process_groups(groups, npi_filter)
 
-	if groups:
-		rate['provider_groups'] = groups
+	if rate.get('provider_groups') or rate.get('provider_references'):
+		# rate['provider_groups'] = groups
 		return rate
 
 
@@ -724,6 +730,7 @@ class MRFContent:
 	def start_conn(self):
 		self.parser = self.start_parser()
 		self.set_plan()
+		asyncio.run(self.set_references())
 
 	def start_parser(self) -> Generator:
 		with JSONOpen(self.filename) as f:
@@ -793,12 +800,12 @@ class MRFContent:
 		replace_in_network_rates -> Generator of items w/ rates subbed
 		process_in_network -> Generator of items with npis removed
 		"""
-		asyncio.run(self.set_references())
+		# asyncio.run(self.set_references())
 		ffwd(self.parser, 'in_network', 'start_array')
 
 		in_network_items = gen_in_network_items(self.parser, self.code_filter)
-		replaced_items   = replace_in_network_rates(in_network_items, self.reference_map)
-		return process_in_network(replaced_items, self.npi_filter)
+		# replaced_items   = replace_in_network_rates(in_network_items, self.reference_map)
+		return process_in_network(in_network_items, self.npi_filter)
 
 
 def json_mrf_to_csv(
@@ -832,8 +839,9 @@ def json_mrf_to_csv(
 
 	content = MRFContent(filename, npi_filter, code_filter)
 	content.start_conn()
+	reference_map = content.reference_map
 
 	for in_network_item in content.in_network_items():
-		write_in_network_item(in_network_item, filename_hash, out_dir)
+		write_in_network_item(in_network_item, filename_hash, reference_map, out_dir)
 
 	write_plan(content.plan, filename_hash, filename, url, out_dir)
