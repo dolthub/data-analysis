@@ -172,7 +172,11 @@ def filename_hasher(filename):
 	return filename_hash
 
 
-def write_table(rows, tablename, out_dir):
+def write_table(
+	rows: list[dict],
+	tablename: str,
+	out_dir: str,
+) -> None:
 
 	fieldnames = SCHEMA[tablename]
 	file_loc = f'{out_dir}/{tablename}.csv'
@@ -194,7 +198,7 @@ def write_table(rows, tablename, out_dir):
 			writer.writerow(row)
 
 
-def plan_row_from_dict(plan: dict):
+def plan_row_from_dict(plan: dict) -> dict:
 
 	keys = [
 		'reporting_entity_name',
@@ -213,7 +217,11 @@ def plan_row_from_dict(plan: dict):
 	return plan_row
 
 
-def file_row_from_filename(filename, filename_hash, url):
+def file_row_from_filename(
+	filename: str,
+	filename_hash: str,
+	url: str
+) -> dict:
 
 	filename = Path(filename).stem.split('.')[0]
 	file_row = {
@@ -225,7 +233,7 @@ def file_row_from_filename(filename, filename_hash, url):
 	return file_row
 
 
-def plan_file_row_from_row(plan_row, filename_hash):
+def plan_file_row_from_row(plan_row: dict, filename_hash: str):
 
 	plan_file_row = {
 		'plan_hash': plan_row['plan_hash'],
@@ -237,11 +245,11 @@ def plan_file_row_from_row(plan_row, filename_hash):
 
 def write_plan(
 	plan: dict,
-	filename_hash,
-	filename,
-	url,
-	out_dir
-):
+	filename_hash: str,
+	filename: str,
+	url: str,
+	out_dir: str,
+) -> None:
 
 	file_row = file_row_from_filename(filename, filename_hash, url)
 	write_table(file_row, 'files', out_dir)
@@ -253,7 +261,7 @@ def write_plan(
 	write_table(plan_file_row, 'plans_files', out_dir)
 
 
-def code_row_from_dict(in_network_item: dict):
+def code_row_from_dict(in_network_item: dict) -> dict:
 
 	keys = [
 		'billing_code_type',
@@ -269,9 +277,9 @@ def code_row_from_dict(in_network_item: dict):
 
 def price_row_from_dict(
 	price: dict,
-	code_hash,
-	filename_hash
-):
+	code_hash: str,
+	filename_hash: str,
+) -> dict:
 
 	keys = [
 		'billing_class',
@@ -308,9 +316,9 @@ def price_row_from_dict(
 
 def price_rows_from_dicts(
 	prices: list[dict],
-	code_hash,
-	filename_hash,
-):
+	code_hash: str,
+	filename_hash: str,
+) -> list[dict]:
 
 	price_rows = []
 	for price in prices:
@@ -320,7 +328,7 @@ def price_rows_from_dicts(
 	return price_rows
 
 
-def group_row_from_dict(group: dict):
+def group_row_from_dict(group: dict) -> dict:
 
 	group_row = {
 		'npi_numbers': json.dumps(sorted(group['npi'])),
@@ -333,7 +341,7 @@ def group_row_from_dict(group: dict):
 	return group_row
 
 
-def group_rows_from_dicts(groups: list[dict]):
+def group_rows_from_dicts(groups: list[dict]) -> list[dict]:
 
 	provider_group_rows = []
 	for provider_group in groups:
@@ -346,7 +354,7 @@ def group_rows_from_dicts(groups: list[dict]):
 def prices_groups_rows_from_dicts(
 	price_rows: list[dict],
 	group_rows: list[dict]
-):
+) -> list[dict]:
 
 	prices_groups_rows = []
 	for price_row in price_rows:
@@ -366,7 +374,7 @@ def write_in_network_item(
 	in_network_item: dict,
 	filename_hash,
 	out_dir
-):
+) -> None:
 
 	code_row = code_row_from_dict(in_network_item)
 	write_table(code_row, 'codes', out_dir)
@@ -426,7 +434,7 @@ def process_reference(
 def replace_rates(
 	rates: list[dict],
 	reference_map: dict,
-):
+) -> list[dict]:
 	if not reference_map:
 		# TODO look into this
 		# If there's no map, and there's only a reference and if there
@@ -450,18 +458,19 @@ def replace_rates(
 def replace_in_network_rates(
 	in_network_items: Generator,
 	reference_map: dict,
-):
+) -> Generator:
 	for in_network_item in in_network_items:
 		rates = in_network_item['negotiated_rates']
 		rates = replace_rates(rates, reference_map)
-		in_network_item['negotiated_rates'] = rates
-		yield in_network_item
+		if rates:
+			in_network_item['negotiated_rates'] = rates
+			yield in_network_item
 
 
 def process_in_network(
 	in_network_items: Generator,
 	npi_filter: set,
-):
+) -> Generator:
 	for in_network_item in in_network_items:
 		rates = in_network_item['negotiated_rates']
 		rates = process_rates(rates, npi_filter)
@@ -497,7 +506,11 @@ process_rates      = partial(process_arr, process_rate)
 # process_in_network_items    = partial(process_arr, process_in_network_item)
 
 
-def ffwd(parser: Generator, to_prefix: str, to_event: str):
+def ffwd(
+	parser: Generator,
+	to_prefix: str,
+	to_event: str
+) -> None:
 	for prefix, event, _ in parser:
 		if prefix == to_prefix and event == to_event:
 			break
