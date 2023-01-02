@@ -786,8 +786,7 @@ class MRFContent:
 
 		in_network_items = gen_in_network_items(self.parser, self.code_filter)
 		replaced_items   = replace_in_network_rates(in_network_items, self.reference_map)
-		processed_items  = process_in_network(replaced_items, self.npi_filter)
-		yield from processed_items
+		return process_in_network(replaced_items, self.npi_filter)
 
 
 def json_mrf_to_csv(
