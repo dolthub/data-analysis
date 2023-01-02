@@ -292,7 +292,7 @@ def _make_prices_provider_groups_rows(
 
 def write_in_network_item(in_network_item: dict, filename_hash, exporter):
     code_row = _make_code_row(in_network_item)
-    exporter.writer_row("codes", code_row)
+    exporter.write_row("codes", code_row)
 
     code_hash = code_row["code_hash"]
 
