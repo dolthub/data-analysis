@@ -38,12 +38,12 @@ else:
     npi_filter = None
 
 if args.file:
-    filename = args.file
+    file = args.file
 else:
-    filename = None
+    file = None
 
 json_mrf_to_csv(
-    filename = filename,
+    file = file,
     url = url,
     npi_filter = npi_filter,
     code_filter = code_filter,

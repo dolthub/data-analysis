@@ -1,9 +1,19 @@
 import unittest
+import asyncio
 from mrfutils import (
-	MRFContent,
+	start_parser,
+	get_plan,
+	ffwd,
+	get_reference_map,
+	gen_in_network_items,
+	swap_references,
+	process_in_network,
 	process_group,
 	process_reference,
-	process_rate,
+	# MRFContent,
+	# process_group,
+	# process_reference,
+	# process_rate,
 )
 
 files = [
@@ -21,25 +31,25 @@ sample_reference = {
 	]
 }
 sample_group = sample_reference['provider_groups'][0]
-
-sample_rate = {
-	"negotiated_prices":
-		[{
-			"additional_information": "",
-			"billing_class": "institutional",
-			"billing_code_modifier": [],
-			"expiration_date": "9999-12-31",
-			"negotiated_rate": 9999999.99,
-			"negotiated_type": "negotiated",
-			"service_code": []
-		}],
-	"provider_groups":
-		[{
-			"npi": [4444444444, 5555555555] ,
-			"tin": {"type": "ein", "value": "11-1111111"}
-		}],
-	"provider_references":[2]
-}
+#
+# sample_rate = {
+# 	"negotiated_prices":
+# 		[{
+# 			"additional_information": "",
+# 			"billing_class": "institutional",
+# 			"billing_code_modifier": [],
+# 			"expiration_date": "9999-12-31",
+# 			"negotiated_rate": 9999999.99,
+# 			"negotiated_type": "negotiated",
+# 			"service_code": []
+# 		}],
+# 	"provider_groups":
+# 		[{
+# 			"npi": [4444444444, 5555555555] ,
+# 			"tin": {"type": "ein", "value": "11-1111111"}
+# 		}],
+# 	"provider_references":[2]
+# }
 
 sample_reference_map = {
 	2:[{
@@ -53,6 +63,61 @@ class Test(unittest.TestCase):
 	def setUp(self) -> None:
 		self.test_files = files
 
+	def test_normal_ordering(self):
+		npi_filter = None
+		code_filter = None
+		file = 'test/test_file_ordered.json'
+		parser = start_parser(file)
+
+		plan = get_plan(parser)
+		assert plan['reporting_entity_name'] == 'TEST ENTITY'
+
+		ref_map = get_reference_map(parser, npi_filter)
+
+		if next(parser) == ('', 'end_map', None):
+			parser.close()
+			parser = start_parser(file)
+			ffwd(parser, to_event = 'map_key', to_value = 'in_network')
+
+		in_network_items = gen_in_network_items(parser, code_filter)
+		swapped_items    = swap_references(in_network_items, ref_map)
+		processed_items  = process_in_network(swapped_items, npi_filter)
+
+		first_item = next(processed_items)
+		assert first_item['billing_code'] == '0000'
+
+		second_item = next(processed_items)
+		assert second_item['billing_code'] == '1111'
+
+	def test_reverse_ordering(self):
+		npi_filter = None
+		code_filter = None
+		file = 'test/test_file_ordered.json'
+		parser = start_parser(file)
+
+		plan = get_plan(parser)
+		assert plan['reporting_entity_name'] == 'TEST ENTITY'
+
+		ref_map = get_reference_map(parser, npi_filter)
+
+		if (
+			next(parser) == ('', 'end_map', None) # end of file
+			or ref_map is None # StopIteration
+		):
+			parser.close()
+			parser = start_parser(file)
+			ffwd(parser, to_event='map_key', to_value='in_network')
+
+		in_network_items = gen_in_network_items(parser, code_filter)
+		swapped_items    = swap_references(in_network_items, ref_map)
+		processed_items  = process_in_network(swapped_items, npi_filter)
+
+		first_item = next(processed_items)
+		assert first_item['billing_code'] == '0000'
+
+		second_item = next(processed_items)
+		assert second_item['billing_code'] == '1111'
+
 	def test_process_group(self):
 		group = sample_group.copy()
 		group = process_group(group, {'9889889881'})
@@ -65,41 +130,76 @@ class Test(unittest.TestCase):
 		groups = reference['provider_groups']
 		npis = groups[0]['npi']
 		assert len(npis) == 1
-
-	def test_process_rate(self):
-		# TBD
-		pass
-
-	def test_ordering(self):
-		for idx, file in enumerate(self.test_files):
-			content = MRFContent(file)
-			content.start_conn()
-			in_network_items = content.in_network_items()
-			first_item = next(in_network_items)
-			assert first_item['billing_code'] == '0000'
-			second_item = next(in_network_items)
-			assert second_item['billing_code'] == '1111'
-			plan = content.plan
-			assert plan['reporting_entity_name'] == 'TEST ENTITY'
-
-	def test_npi_filtering(self):
+	#
+	def test_npi_filtering_ordered(self):
 		npi_filter = {'9889889881'}
-		for idx, file in enumerate(self.test_files):
-			content = MRFContent(file, npi_filter = npi_filter)
-			content.start_conn()
-			in_network_items = list(content.in_network_items())
-			assert in_network_items[0]['billing_code'] == '0000'
-			assert len(in_network_items) == 1
-			plan = content.plan
-			assert plan['reporting_entity_name'] == 'TEST ENTITY'
+		code_filter = None
+		file = 'test/test_file_ordered.json'
+		parser = start_parser(file)
+
+		_ = get_plan(parser)
+		ref_map = get_reference_map(parser, npi_filter)
+
+		if (
+			next(parser) == ('', 'end_map', None) # end of file
+			or ref_map is None # StopIteration
+		):
+			parser.close()
+			parser = start_parser(file)
+			ffwd(parser, to_event='map_key', to_value='in_network')
+
+		in_network_items = gen_in_network_items(parser, code_filter)
+		swapped_items    = swap_references(in_network_items, ref_map)
+		processed_items  = process_in_network(swapped_items, npi_filter)
+		items = list(processed_items)
+		assert items[0]['billing_code'] == '0000'
+		assert len(items) == 1
+
+	def test_npi_filtering_out_of_order(self):
+		npi_filter = {'9889889881'}
+		code_filter = None
+		file = 'test/test_file_out_of_order.json'
+		parser = start_parser(file)
+
+		_ = get_plan(parser)
+		ref_map = get_reference_map(parser, npi_filter)
+
+		if (
+			next(parser) == ('', 'end_map', None) # end of file
+			or ref_map is None # StopIteration
+		):
+			parser.close()
+			parser = start_parser(file)
+			ffwd(parser, to_event='map_key', to_value='in_network')
+
+		in_network_items = gen_in_network_items(parser, code_filter)
+		swapped_items    = swap_references(in_network_items, ref_map)
+		processed_items  = process_in_network(swapped_items, npi_filter)
+		items = list(processed_items)
+		assert items[0]['billing_code'] == '0000'
+		assert len(items) == 1
 
 	def test_remote_npi_filtering(self):
 		npi_filter = {'2222222222'}
+		code_filter = None
 		for file in self.test_files:
-			content = MRFContent(file, npi_filter = npi_filter)
-			content.start_conn()
-			in_network_items = content.in_network_items()
-			first_item = next(in_network_items)
+			parser = start_parser(file)
+
+			_ = get_plan(parser)
+			ref_map = get_reference_map(parser, npi_filter)
+
+			if (
+				next(parser) == ('', 'end_map', None) # end of file
+				or ref_map is None # StopIteration
+			):
+				parser.close()
+				parser = start_parser(file)
+				ffwd(parser, to_event='map_key', to_value='in_network')
+
+			in_network_items = gen_in_network_items(parser, code_filter)
+			swapped_items    = swap_references(in_network_items, ref_map)
+			processed_items  = process_in_network(swapped_items, npi_filter)
+			first_item = next(processed_items)
 			assert first_item['name'] == 'TEST NAME 2'
 			rates = first_item['negotiated_rates']
 			assert len(rates) == 1
@@ -111,11 +211,25 @@ class Test(unittest.TestCase):
 
 	def test_multiple_npi_filtering(self):
 		npi_filter = {'1234567890', '4444444444'}
+		code_filter = None
 		for file in self.test_files:
-			content = MRFContent(file, npi_filter = npi_filter)
-			content.start_conn()
-			in_network_items = content.in_network_items()
-			first_item = next(in_network_items)
+			parser = start_parser(file)
+
+			_ = get_plan(parser)
+			ref_map = get_reference_map(parser, npi_filter)
+
+			if (
+				next(parser) == ('', 'end_map', None) # end of file
+				or ref_map is None # StopIteration
+			):
+				parser.close()
+				parser = start_parser(file)
+				ffwd(parser, to_event='map_key', to_value='in_network')
+
+			in_network_items = gen_in_network_items(parser, code_filter)
+			swapped_items    = swap_references(in_network_items, ref_map)
+			processed_items  = process_in_network(swapped_items, npi_filter)
+			first_item = next(processed_items)
 			assert first_item['billing_code'] == '0000'
 			rates = first_item['negotiated_rates']
 			assert len(rates) == 1
@@ -124,21 +238,48 @@ class Test(unittest.TestCase):
 
 	def test_code_filtering(self):
 		code_filter = {('TS-TST', '0000')}
+		npi_filter = None
 		for file in self.test_files:
-			content = MRFContent(file, code_filter = code_filter)
-			content.start_conn()
-			in_network_items = content.in_network_items()
-			first_item = next(in_network_items)
+			parser = start_parser(file)
+
+			_ = get_plan(parser)
+			ref_map = get_reference_map(parser, npi_filter)
+
+			if (
+				next(parser) == ('', 'end_map', None) # end of file
+				or ref_map is None # StopIteration
+			):
+				parser.close()
+				parser = start_parser(file)
+				ffwd(parser, to_event='map_key', to_value='in_network')
+
+			in_network_items = gen_in_network_items(parser, code_filter)
+			swapped_items    = swap_references(in_network_items, ref_map)
+			processed_items  = process_in_network(swapped_items, npi_filter)
+			first_item = next(processed_items)
 			assert first_item['billing_code'] == '0000'
 
 	def test_combined_filtering(self):
 		code_filter = {('TS-TST', '0000')}
 		npi_filter = {'4444444444'}
 		for file in self.test_files:
-			content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
-			content.start_conn()
-			in_network_items = content.in_network_items()
-			first_item = next(in_network_items)
+			parser = start_parser(file)
+
+			_ = get_plan(parser)
+			ref_map = get_reference_map(parser, npi_filter)
+
+			if (
+				next(parser) == ('', 'end_map', None) # end of file
+				or ref_map is None # StopIteration
+			):
+				parser.close()
+				parser = start_parser(file)
+				ffwd(parser, to_event='map_key', to_value='in_network')
+
+			in_network_items = gen_in_network_items(parser, code_filter)
+			swapped_items    = swap_references(in_network_items, ref_map)
+			processed_items  = process_in_network(swapped_items, npi_filter)
+			first_item = next(processed_items)
 			assert first_item['billing_code'] == '0000'
 	#
 	# def test_not_in_list(self):

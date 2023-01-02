@@ -480,14 +480,22 @@ process_rates      = partial(process_arr, process_rate)
 
 def ffwd(
 	parser: Generator,
-	to_prefix: str,
-	to_event: str
+	to_prefix: str = None,
+	to_event: str = None,
+	to_value: str = None,
 ) -> None:
-	for prefix, event, _ in parser:
-		if prefix == to_prefix and event == to_event:
-			break
-	else:
-		raise StopIteration
+	if to_value is None:
+		for prefix, event, _ in parser:
+			if prefix == to_prefix and event == to_event:
+				break
+		else:
+			raise StopIteration
+	if to_prefix is None:
+		for _, event, value in parser:
+			if event == to_event and value == to_value:
+				break
+		else:
+			raise StopIteration
 
 
 def skip_item_by_code(
@@ -507,7 +515,7 @@ def skip_item_by_code(
 	if code and code_type and code_filter:
 		if (code_type, str(code)) not in code_filter:
 			log.debug(f'Skipping {code_type} {code}: filtered out')
-			ffwd(parser, 'in_network.item', 'end_map')
+			ffwd(parser, to_prefix='in_network.item', to_event='end_map')
 			builder.value.pop()
 			builder.containers.pop()
 			return
@@ -515,7 +523,7 @@ def skip_item_by_code(
 	arrangement = item.get('negotiation_arrangement')
 	if arrangement and arrangement != 'ffs':
 		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-		ffwd(parser, 'in_network.item', 'end_map')
+		ffwd(parser, to_prefix='in_network.item', to_event='end_map')
 		builder.value.pop()
 		builder.containers.pop()
 		return
@@ -634,7 +642,6 @@ async def make_reference_map(
 		reference['provider_group_id']: reference['provider_groups']
 		for reference in processed_references
 	}
-
 	return reference_map
 
 
@@ -646,33 +653,33 @@ def swap_references(
 	and replaces it with the corresponding provider
 	groups from reference_map"""
 	for item in in_network_items:
-		rates = item['negotiated_rates']
-		for rate in rates:
-			references = rate.get('provider_references')
-			if not references:
-				continue
-			groups = rate.get('provider_groups', [])
-			for reference in references:
-				addl_groups = reference_map.get(reference)
-				if addl_groups:
-					groups.extend(addl_groups)
-			rate.pop('provider_references')
-			rate['provider_groups'] = groups
-
-		item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
-
-		if item['negotiated_rates']:
+		if not reference_map:
 			yield item
+		else:
+			rates = item['negotiated_rates']
+			for rate in rates:
+				references = rate.get('provider_references')
+				if not references:
+					continue
+				groups = rate.get('provider_groups', [])
+				for reference in references:
+					addl_groups = reference_map.get(reference)
+					if addl_groups:
+						groups.extend(addl_groups)
+				rate.pop('provider_references')
+				rate['provider_groups'] = groups
+
+			item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
+
+			if item['negotiated_rates']:
+				yield item
 
 
 def gen_in_network_items(
 	parser: Generator,
 	code_filter: set,
 ) -> Generator:
-
 	builder = ijson.ObjectBuilder()
-	builder.event('start_array', None)
-
 	for prefix, event, value in parser:
 		builder.event(event, value)
 
@@ -703,7 +710,7 @@ def get_plan(parser) -> dict | None:
 		raise InvalidMRF
 
 
-async def get_reference_map(parser, npi_filter) -> dict | None:
+async def _get_reference_map(parser, npi_filter) -> dict | None:
 	"""
 	Probably looks pretty WTF. All this does is collect the
 	provider references (and reset the parsing stream if need be.)
@@ -738,21 +745,24 @@ async def get_reference_map(parser, npi_filter) -> dict | None:
 		return await make_reference_map(references, npi_filter)
 	try:
 		# Check for case (2)
-		ffwd(parser, 'provider_references', 'start_array')
+		ffwd(parser, to_prefix='provider_references', to_value='start_array')
 	except StopIteration:
 		# StopIteration -> they don't exist (3)
-		return
+		return None
 	else:
-		# Collect them
+		# Collect them (ends on ('', 'end_map', None))
 		return await make_reference_map(references, npi_filter)
-	finally:
-		parser = start_parser()
+
+
+def get_reference_map(parser, npi_filter):
+	"""Wrapper to turn _get_reference_map into a sync function"""
+	return asyncio.run(_get_reference_map(parser, npi_filter))
 
 
 def json_mrf_to_csv(
 	url: str,
 	out_dir: str,
-	filename: str = None,
+	file: str = None,
 	code_filter: set = None,
 	npi_filter: set = None,
 ) -> None:
@@ -765,19 +775,25 @@ def json_mrf_to_csv(
 	isn't an optional parameter.
 	"""
 
-	if not filename:
-		filename = url
+	if file is None:
+		file = url
 
 	# Explicitly make this variable up-front since both sets of tables
 	# are linked by it (in_network and plan tables)
-	filename_hash = filename_hasher(filename)
+	filename_hash = filename_hasher(file)
 
-	parser = start_parser(filename)
+	parser = start_parser(file)
 
-	plan = get_plan(parser)
-	ref_map = asyncio.run(get_reference_map(parser, npi_filter))
+	plan    = get_plan(parser)
+	ref_map = get_reference_map(parser, npi_filter)
 
-	ffwd(parser, 'in_network', 'start_array')
+	if (
+		next(parser) == ('', 'end_map', None)  # at EOF (case 2)
+		or ref_map is None                     # StopIteration (case 3)
+	):
+		parser = start_parser(file)
+		ffwd(parser, to_event='map_key', to_value='in_network')
+
 	in_network_items = gen_in_network_items(parser, code_filter)
 	swapped_items    = swap_references(in_network_items, ref_map)
 	processed_items  = process_in_network(swapped_items, npi_filter)
@@ -787,4 +803,4 @@ def json_mrf_to_csv(
 	for item in processed_items:
 		write_in_network_item(item, filename_hash, out_dir)
 
-	write_plan(plan, filename_hash, filename, url, out_dir)
+	write_plan(plan, filename_hash, file, url, out_dir)
