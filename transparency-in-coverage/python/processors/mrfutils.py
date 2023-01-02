@@ -621,7 +621,8 @@ async def make_reference_map(
 		task = asyncio.create_task(coro)
 		tasks.append(task)
 
-	async with aiohttp.client.ClientSession() as session:
+	connector = aiohttp.TCPConnector(limit_per_host=10)
+	async with aiohttp.client.ClientSession(connector=connector) as session:
 		for reference in references:
 			if url := reference.get('location'):
 				group_id = reference['provider_group_id']
