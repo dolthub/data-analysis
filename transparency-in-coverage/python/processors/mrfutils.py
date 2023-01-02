@@ -749,14 +749,6 @@ async def get_reference_map(parser, npi_filter) -> dict | None:
 		parser = start_parser()
 
 
-"""
-
-
-
-
-	
-"""
-
 def json_mrf_to_csv(
 	url: str,
 	out_dir: str,
@@ -773,28 +765,24 @@ def json_mrf_to_csv(
 	isn't an optional parameter.
 	"""
 
-	#TODO warn user if filename is URL
-
-	make_dir(out_dir)
-
-	# Explicitly make this variable up-front since both sets of tables
-	# are linked by it (in_network and plan tables)
 	if not filename:
 		filename = url
 
+	# Explicitly make this variable up-front since both sets of tables
+	# are linked by it (in_network and plan tables)
 	filename_hash = filename_hasher(filename)
 
 	parser = start_parser(filename)
 
 	plan = get_plan(parser)
 	ref_map = asyncio.run(get_reference_map(parser, npi_filter))
-	ffwd(parser, 'in_network', 'start_array')
 
-	# gen_in_network_items -> filter items by code
-	# process_in_network -> remove npis
+	ffwd(parser, 'in_network', 'start_array')
 	in_network_items = gen_in_network_items(parser, code_filter)
 	swapped_items    = swap_references(in_network_items, ref_map)
 	processed_items  = process_in_network(swapped_items, npi_filter)
+
+	make_dir(out_dir)
 
 	for item in processed_items:
 		write_in_network_item(item, filename_hash, out_dir)
