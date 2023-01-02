@@ -308,7 +308,7 @@ def write_in_network_item(in_network_item: dict, filename_hash, exporter):
         prices_provider_group_rows = _make_prices_provider_groups_rows(
             price_rows, provider_group_rows
         )
-        exporter.writer_rows("prices_provider_groups", prices_provider_group_rows)
+        exporter.write_rows("prices_provider_groups", prices_provider_group_rows)
 
     code_type = in_network_item["billing_code_type"]
     code = in_network_item["billing_code"]
