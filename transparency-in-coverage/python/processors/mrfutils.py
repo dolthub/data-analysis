@@ -261,7 +261,7 @@ def code_row_from_dict(in_network_item: dict):
 		'billing_code',
 	]
 
-	code_row = {key : in_network_item[key] for key in keys}
+	code_row = {key : in_network_item[key].strip() for key in keys}
 	code_row = append_hash(code_row, 'code_hash')
 
 	return code_row
@@ -292,8 +292,7 @@ def price_row_from_dict(
 	# in its JSON -- remove these before sorting
 	for key in optional_json_keys:
 		if price.get(key):
-			price.get(key)
-			sorted_value = sorted(price[key])
+			sorted_value = [value.strip() for value in sorted(price[key])]
 			price_row[key] = json.dumps(sorted_value)
 
 	hashes = {
