@@ -32,11 +32,11 @@ where the flags are
 --url <mrf url>
 ```
 
-### Q: Will this work on table of contents files or allowed-amounts files?
-A: No. This **will not work** for _index.json_ or _allowed-amounts.json_ file. The script will fail. These files don't contain rates.  Index files do, however, contain links to files with rates. So you may want to write a program that loops through them and gets those files. `example2.py` shows you how to do that.
+#### Q: Will this work on table of contents files or allowed-amounts files?
+A: This will not work for _index.json_ or _allowed-amounts.json_ file as these files don't contain rates.  Index files do, however, contain links to files with rates. So you may want to write a program that loops through them and gets those files. `example2.py` shows you how to do that.
 
-### Q: Can I contribute?
-A: `mrfutils` is not seeking developers or maintainers, but having it work reliably is important. If you find a bug or a performance improvement, please let me know. Examples are welcome additions, but `mrfutils.py` should stay as simple as possible.
+#### Q: Can I contribute?
+A: I'm not seeking developers but having the tool work reliably is important. If you find a bug or a potential performance improvement, please let me know. Extra examples, plugins, and unit tests are welcome additions, but `mrfutils.py` should stay as simple as possible.
 
 ## Example
 
