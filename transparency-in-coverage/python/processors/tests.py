@@ -4,7 +4,6 @@ from mrfutils import (
 	process_group,
 	process_reference,
 	process_rate,
-	replace_rates,
 )
 
 files = [
@@ -67,24 +66,9 @@ class Test(unittest.TestCase):
 		npis = groups[0]['npi']
 		assert len(npis) == 1
 
-	def test_replace_rates_no_reference_map(self):
-		rates = [sample_rate.copy()]
-		rates = replace_rates(rates, {})
-		assert len(rates) == 1
-		groups = rates[0]['provider_groups']
-		group = groups[0]
-		assert group['npi'] == [4444444444, 5555555555]
-
-	def test_replace_rates_reference_map(self):
-		rates = [sample_rate.copy()]
-		rates = replace_rates(rates, sample_reference_map)
-		groups = rates[0]['provider_groups']
-		assert len(groups) == 2
-		assert len(groups[0]['npi']) == 2
-		assert len(groups[1]['npi']) == 3
-
 	def test_process_rate(self):
 		# TBD
+		pass
 
 	def test_ordering(self):
 		for idx, file in enumerate(self.test_files):

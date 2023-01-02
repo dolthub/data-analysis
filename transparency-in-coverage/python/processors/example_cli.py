@@ -16,6 +16,7 @@ log = logging.getLogger('mrfutils')
 log.setLevel(logging.DEBUG)
 
 parser = argparse.ArgumentParser()
+parser.add_argument('-f', '--file')
 parser.add_argument('-u', '--url')
 parser.add_argument('-o', '--out', default = 'csv_output')
 parser.add_argument('-c', '--codes')
@@ -36,9 +37,14 @@ if args.npis:
 else:
     npi_filter = None
 
+if args.file:
+    filename = args.file
+else:
+    filename = None
+
 json_mrf_to_csv(
-    filename = url,
-    # url = url,
+    filename = filename,
+    url = url,
     npi_filter = npi_filter,
     code_filter = code_filter,
     out_dir = out_dir

@@ -32,6 +32,8 @@ For the time being I set the tab width to be 8 spaces to force myself to be
 more concise with my functions.
 
 """
+from __future__ import annotations
+
 import asyncio
 import csv
 import gzip
@@ -143,7 +145,7 @@ def make_dir(out_dir):
 		os.mkdir(out_dir)
 
 
-def dicthasher(data, n_bytes = 8):
+def dicthasher(data: dict, n_bytes = 8) -> int:
 	if not data:
 		raise Exception("Hashed dictionary can't be empty")
 
@@ -154,7 +156,7 @@ def dicthasher(data, n_bytes = 8):
 	return hash_i
 
 
-def append_hash(item, name):
+def append_hash(item: dict, name: str) -> dict:
 
 	hash_ = dicthasher(item)
 	item[name] = hash_
@@ -162,7 +164,7 @@ def append_hash(item, name):
 	return item
 
 
-def filename_hasher(filename):
+def filename_hasher(filename: str) -> int:
 
 	# retrieve/only/this_part_of_the_file.json(.gz)
 	filename = Path(filename).stem.split('.')[0]
@@ -219,7 +221,7 @@ def plan_row_from_dict(plan: dict) -> dict:
 
 def file_row_from_filename(
 	filename: str,
-	filename_hash: str,
+	filename_hash: int,
 	url: str
 ) -> dict:
 
@@ -233,7 +235,7 @@ def file_row_from_filename(
 	return file_row
 
 
-def plan_file_row_from_row(plan_row: dict, filename_hash: str):
+def plan_file_row_from_row(plan_row: dict, filename_hash: int):
 
 	plan_file_row = {
 		'plan_hash': plan_row['plan_hash'],
@@ -245,7 +247,7 @@ def plan_file_row_from_row(plan_row: dict, filename_hash: str):
 
 def write_plan(
 	plan: dict,
-	filename_hash: str,
+	filename_hash: int,
 	filename: str,
 	url: str,
 	out_dir: str,
@@ -373,7 +375,7 @@ def prices_groups_rows_from_dicts(
 def write_in_network_item(
 	in_network_item: dict,
 	filename_hash,
-	reference_map,
+	# reference_map,
 	out_dir
 ) -> None:
 
@@ -385,11 +387,11 @@ def write_in_network_item(
 	for rate in in_network_item['negotiated_rates']:
 		prices = rate['negotiated_prices']
 		groups = rate.get('provider_groups', [])
-		references = rate.get('provider_references', [])
+		# references = rate.get('provider_references', [])
 
-		for reference in references:
-			if addl_groups := reference_map.get(reference):
-				groups.extend(addl_groups)
+		# for reference in references:
+		# 	if addl_groups := reference_map.get(reference):
+		# 		groups.extend(addl_groups)
 
 		price_rows = price_rows_from_dicts(prices, code_hash, filename_hash)
 		write_table(price_rows, 'prices', out_dir)
@@ -408,7 +410,7 @@ def write_in_network_item(
 def process_group(
 	group: dict,
 	npi_filter: set,
-) -> dict:
+) -> dict | None:
 
 	group['npi'] = [str(n) for n in group['npi']]
 
@@ -424,7 +426,7 @@ def process_group(
 def process_reference(
 	reference: dict,
 	npi_filter: set,
-) -> dict:
+) -> dict | None:
 
 	groups = reference['provider_groups']
 	groups = process_groups(groups, npi_filter)
@@ -435,42 +437,6 @@ def process_reference(
 			'provider_groups'   : groups
 		}
 		return reference
-
-
-# def replace_rates(
-# 	rates: list[dict],
-# 	reference_map: dict,
-# ) -> list[dict]:
-# 	if not reference_map:
-# 		# TODO look into this
-# 		# If there's no map, and there's only a reference and if there
-# 		# are no provider groups we can forget about the whole rate
-# 		for rate in rates:
-# 			rate.pop('provider_references', None)
-# 		rates = [rate for rate in rates if rate.get('provider_groups')]
-# 		return rates
-#
-# 	for rate in rates:
-# 		if group_ids := rate.get('provider_references'):
-# 			groups = rate.get('provider_groups', [])
-# 			for group_id in group_ids:
-# 				addl_groups = reference_map.get(group_id, [])
-# 				groups.extend(addl_groups)
-# 			# rate.pop('provider_references')
-# 			rate['provider_groups'] = groups
-# 	return rates
-
-
-# def replace_in_network_rates(
-# 	in_network_items: Generator,
-# 	reference_map: dict,
-# ) -> Generator:
-# 	for in_network_item in in_network_items:
-# 		rates = in_network_item['negotiated_rates']
-# 		# rates = replace_rates(rates, reference_map)
-# 		if rates:
-# 			in_network_item['negotiated_rates'] = rates
-# 			yield in_network_item
 
 
 def process_in_network(
@@ -488,13 +454,13 @@ def process_in_network(
 def process_rate(
 	rate: dict,
 	npi_filter: set,
-) -> dict:
+) -> dict | None:
 
 	if groups := rate.get('provider_groups'):
 		rate['provider_groups'] = process_groups(groups, npi_filter)
 
-	if rate.get('provider_groups') or rate.get('provider_references'):
-		# rate['provider_groups'] = groups
+	# if rate.get('provider_groups') or rate.get('provider_references'):
+	if rate.get('provider_groups'):
 		return rate
 
 
@@ -672,6 +638,33 @@ async def make_reference_map(
 	return reference_map
 
 
+def swap_references(
+	in_network_items: Generator,
+	reference_map: dict,
+) -> Generator:
+	"""Takes the provider reference ID in the rate
+	and replaces it with the corresponding provider
+	groups from reference_map"""
+	for item in in_network_items:
+		rates = item['negotiated_rates']
+		for rate in rates:
+			references = rate.get('provider_references')
+			if not references:
+				continue
+			groups = rate.get('provider_groups', [])
+			for reference in references:
+				addl_groups = reference_map.get(reference)
+				if addl_groups:
+					groups.extend(addl_groups)
+			rate.pop('provider_references')
+			rate['provider_groups'] = groups
+
+		item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
+
+		if item['negotiated_rates']:
+			yield item
+
+
 def gen_in_network_items(
 	parser: Generator,
 	code_filter: set,
@@ -695,153 +688,115 @@ def gen_in_network_items(
 			return
 
 
-# Basic pipeline
-# MRF -> read header -> filter provider refs -> read in-network items
-# read in-network items: filter items -> process items
-class MRFContent:
+def start_parser(filename) -> Generator:
+	with JSONOpen(filename) as f:
+		yield from ijson.parse(f, use_float = True)
+
+
+def get_plan(parser) -> dict | None:
+	builder = ijson.ObjectBuilder()
+	for prefix, event, value in parser:
+		builder.event(event, value)
+		if value in ('provider_references', 'in_network'):
+			return builder.value
+	else:
+		raise InvalidMRF
+
+
+async def get_reference_map(parser, npi_filter) -> dict | None:
 	"""
-	Bucket for MRF data. Assumes that the MRF is in one of the following
-	three orders:
+	Probably looks pretty WTF. All this does is collect the
+	provider references (and reset the parsing stream if need be.)
+	The problem is they can either be located in one of three
+	places:
 
-	1. plan -> provider_references -> in_network (most common)
-	2. plan -> in_network (second-most common)
-	3. plan -> in_network -> provider_references (least common)
+	1. {
+		...
+		'provider_references': <-- here (most common)
+		'in_network': ...
+	}
+	2. {
+		...
+		'in_network': ...
+		'provider_references': <-- here (rarely)
+	}
+	3. {
+		...
+		'in_network': ...
+	} (aka nowhere, semi-common)
 
-	As far as I can tell, no one puts their plan data at the bottom,
-	although that's possible. If that turns out to be the case this
-	function will have to be modified a little bit (but that won't be a
-	big deal.)
+	This function checks in order (1, 2, 3). First we look for
+	case (1). If we don't find it, we try case (2), and if we hit a
+	StopIteration, we know we have case (3).
 
-	Usage:
-	>>> content = MRFContent(filename, npi_filter, code_filter)
-	>>> content.start_conn() # fetches plan info and opens file
-	>>> content.plan # access plan information
-	>>> content.in_network_items() # generates items as file is read
-
-	From there you can write the items and plan information as you
-	read them in.
+	In cases (2) and (3) we have to restart the parser since the
+	in-network items are now above us.
 	"""
+	# Case (1)
+	references = gen_references(parser)
+	if next(parser) == ('provider_references', 'start_array', None):
+		return await make_reference_map(references, npi_filter)
+	try:
+		# Check for case (2)
+		ffwd(parser, 'provider_references', 'start_array')
+	except StopIteration:
+		# StopIteration -> they don't exist (3)
+		return
+	else:
+		# Collect them
+		return await make_reference_map(references, npi_filter)
+	finally:
+		parser = start_parser()
 
-	def __init__(self, filename, npi_filter = None, code_filter = None):
-		self.filename = filename
-		self.code_filter = code_filter
-		self.npi_filter = npi_filter
 
-	def start_conn(self):
-		self.parser = self.start_parser()
-		self.set_plan()
-		asyncio.run(self.set_references())
+"""
 
-	def start_parser(self) -> Generator:
-		with JSONOpen(self.filename) as f:
-			yield from ijson.parse(f, use_float = True)
 
-	def set_plan(self):
-		builder = ijson.ObjectBuilder()
-		for prefix, event, value in self.parser:
-			builder.event(event, value)
-			if value in ('provider_references', 'in_network'):
-				self.plan = builder.value
-				break
-		else:
-			raise InvalidMRF
 
-	async def set_references(self) -> None:
-		"""
-		Probably looks pretty WTF. All this does is collect the
-		provider references (and reset the parsing stream if need be.)
-		The problem is they can either be located in one of three
-		places:
 
-		1. {
-			...
-			'provider_references': <-- here (most common)
-			'in_network': ...
-		}
-		2. {
-			...
-			'in_network': ...
-			'provider_references': <-- here (rarely)
-		}
-		3. {
-			...
-			'in_network': ...
-		} (aka nowhere, semi-common)
-
-		This function checks in order (1, 2, 3). First we look for
-		case (1). If we don't find it, we try case (2), and if we hit a
-		StopIteration, we know we have case (3).
-
-		In cases (2) and (3) we have to restart the parser since the
-		in-network items are now above us.
-		"""
-		# Case (1)
-		references = gen_references(self.parser)
-		if next(self.parser) == ('provider_references', 'start_array', None):
-			self.reference_map = await make_reference_map(references, self.npi_filter)
-			return
-		try:
-			# Check for case (2)
-			ffwd(self.parser, 'provider_references', 'start_array')
-		except StopIteration:
-			# StopIteration -> they don't exist (3)
-			self.reference_map = None
-		else:
-			# Collect them
-			self.reference_map = await make_reference_map(references, self.npi_filter)
-		finally:
-			self.parser = self.start_parser()
-
-	def in_network_items(self) -> Generator:
-		"""
-		Generator pipeline for returning processed in-network items.
-
-		gen_in_network_items -> Generator of filtered items
-		replace_in_network_rates -> Generator of items w/ rates subbed
-		process_in_network -> Generator of items with npis removed
-		"""
-		# asyncio.run(self.set_references())
-		ffwd(self.parser, 'in_network', 'start_array')
-
-		in_network_items = gen_in_network_items(self.parser, self.code_filter)
-		# replaced_items   = replace_in_network_rates(in_network_items, self.reference_map)
-		return process_in_network(in_network_items, self.npi_filter)
-
+	
+"""
 
 def json_mrf_to_csv(
-	filename: str,
-	npi_filter: set,
-	code_filter: set,
+	url: str,
 	out_dir: str,
-	url: str = None,
+	filename: str = None,
+	code_filter: set = None,
+	npi_filter: set = None,
 ) -> None:
 	"""
 	Writes MRF content to a flat file CSV in a specific schema.
-	The url parameter is optional -- if you pass only a loc,
-	we assume that the file is remote.
+	The filename parameter is optional. If you only pass a URL we assume
+	that it's a remote file. If you pass a filename, you must also pass a URL.
 
-	If you pass a filename and a URL, the file is read from filename but the
-	URL that you input is used. This is just saved for bookkeeping.
-
-	!Importantly! you have to make sure that whatever file you saved
-	matches the filename that the URL returns. We index the files by
-	name, so if the name is different, the index will be wrong.
+	As of 1/2/2023 the filename is extracted from the URL, so this
+	isn't an optional parameter.
 	"""
 
 	#TODO warn user if filename is URL
 
 	make_dir(out_dir)
-	url = url if url else filename
 
 	# Explicitly make this variable up-front since both sets of tables
 	# are linked by it (in_network and plan tables)
+	if not filename:
+		filename = url
+
 	filename_hash = filename_hasher(filename)
 
-	content = MRFContent(filename, npi_filter, code_filter)
-	content.start_conn()
-	reference_map = content.reference_map
+	parser = start_parser(filename)
 
-	for in_network_item in content.in_network_items():
-		write_in_network_item(in_network_item, filename_hash, reference_map, out_dir)
+	plan = get_plan(parser)
+	ref_map = asyncio.run(get_reference_map(parser, npi_filter))
+	ffwd(parser, 'in_network', 'start_array')
 
-	write_plan(content.plan, filename_hash, filename, url, out_dir)
+	# gen_in_network_items -> filter items by code
+	# process_in_network -> remove npis
+	in_network_items = gen_in_network_items(parser, code_filter)
+	swapped_items    = swap_references(in_network_items, ref_map)
+	processed_items  = process_in_network(swapped_items, npi_filter)
+
+	for item in processed_items:
+		write_in_network_item(item, filename_hash, out_dir)
+
+	write_plan(plan, filename_hash, filename, url, out_dir)

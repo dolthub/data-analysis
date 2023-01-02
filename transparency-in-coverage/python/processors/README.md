@@ -31,6 +31,10 @@ where the flags are
 --out <outputdirectory>
 --url <mrf url>
 ```
+
+#### Q: What python version do I need?
+A: Right now it works best under python 3.9, since `ijson` has not released its high performance C backend for 3.10+ yet.
+
 #### Q: How do I run this?
 A: The only two files needed to start flattening the in-network `.json` files are `schema.py` and `mrfutils.py`. `example_cli.py` shows you the basics of what you need in order to parse these files. You can input either a local file or a remote URL. If you choose to import from local, you will need to pass the URL as a parameter.
 
