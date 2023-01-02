@@ -31,6 +31,8 @@ where the flags are
 --out <outputdirectory>
 --url <mrf url>
 ```
+#### Q: How do I run this?
+A: the only two files needed are `schema.py` and `mrfutils.py`. `example_cli.py` shows you the basics of what you need in order to parse these files. You're encouraged to write your own scripts using the functions in `mrfutils.py`, but without modification of the main functionality.
 
 #### Q: Will this work on table of contents files or allowed-amounts files?
 A: This will not work for _index.json_ or _allowed-amounts.json_ file as these files don't contain rates.  Index files do, however, contain links to files with rates. So you may want to write a program that loops through them and gets those files. `example2.py` shows you how to do that.
