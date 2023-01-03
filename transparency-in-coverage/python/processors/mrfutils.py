@@ -53,6 +53,7 @@ from typing import Generator
 from pathlib import Path
 from urllib.parse import urlparse
 from functools import partial
+from itertools import chain, product
 
 import aiohttp
 import ijson
@@ -75,19 +76,33 @@ class InvalidMRF(Exception):
 	pass
 
 
-def peek(gen):
-	try:
-		peeked = next(gen)
-	except StopIteration:
-		return None, gen
-	return peeked, (value for g in ([peeked], gen) for value in g)
+def prepend(value, iterator):
+	"""Prepend a single value in front of an iterator
+	>>>  prepend(1, [2, 3, 4])
+	>>>  1 2 3 4
+	"""
+	return chain([value], iterator)
+
+
+def peek(iterator):
+	"""
+	Usage:
+	>>> next_, iter = peek(iter)
+	allows you to peek at the next value of the iterator
+	"""
+	try: next_ = next(iterator)
+	except StopIteration: return None, iterator
+	return next_, prepend(next_, iterator)
 
 
 class JSONOpen:
 	"""
 	Context manager for opening JSON(.gz) MRFs.
-	Handles local and remote gzipped and unzipped
-	JSON files.
+	Usage:
+	>>> with JSONOpen('localfile.json') as f:
+	or
+	>>> with JSONOpen(some_json_url) as f:
+	including both zipped and unzipped files.
 	"""
 
 	def __init__(self, filename):
@@ -142,16 +157,12 @@ def import_csv_to_set(filename: str):
 
 	with open(filename, 'r') as f:
 		reader = csv.reader(f)
-
 		for row in reader:
 			row = [col.strip() for col in row]
-
 			if len(row) > 1:
 				items.add(tuple(row))
-
 			else:
 				items.add(row.pop())
-
 		return items
 
 
@@ -162,6 +173,7 @@ def make_dir(out_dir):
 
 
 def dicthasher(data: dict, n_bytes = 8) -> int:
+
 	if not data:
 		raise Exception("Hashed dictionary can't be empty")
 
@@ -216,7 +228,11 @@ def write_table(
 			writer.writerow(row)
 
 
-def plan_row_from_dict(plan: dict) -> dict:
+Row = dict
+# To distinguish data from rows
+
+
+def plan_row_from_dict(plan: dict) -> Row:
 
 	keys = [
 		'reporting_entity_name',
@@ -239,7 +255,7 @@ def file_row_from_filename(
 	filename: str,
 	filename_hash: int,
 	url: str
-) -> dict:
+) -> Row:
 
 	filename = Path(filename).stem.split('.')[0]
 	file_row = {
@@ -251,7 +267,10 @@ def file_row_from_filename(
 	return file_row
 
 
-def plan_file_row_from_row(plan_row: dict, filename_hash: int):
+def plan_file_row_from_row(
+	plan_row: Row,
+	filename_hash: int
+) -> Row:
 
 	plan_file_row = {
 		'plan_hash': plan_row['plan_hash'],
@@ -279,7 +298,7 @@ def write_plan(
 	write_table(plan_file_row, 'plans_files', out_dir)
 
 
-def code_row_from_dict(in_network_item: dict) -> dict:
+def code_row_from_dict(in_network_item: dict) -> Row:
 
 	keys = [
 		'billing_code_type',
@@ -297,7 +316,7 @@ def price_row_from_dict(
 	price: dict,
 	code_hash: str,
 	filename_hash: str,
-) -> dict:
+) -> Row:
 
 	keys = [
 		'billing_class',
@@ -336,7 +355,7 @@ def price_rows_from_dicts(
 	prices: list[dict],
 	code_hash: str,
 	filename_hash: str,
-) -> list[dict]:
+) -> list[Row]:
 
 	price_rows = []
 	for price in prices:
@@ -346,7 +365,7 @@ def price_rows_from_dicts(
 	return price_rows
 
 
-def group_row_from_dict(group: dict) -> dict:
+def group_row_from_dict(group: dict) -> Row:
 
 	group_row = {
 		'npi_numbers': json.dumps(sorted(group['npi'])),
@@ -359,7 +378,7 @@ def group_row_from_dict(group: dict) -> dict:
 	return group_row
 
 
-def group_rows_from_dicts(groups: list[dict]) -> list[dict]:
+def group_rows_from_dicts(groups: list[dict]) -> list[Row]:
 
 	provider_group_rows = []
 	for provider_group in groups:
@@ -372,18 +391,17 @@ def group_rows_from_dicts(groups: list[dict]) -> list[dict]:
 def prices_groups_rows_from_dicts(
 	price_rows: list[dict],
 	group_rows: list[dict]
-) -> list[dict]:
+) -> list[Row]:
 
 	prices_groups_rows = []
-	for price_row in price_rows:
-		for group_row in group_rows:
+	for price_row, group_row in product(price_rows, group_rows):
 
-			prices_groups_row = {
-				'provider_group_hash': group_row['provider_group_hash'],
-				'price_hash': price_row['price_hash'],
-			}
+		prices_groups_row = {
+			'provider_group_hash': group_row['provider_group_hash'],
+			'price_hash': price_row['price_hash'],
+		}
 
-			prices_groups_rows.append(prices_groups_row)
+		prices_groups_rows.append(prices_groups_row)
 
 	return prices_groups_rows
 
@@ -391,7 +409,6 @@ def prices_groups_rows_from_dicts(
 def write_in_network_item(
 	in_network_item: dict,
 	filename_hash,
-	# reference_map,
 	out_dir
 ) -> None:
 
@@ -403,11 +420,6 @@ def write_in_network_item(
 	for rate in in_network_item['negotiated_rates']:
 		prices = rate['negotiated_prices']
 		groups = rate.get('provider_groups', [])
-		# references = rate.get('provider_references', [])
-
-		# for reference in references:
-		# 	if addl_groups := reference_map.get(reference):
-		# 		groups.extend(addl_groups)
 
 		price_rows = price_rows_from_dicts(prices, code_hash, filename_hash)
 		write_table(price_rows, 'prices', out_dir)
@@ -488,10 +500,8 @@ def process_arr(func, arr, *args, **kwargs):
 	return processed_arr
 
 
-# process_provider_references = partial(process_arr, process_provider_reference)
 process_groups     = partial(process_arr, process_group)
 process_rates      = partial(process_arr, process_rate)
-# process_in_network_items    = partial(process_arr, process_in_network_item)
 
 
 def ffwd(
@@ -505,12 +515,12 @@ def ffwd(
 			if prefix == to_prefix and event == to_event:
 				break
 		else: raise StopIteration
-	if to_prefix is None:
+	elif to_prefix is None:
 		for _, event, value in parser:
 			if event == to_event and value == to_value:
 				break
 		else: raise StopIteration
-	if to_event is None:
+	elif to_event is None:
 		for prefix, _, value in parser:
 			if prefix == to_prefix and value == to_value:
 				break
@@ -748,8 +758,8 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 	StopIteration, we know we have case (3).
 	"""
 	# Case (1)`
-	peeked, parser = peek(parser)
-	if peeked == ('provider_references', 'start_array', None):
+	next_, parser = peek(parser)
+	if next_ == ('provider_references', 'start_array', None):
 		references = gen_references(parser)
 		return await make_reference_map(references, npi_filter)
 	try:
@@ -782,8 +792,8 @@ class Content:
 		self.ref_map = get_reference_map(self.parser, self.npi_filter)
 
 	def prepare_in_network(self):
-		peeked, parser = peek(self.parser)
-		if peeked in [('', 'end_map', None), None]:
+		next_, parser = peek(self.parser)
+		if next_ in [('', 'end_map', None), None]:
 			self.parser = start_parser(self.file)
 			ffwd(self.parser, to_prefix='', to_value='in_network')
 

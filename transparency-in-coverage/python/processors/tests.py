@@ -2,20 +2,8 @@ import unittest
 import asyncio
 from mrfutils import (
 	Content,
-	start_parser,
-	get_plan,
-	ffwd,
-	get_reference_map,
-	gen_in_network_items,
-	swap_references,
-	process_in_network,
 	process_group,
 	process_reference,
-	peek,
-	# MRFContent,
-	# process_group,
-	# process_reference,
-	# process_rate,
 )
 
 files = [
@@ -64,6 +52,22 @@ class Test(unittest.TestCase):
 
 	def setUp(self) -> None:
 		self.test_files = files
+
+	def test_no_references(self):
+		npi_filter = None
+		code_filter = None
+		file = 'test/test_file_no_references.json'
+		content = Content(file, code_filter, npi_filter)
+		content.start_conn()
+		plan = content.plan
+		ref_map = content.ref_map
+		assert ref_map is None
+		assert plan['reporting_entity_name'] == 'TEST ENTITY'
+		processed_items = content.in_network_items()
+		first_item = next(processed_items)
+		assert first_item['billing_code'] == '0000'
+		second_item = next(processed_items)
+		assert second_item['billing_code'] == '1111'
 
 	def test_normal_ordering(self):
 		npi_filter = None
