@@ -389,8 +389,8 @@ def group_rows_from_dicts(groups: list[dict]) -> list[Row]:
 
 
 def prices_groups_rows_from_dicts(
-	price_rows: list[dict],
-	group_rows: list[dict]
+	price_rows: list[Row],
+	group_rows: list[Row]
 ) -> list[Row]:
 
 	prices_groups_rows = []
@@ -435,20 +435,28 @@ def write_in_network_item(
 	log.debug(f'Wrote {code_type} {code}')
 
 
+def process_arr(func, arr, *args, **kwargs):
+	processed_arr = []
+	for item in arr:
+		if processed_item := func(item, *args, **kwargs):
+			processed_arr.append(processed_item)
+	return processed_arr
+
+
 def process_group(
 	group: dict,
 	npi_filter: set,
 ) -> dict | None:
 
 	group['npi'] = [str(n) for n in group['npi']]
-
 	if not npi_filter:
 		return group
 
 	group['npi'] = [n for n in group['npi'] if n in npi_filter]
-
 	if group['npi']:
 		return group
+
+process_groups = partial(process_arr, process_group)
 
 
 def process_reference(
@@ -491,19 +499,9 @@ def process_rate(
 	if rate.get('provider_groups'):
 		return rate
 
+process_rates = partial(process_arr, process_rate)
 
-def process_arr(func, arr, *args, **kwargs):
-	processed_arr = []
-	for item in arr:
-		if processed_item := func(item, *args, **kwargs):
-			processed_arr.append(processed_item)
-	return processed_arr
-
-
-process_groups     = partial(process_arr, process_group)
-process_rates      = partial(process_arr, process_rate)
-
-
+# TODO simplify
 def ffwd(
 	parser: Generator,
 	to_prefix: str = None,
@@ -525,6 +523,42 @@ def ffwd(
 			if prefix == to_prefix and value == to_value:
 				break
 		else: raise StopIteration
+
+
+def gen_in_network_items(
+	parser: Generator,
+	code_filter: set,
+) -> Generator:
+	builder = ijson.ObjectBuilder()
+	for prefix, event, value in parser:
+		builder.event(event, value)
+
+		# This line can be commented out! but it's faster with it in
+		if hasattr(builder, 'value') and len(builder.value) > 0:
+			skip_item_by_code(parser, builder, code_filter)
+
+		if (prefix, event) == ('in_network.item', 'end_map'):
+			in_network_item = builder.value.pop()
+			yield in_network_item
+
+		elif (prefix, event) == ('in_network', 'end_array'):
+			return
+
+
+def gen_references(parser: Generator) -> Generator:
+
+	builder = ijson.ObjectBuilder()
+	# builder.event('start_array', None)
+
+	for prefix, event, value in parser:
+		builder.event(event, value)
+		if (prefix, event) == ('provider_references.item', 'end_map'):
+			reference = builder.value.pop()
+			yield reference
+
+		elif (prefix, event) == ('provider_references', 'end_array'):
+			return
+
 
 def skip_item_by_code(
 	parser: Generator,
@@ -555,21 +589,6 @@ def skip_item_by_code(
 		builder.value.pop()
 		builder.containers.pop()
 		return
-
-
-def gen_references(parser: Generator) -> Generator:
-
-	builder = ijson.ObjectBuilder()
-	# builder.event('start_array', None)
-
-	for prefix, event, value in parser:
-		builder.event(event, value)
-		if (prefix, event) == ('provider_references.item', 'end_map'):
-			reference = builder.value.pop()
-			yield reference
-
-		elif (prefix, event) == ('provider_references', 'end_array'):
-			return
 
 
 async def fetch_remote_reference(
@@ -614,7 +633,7 @@ async def append_processed_remote_reference(
 			queue.task_done()
 
 
-# TODO I don't like that we process the refs separately
+# TODO simplify
 async def make_reference_map(
 	references: Generator,
 	npi_filter: set
@@ -636,7 +655,7 @@ async def make_reference_map(
 	tasks = []
 	processed_references = []
 
-	for i in range(300):
+	for i in range(200):
 		coro = append_processed_remote_reference(queue, processed_references, npi_filter)
 		task = asyncio.create_task(coro)
 		tasks.append(task)
@@ -673,72 +692,6 @@ async def make_reference_map(
 	return reference_map
 
 
-def swap_references(
-	in_network_items: Generator,
-	reference_map: dict,
-) -> Generator:
-	"""Takes the provider reference ID in the rate
-	and replaces it with the corresponding provider
-	groups from reference_map"""
-
-	if not reference_map:
-		yield from in_network_items
-		return
-
-	for item in in_network_items:
-		rates = item['negotiated_rates']
-		for rate in rates:
-			references = rate.get('provider_references')
-			if not references:
-				continue
-			groups = rate.get('provider_groups', [])
-			for reference in references:
-				addl_groups = reference_map.get(reference, [])
-				groups.extend(addl_groups)
-			rate.pop('provider_references')
-			rate['provider_groups'] = groups
-
-		item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
-
-		if item['negotiated_rates']:
-			yield item
-
-
-def gen_in_network_items(
-	parser: Generator,
-	code_filter: set,
-) -> Generator:
-	builder = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
-		builder.event(event, value)
-
-		# This line can be commented out! but it's faster with it in
-		if hasattr(builder, 'value') and len(builder.value) > 0:
-			skip_item_by_code(parser, builder, code_filter)
-
-		if (prefix, event) == ('in_network.item', 'end_map'):
-			in_network_item = builder.value.pop()
-			yield in_network_item
-
-		elif (prefix, event) == ('in_network', 'end_array'):
-			return
-
-
-def start_parser(filename) -> Generator:
-	with JSONOpen(filename) as f:
-		yield from ijson.parse(f, use_float = True)
-
-
-def get_plan(parser) -> dict:
-	builder = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
-		builder.event(event, value)
-		if value in ('provider_references', 'in_network'):
-			return builder.value
-	else:
-		raise InvalidMRF
-
-
 async def _get_reference_map(parser, npi_filter) -> dict | None:
 	"""Possible file structures.
 	1. {    ...
@@ -773,10 +726,55 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 		references = gen_references(parser)
 		return await make_reference_map(references, npi_filter)
 
-
 def get_reference_map(parser, npi_filter):
 	"""Wrapper to turn _get_reference_map into a sync function"""
 	return asyncio.run(_get_reference_map(parser, npi_filter))
+
+
+def swap_references(
+	in_network_items: Generator,
+	reference_map: dict,
+) -> Generator:
+	"""Takes the provider reference ID in the rate
+	and replaces it with the corresponding provider
+	groups from reference_map"""
+
+	if not reference_map:
+		yield from in_network_items
+		return
+
+	for item in in_network_items:
+		rates = item['negotiated_rates']
+		for rate in rates:
+			references = rate.get('provider_references')
+			if not references:
+				continue
+			groups = rate.get('provider_groups', [])
+			for reference in references:
+				addl_groups = reference_map.get(reference, [])
+				groups.extend(addl_groups)
+			rate.pop('provider_references')
+			rate['provider_groups'] = groups
+
+		item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
+
+		if item['negotiated_rates']:
+			yield item
+
+
+def start_parser(filename) -> Generator:
+	with JSONOpen(filename) as f:
+		yield from ijson.parse(f, use_float = True)
+
+
+def get_plan(parser) -> dict:
+	builder = ijson.ObjectBuilder()
+	for prefix, event, value in parser:
+		builder.event(event, value)
+		if value in ('provider_references', 'in_network'):
+			return builder.value
+	else:
+		raise InvalidMRF
 
 
 class Content:
