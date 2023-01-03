@@ -652,27 +652,29 @@ def swap_references(
 	"""Takes the provider reference ID in the rate
 	and replaces it with the corresponding provider
 	groups from reference_map"""
+
+	if not reference_map:
+		yield from in_network_items
+		return
+
 	for item in in_network_items:
-		if not reference_map:
+		rates = item['negotiated_rates']
+		for rate in rates:
+			references = rate.get('provider_references')
+			if not references:
+				continue
+			groups = rate.get('provider_groups', [])
+			for reference in references:
+				addl_groups = reference_map.get(reference)
+				if addl_groups:
+					groups.extend(addl_groups)
+			rate.pop('provider_references')
+			rate['provider_groups'] = groups
+
+		item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
+
+		if item['negotiated_rates']:
 			yield item
-		else:
-			rates = item['negotiated_rates']
-			for rate in rates:
-				references = rate.get('provider_references')
-				if not references:
-					continue
-				groups = rate.get('provider_groups', [])
-				for reference in references:
-					addl_groups = reference_map.get(reference)
-					if addl_groups:
-						groups.extend(addl_groups)
-				rate.pop('provider_references')
-				rate['provider_groups'] = groups
-
-			item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
-
-			if item['negotiated_rates']:
-				yield item
 
 
 def gen_in_network_items(
@@ -700,7 +702,7 @@ def start_parser(filename) -> Generator:
 		yield from ijson.parse(f, use_float = True)
 
 
-def get_plan(parser) -> dict | None:
+def get_plan(parser) -> dict:
 	builder = ijson.ObjectBuilder()
 	for prefix, event, value in parser:
 		builder.event(event, value)
@@ -711,33 +713,22 @@ def get_plan(parser) -> dict | None:
 
 
 async def _get_reference_map(parser, npi_filter) -> dict | None:
-	"""
-	Probably looks pretty WTF. All this does is collect the
-	provider references (and reset the parsing stream if need be.)
-	The problem is they can either be located in one of three
-	places:
-
-	1. {
-		...
+	"""Possible file structures.
+	1. {    ...
 		'provider_references': <-- here (most common)
 		'in_network': ...
 	}
-	2. {
-		...
+	2. {    ...
 		'in_network': ...
 		'provider_references': <-- here (rarely)
 	}
-	3. {
-		...
+	3. {    ...
 		'in_network': ...
 	} (aka nowhere, semi-common)
 
-	This function checks in order (1, 2, 3). First we look for
+	This function checks the MRF in order (1, 2, 3). First we look for
 	case (1). If we don't find it, we try case (2), and if we hit a
 	StopIteration, we know we have case (3).
-
-	In cases (2) and (3) we have to restart the parser since the
-	in-network items are now above us.
 	"""
 	# Case (1)
 	references = gen_references(parser)
