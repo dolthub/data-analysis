@@ -9,7 +9,9 @@ line argument to do that.
 """
 import argparse
 import logging
-from mrfutils import import_csv_to_set, json_mrf_to_csv
+
+from helpers import import_csv_to_set
+from mrfutils import json_mrf_to_csv
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
