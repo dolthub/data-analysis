@@ -1,6 +1,7 @@
 import unittest
 import asyncio
 from mrfutils import (
+	Content,
 	start_parser,
 	get_plan,
 	ffwd,
@@ -10,6 +11,7 @@ from mrfutils import (
 	process_in_network,
 	process_group,
 	process_reference,
+	peek,
 	# MRFContent,
 	# process_group,
 	# process_reference,
@@ -67,21 +69,13 @@ class Test(unittest.TestCase):
 		npi_filter = None
 		code_filter = None
 		file = 'test/test_file_ordered.json'
-		parser = start_parser(file)
+		content = Content(file, code_filter, npi_filter)
+		content.start_conn()
 
-		plan = get_plan(parser)
+		plan = content.plan
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
-		ref_map = get_reference_map(parser, npi_filter)
-
-		if next(parser) == ('', 'end_map', None):
-			parser.close()
-			parser = start_parser(file)
-			ffwd(parser, to_event = 'map_key', to_value = 'in_network')
-
-		in_network_items = gen_in_network_items(parser, code_filter)
-		swapped_items    = swap_references(in_network_items, ref_map)
-		processed_items  = process_in_network(swapped_items, npi_filter)
+		processed_items = content.in_network_items()
 
 		first_item = next(processed_items)
 		assert first_item['billing_code'] == '0000'
@@ -93,30 +87,20 @@ class Test(unittest.TestCase):
 		npi_filter = None
 		code_filter = None
 		file = 'test/test_file_ordered.json'
-		parser = start_parser(file)
+		content = Content(file, code_filter, npi_filter)
+		content.start_conn()
 
-		plan = get_plan(parser)
+		plan = content.plan
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
-		ref_map = get_reference_map(parser, npi_filter)
-
-		if (
-			next(parser) == ('', 'end_map', None) # end of file
-			or ref_map is None # StopIteration
-		):
-			parser.close()
-			parser = start_parser(file)
-			ffwd(parser, to_event='map_key', to_value='in_network')
-
-		in_network_items = gen_in_network_items(parser, code_filter)
-		swapped_items    = swap_references(in_network_items, ref_map)
-		processed_items  = process_in_network(swapped_items, npi_filter)
+		processed_items = content.in_network_items()
 
 		first_item = next(processed_items)
 		assert first_item['billing_code'] == '0000'
 
 		second_item = next(processed_items)
 		assert second_item['billing_code'] == '1111'
+
 
 	def test_process_group(self):
 		group = sample_group.copy()
@@ -130,27 +114,20 @@ class Test(unittest.TestCase):
 		groups = reference['provider_groups']
 		npis = groups[0]['npi']
 		assert len(npis) == 1
-	#
+
 	def test_npi_filtering_ordered(self):
 		npi_filter = {'9889889881'}
 		code_filter = None
 		file = 'test/test_file_ordered.json'
-		parser = start_parser(file)
 
-		_ = get_plan(parser)
-		ref_map = get_reference_map(parser, npi_filter)
+		content = Content(file, code_filter, npi_filter)
+		content.start_conn()
 
-		if (
-			next(parser) == ('', 'end_map', None) # end of file
-			or ref_map is None # StopIteration
-		):
-			parser.close()
-			parser = start_parser(file)
-			ffwd(parser, to_event='map_key', to_value='in_network')
+		plan = content.plan
+		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
-		in_network_items = gen_in_network_items(parser, code_filter)
-		swapped_items    = swap_references(in_network_items, ref_map)
-		processed_items  = process_in_network(swapped_items, npi_filter)
+		processed_items = content.in_network_items()
+
 		items = list(processed_items)
 		assert items[0]['billing_code'] == '0000'
 		assert len(items) == 1
@@ -159,22 +136,14 @@ class Test(unittest.TestCase):
 		npi_filter = {'9889889881'}
 		code_filter = None
 		file = 'test/test_file_out_of_order.json'
-		parser = start_parser(file)
+		content = Content(file, code_filter, npi_filter)
+		content.start_conn()
 
-		_ = get_plan(parser)
-		ref_map = get_reference_map(parser, npi_filter)
+		plan = content.plan
+		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
-		if (
-			next(parser) == ('', 'end_map', None) # end of file
-			or ref_map is None # StopIteration
-		):
-			parser.close()
-			parser = start_parser(file)
-			ffwd(parser, to_event='map_key', to_value='in_network')
+		processed_items = content.in_network_items()
 
-		in_network_items = gen_in_network_items(parser, code_filter)
-		swapped_items    = swap_references(in_network_items, ref_map)
-		processed_items  = process_in_network(swapped_items, npi_filter)
 		items = list(processed_items)
 		assert items[0]['billing_code'] == '0000'
 		assert len(items) == 1
@@ -183,22 +152,10 @@ class Test(unittest.TestCase):
 		npi_filter = {'2222222222'}
 		code_filter = None
 		for file in self.test_files:
-			parser = start_parser(file)
+			content = Content(file, code_filter, npi_filter)
+			content.start_conn()
+			processed_items = content.in_network_items()
 
-			_ = get_plan(parser)
-			ref_map = get_reference_map(parser, npi_filter)
-
-			if (
-				next(parser) == ('', 'end_map', None) # end of file
-				or ref_map is None # StopIteration
-			):
-				parser.close()
-				parser = start_parser(file)
-				ffwd(parser, to_event='map_key', to_value='in_network')
-
-			in_network_items = gen_in_network_items(parser, code_filter)
-			swapped_items    = swap_references(in_network_items, ref_map)
-			processed_items  = process_in_network(swapped_items, npi_filter)
 			first_item = next(processed_items)
 			assert first_item['name'] == 'TEST NAME 2'
 			rates = first_item['negotiated_rates']
@@ -213,22 +170,9 @@ class Test(unittest.TestCase):
 		npi_filter = {'1234567890', '4444444444'}
 		code_filter = None
 		for file in self.test_files:
-			parser = start_parser(file)
-
-			_ = get_plan(parser)
-			ref_map = get_reference_map(parser, npi_filter)
-
-			if (
-				next(parser) == ('', 'end_map', None) # end of file
-				or ref_map is None # StopIteration
-			):
-				parser.close()
-				parser = start_parser(file)
-				ffwd(parser, to_event='map_key', to_value='in_network')
-
-			in_network_items = gen_in_network_items(parser, code_filter)
-			swapped_items    = swap_references(in_network_items, ref_map)
-			processed_items  = process_in_network(swapped_items, npi_filter)
+			content = Content(file, code_filter, npi_filter)
+			content.start_conn()
+			processed_items = content.in_network_items()
 			first_item = next(processed_items)
 			assert first_item['billing_code'] == '0000'
 			rates = first_item['negotiated_rates']
@@ -240,22 +184,9 @@ class Test(unittest.TestCase):
 		code_filter = {('TS-TST', '0000')}
 		npi_filter = None
 		for file in self.test_files:
-			parser = start_parser(file)
-
-			_ = get_plan(parser)
-			ref_map = get_reference_map(parser, npi_filter)
-
-			if (
-				next(parser) == ('', 'end_map', None) # end of file
-				or ref_map is None # StopIteration
-			):
-				parser.close()
-				parser = start_parser(file)
-				ffwd(parser, to_event='map_key', to_value='in_network')
-
-			in_network_items = gen_in_network_items(parser, code_filter)
-			swapped_items    = swap_references(in_network_items, ref_map)
-			processed_items  = process_in_network(swapped_items, npi_filter)
+			content = Content(file, code_filter, npi_filter)
+			content.start_conn()
+			processed_items = content.in_network_items()
 			first_item = next(processed_items)
 			assert first_item['billing_code'] == '0000'
 
@@ -263,34 +194,21 @@ class Test(unittest.TestCase):
 		code_filter = {('TS-TST', '0000')}
 		npi_filter = {'4444444444'}
 		for file in self.test_files:
-			parser = start_parser(file)
-
-			_ = get_plan(parser)
-			ref_map = get_reference_map(parser, npi_filter)
-
-			if (
-				next(parser) == ('', 'end_map', None) # end of file
-				or ref_map is None # StopIteration
-			):
-				parser.close()
-				parser = start_parser(file)
-				ffwd(parser, to_event='map_key', to_value='in_network')
-
-			in_network_items = gen_in_network_items(parser, code_filter)
-			swapped_items    = swap_references(in_network_items, ref_map)
-			processed_items  = process_in_network(swapped_items, npi_filter)
+			content = Content(file, code_filter, npi_filter)
+			content.start_conn()
+			processed_items = content.in_network_items()
 			first_item = next(processed_items)
 			assert first_item['billing_code'] == '0000'
-	#
-	# def test_not_in_list(self):
-	# 	code_filter = {('TS-TST', '0000')}
-	# 	# code_filter = None
-	# 	npi_filter = {'NOTINLIST'}
-	# 	for file in self.test_files:
-	# 		content = MRFContent(file, code_filter = code_filter, npi_filter = npi_filter)
-	# 		content.start_conn()
-	# 		in_network_items = content.in_network_items()
-	# 		assert len(list(in_network_items)) == 0
+
+	def test_not_in_list(self):
+		code_filter = {('TS-TST', '0000')}
+		# code_filter = None
+		npi_filter = {'NOTINLIST'}
+		for file in self.test_files:
+			content = Content(file, code_filter, npi_filter)
+			content.start_conn()
+			processed_items = content.in_network_items()
+			assert len(list(processed_items)) == 0
 
 	# def test_hashes_match(self):
 	# 	Still need to write a test for this

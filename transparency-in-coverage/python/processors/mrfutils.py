@@ -75,6 +75,14 @@ class InvalidMRF(Exception):
 	pass
 
 
+def peek(gen):
+	try:
+		peeked = next(gen)
+	except StopIteration:
+		return None, gen
+	return peeked, (value for g in ([peeked], gen) for value in g)
+
+
 class JSONOpen:
 	"""
 	Context manager for opening JSON(.gz) MRFs.
@@ -496,15 +504,17 @@ def ffwd(
 		for prefix, event, _ in parser:
 			if prefix == to_prefix and event == to_event:
 				break
-		else:
-			raise StopIteration
+		else: raise StopIteration
 	if to_prefix is None:
 		for _, event, value in parser:
 			if event == to_event and value == to_value:
 				break
-		else:
-			raise StopIteration
-
+		else: raise StopIteration
+	if to_event is None:
+		for prefix, _, value in parser:
+			if prefix == to_prefix and value == to_value:
+				break
+		else: raise StopIteration
 
 def skip_item_by_code(
 	parser: Generator,
@@ -540,7 +550,7 @@ def skip_item_by_code(
 def gen_references(parser: Generator) -> Generator:
 
 	builder = ijson.ObjectBuilder()
-	builder.event('start_array', None)
+	# builder.event('start_array', None)
 
 	for prefix, event, value in parser:
 		builder.event(event, value)
@@ -616,7 +626,7 @@ async def make_reference_map(
 	tasks = []
 	processed_references = []
 
-	for i in range(200):
+	for i in range(300):
 		coro = append_processed_remote_reference(queue, processed_references, npi_filter)
 		task = asyncio.create_task(coro)
 		tasks.append(task)
@@ -737,24 +747,51 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 	case (1). If we don't find it, we try case (2), and if we hit a
 	StopIteration, we know we have case (3).
 	"""
-	# Case (1)
-	references = gen_references(parser)
-	if next(parser) == ('provider_references', 'start_array', None):
+	# Case (1)`
+	peeked, parser = peek(parser)
+	if peeked == ('provider_references', 'start_array', None):
+		references = gen_references(parser)
 		return await make_reference_map(references, npi_filter)
 	try:
-		# Check for case (2)
-		ffwd(parser, to_prefix='provider_references', to_value='start_array')
+		# Case (2)
+		ffwd(parser, to_prefix='', to_value='provider_references')
 	except StopIteration:
 		# StopIteration -> they don't exist (3)
 		return None
 	else:
 		# Collect them (ends on ('', 'end_map', None))
+		references = gen_references(parser)
 		return await make_reference_map(references, npi_filter)
 
 
 def get_reference_map(parser, npi_filter):
 	"""Wrapper to turn _get_reference_map into a sync function"""
 	return asyncio.run(_get_reference_map(parser, npi_filter))
+
+
+class Content:
+
+	def __init__(self, file, code_filter, npi_filter):
+		self.file        = file
+		self.npi_filter  = npi_filter
+		self.code_filter = code_filter
+
+	def start_conn(self):
+		self.parser  = start_parser(self.file)
+		self.plan    = get_plan(self.parser)
+		self.ref_map = get_reference_map(self.parser, self.npi_filter)
+
+	def prepare_in_network(self):
+		peeked, parser = peek(self.parser)
+		if peeked in [('', 'end_map', None), None]:
+			self.parser = start_parser(self.file)
+			ffwd(self.parser, to_prefix='', to_value='in_network')
+
+	def in_network_items(self) -> Generator:
+		self.prepare_in_network()
+		filtered_items = gen_in_network_items(self.parser, self.code_filter)
+		swapped_items  = swap_references(filtered_items, self.ref_map)
+		return process_in_network(swapped_items, self.npi_filter)
 
 
 def json_mrf_to_csv(
@@ -780,22 +817,10 @@ def json_mrf_to_csv(
 	# are linked by it (in_network and plan tables)
 	filename_hash = filename_hasher(file)
 
-	parser = start_parser(file)
-
-	plan    = get_plan(parser)
-	ref_map = get_reference_map(parser, npi_filter)
-
-	# Cases where you need to restart the parser:
-	if (
-		next(parser) == ('', 'end_map', None)  # at EOF (case 2)
-		or ref_map is None                     # StopIteration (case 3)
-	):
-		parser = start_parser(file)
-		ffwd(parser, to_event='map_key', to_value='in_network')
-
-	in_network_items = gen_in_network_items(parser, code_filter)
-	swapped_items    = swap_references(in_network_items, ref_map)
-	processed_items  = process_in_network(swapped_items, npi_filter)
+	content = Content(file, code_filter, npi_filter)
+	content.start_conn()
+	plan = content.plan
+	processed_items = content.in_network_items()
 
 	make_dir(out_dir)
 
