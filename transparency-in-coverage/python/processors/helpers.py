@@ -104,7 +104,8 @@ def import_csv_to_set(filename: str):
 			if len(row) > 1:
 				items.add(tuple(row))
 			else:
-				items.add(row.pop())
+				item = row.pop()
+				items.add(item)
 		return items
 
 

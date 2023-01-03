@@ -43,9 +43,6 @@ that you can track your depth in the JSON tree.
 from __future__ import annotations
 
 import asyncio
-import csv
-import json
-import os
 from functools import partial
 from itertools import product
 from typing import Generator
@@ -63,9 +60,11 @@ assert ijson.backend == 'yajl2_c'
 log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
+# To distinguish data from rows
+Row = dict
 
 def write_table(
-	rows: list[dict] | dict,
+	rows: list[Row] | Row,
 	tablename: str,
 	out_dir: str,
 ) -> None:
@@ -88,10 +87,6 @@ def write_table(
 		if type(rows) == dict:
 			row = rows
 			writer.writerow(row)
-
-
-Row = dict
-# To distinguish data from rows
 
 
 def plan_row_from_dict(plan: dict) -> Row:
@@ -317,6 +312,7 @@ def process_group(
 	group['npi'] = [n for n in group['npi'] if n in npi_filter]
 	if group['npi']:
 		return group
+	return None
 
 process_groups = partial(process_arr, process_group)
 
@@ -335,6 +331,7 @@ def process_reference(
 			'provider_groups'   : groups
 		}
 		return reference
+	return None
 
 
 def process_in_network(
@@ -360,6 +357,7 @@ def process_rate(
 	# if rate.get('provider_groups') or rate.get('provider_references'):
 	if rate.get('provider_groups'):
 		return rate
+	return None
 
 process_rates = partial(process_arr, process_rate)
 
@@ -367,9 +365,9 @@ process_rates = partial(process_arr, process_rate)
 # TODO simplify
 def ffwd(
 	parser: Generator,
-	to_prefix: str = None,
-	to_event: str = None,
-	to_value: str = None,
+	to_prefix: str | None = None,
+	to_event:  str | None = None,
+	to_value:  str | None = None,
 ) -> None:
 	if to_value is None and to_prefix and to_event:
 		for prefix, event, _ in parser:
@@ -475,7 +473,7 @@ async def fetch_remote_reference(
 # smaller funcs
 async def append_processed_remote_reference(
 	queue: asyncio.Queue,
-	processed_references: list,
+	processed_references: list[dict],
 	npi_filter: set,
 ):
 	while True:
@@ -513,12 +511,12 @@ async def make_reference_map(
 	the NPIs contained in `npi_filter`.
 	"""
 	# Create a queue that we will use to store our "workload".
-	queue = asyncio.Queue()
+	queue: asyncio.Queue = asyncio.Queue()
 
 	# Tasks hold the consumers. reference is appended to
 	# by consumers and by the main loop of this function
 	tasks = []
-	processed_references = []
+	processed_references: list[dict] = []
 
 	for i in range(200):
 		coro = append_processed_remote_reference(queue, processed_references, npi_filter)
@@ -670,9 +668,9 @@ class Content:
 def json_mrf_to_csv(
 	url: str,
 	out_dir: str,
-	file: str = None,
-	code_filter: set = None,
-	npi_filter: set = None,
+	file:        str | None = None,
+	code_filter: set | None = None,
+	npi_filter:  set | None = None,
 ) -> None:
 	"""
 	Writes MRF content to a flat file CSV in a specific schema.
