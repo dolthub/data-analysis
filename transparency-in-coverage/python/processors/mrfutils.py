@@ -31,6 +31,14 @@ because typing out the full-length names gives me a headache.
 For the time being I set the tab width to be 8 spaces to force myself to be
 more concise with my functions.
 
+NOTES: There's more than one way to go about this.
+* You don't have to swap the provider references in the rates. You can keep them
+as they are and write them later. But this way if you have a custom code -- NPI
+mapping you can optionally delete NPI numbers contingent on which billing code
+you're looking at.
+* Possible room for optimization: basic_parse instead of parse. You'd probably
+need to write a +1/-1 tracker every time you hit a start_map/end_map event, so
+that you can track your depth in the JSON tree.
 """
 from __future__ import annotations
 
@@ -665,9 +673,8 @@ def swap_references(
 				continue
 			groups = rate.get('provider_groups', [])
 			for reference in references:
-				addl_groups = reference_map.get(reference)
-				if addl_groups:
-					groups.extend(addl_groups)
+				addl_groups = reference_map.get(reference, [])
+				groups.extend(addl_groups)
 			rate.pop('provider_references')
 			rate['provider_groups'] = groups
 
@@ -778,6 +785,7 @@ def json_mrf_to_csv(
 	plan    = get_plan(parser)
 	ref_map = get_reference_map(parser, npi_filter)
 
+	# Cases where you need to restart the parser:
 	if (
 		next(parser) == ('', 'end_map', None)  # at EOF (case 2)
 		or ref_map is None                     # StopIteration (case 3)
