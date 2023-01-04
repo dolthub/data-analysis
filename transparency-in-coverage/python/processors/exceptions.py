@@ -1,0 +1,2 @@
+class InvalidMRF(Exception):
+	pass

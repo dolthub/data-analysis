@@ -10,12 +10,10 @@ from urllib.parse import urlparse
 
 import requests
 
+from exceptions import InvalidMRF
+
 log = logging.getLogger('mrfutils')
 log.setLevel(logging.INFO)
-
-
-class InvalidMRF(Exception):
-	pass
 
 
 def prepend(value, iterator):
