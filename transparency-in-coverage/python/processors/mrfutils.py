@@ -329,6 +329,9 @@ def process_in_network(in_network_items: Generator, npi_filter: set) -> Generato
 
 
 def process_rate(rate: dict, npi_filter: set) -> dict | None:
+	# Will not work if provider references haven't been swapped out yet
+	assert rate.get('provider_references') is None
+
 	if groups := rate.get('provider_groups'):
 		rate['provider_groups'] = process_groups(groups, npi_filter)
 	if rate.get('provider_groups'):
@@ -341,25 +344,26 @@ process_rates = partial(process_arr, process_rate)
 # TODO simplify
 def ffwd(
 	parser: Generator,
-	to_prefix: str | None = None,
-	to_event:  str | None = None,
-	to_value:  str | None = None,
+	to_prefix,
+	to_event = None,
+	to_value = None,
 ) -> None:
-	if to_value is None and to_prefix is not None and to_event is not None:
+	# Must have at least one of these arguments selected
+	assert not all(arg is None for arg in (to_event, to_value))
+
+	if to_value is None:
 		for prefix, event, _ in parser:
 			if prefix == to_prefix and event == to_event:
 				break
-		else: raise StopIteration
-	elif to_prefix is None and to_event is not None and to_value is not None:
-		for _, event, value in parser:
-			if event == to_event and value == to_value:
-				break
-		else: raise StopIteration
-	elif to_event is None and to_prefix is not None and to_value is not None:
+		else:
+			raise StopIteration
+
+	elif to_event is None:
 		for prefix, _, value in parser:
 			if prefix == to_prefix and value == to_value:
 				break
-		else: raise StopIteration
+		else:
+			raise StopIteration
 	else:
 		raise NotImplementedError
 

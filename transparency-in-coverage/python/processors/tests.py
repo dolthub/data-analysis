@@ -1,9 +1,10 @@
 import unittest
-import asyncio
+import copy
 from mrfutils import (
 	Content,
 	process_group,
 	process_reference,
+	process_rate,
 )
 
 files = [
@@ -21,25 +22,25 @@ sample_reference = {
 	]
 }
 sample_group = sample_reference['provider_groups'][0]
-#
-# sample_rate = {
-# 	"negotiated_prices":
-# 		[{
-# 			"additional_information": "",
-# 			"billing_class": "institutional",
-# 			"billing_code_modifier": [],
-# 			"expiration_date": "9999-12-31",
-# 			"negotiated_rate": 9999999.99,
-# 			"negotiated_type": "negotiated",
-# 			"service_code": []
-# 		}],
-# 	"provider_groups":
-# 		[{
-# 			"npi": [4444444444, 5555555555] ,
-# 			"tin": {"type": "ein", "value": "11-1111111"}
-# 		}],
-# 	"provider_references":[2]
-# }
+
+sample_rate = {
+	"negotiated_prices":
+		[{
+			"additional_information": "",
+			"billing_class": "institutional",
+			"billing_code_modifier": [],
+			"expiration_date": "9999-12-31",
+			"negotiated_rate": 9999999.99,
+			"negotiated_type": "negotiated",
+			"service_code": []
+		}],
+	"provider_groups":
+		[{
+			"npi": [4444444444, 5555555555] ,
+			"tin": {"type": "ein", "value": "11-1111111"}
+		}],
+	"provider_references":[2]
+}
 
 sample_reference_map = {
 	2:[{
@@ -52,6 +53,34 @@ class Test(unittest.TestCase):
 
 	def setUp(self) -> None:
 		self.test_files = files
+
+	def test_process_rate_single_npi(self):
+		rate = copy.deepcopy(sample_rate)
+		rate.pop('provider_references')
+		rate = process_rate(rate, {'4444444444'})
+		assert rate['provider_groups'][0]['npi'] == ['4444444444']
+
+	def test_process_rate_multiple_npi(self):
+		rate = copy.deepcopy(sample_rate)
+		rate.pop('provider_references')
+		rate = process_rate(rate, {'4444444444', 'notused'})
+		assert rate['provider_groups'][0]['npi'] == ['4444444444']
+
+	def test_process_rate_no_matches(self):
+		rate = copy.deepcopy(sample_rate)
+		rate.pop('provider_references')
+		rate = process_rate(rate, {'no', 'definitelynot'})
+		assert rate is None
+
+	def test_process_rate_no_npi_list(self):
+		rate = copy.deepcopy(sample_rate)
+		rate.pop('provider_references')
+		rate = process_rate(rate, None)
+		assert rate['provider_groups'][0]['npi'] == ['4444444444', '5555555555']
+
+	def test_process_rate_forget_pop_references(self):
+		rate = copy.deepcopy(sample_rate)
+		self.assertRaises(AssertionError, process_rate, rate, {'doesntmatter'})
 
 	def test_no_references(self):
 		npi_filter = None
