@@ -66,14 +66,16 @@ class JSONOpen:
 			self.is_remote
 			and self.suffix == '.json.gz'
 		):
-			self.r = requests.get(self.filename, stream=True)
+			self.s = requests.Session()
+			self.r = self.s.get(self.filename, stream=True)
 			self.f = gzip.GzipFile(fileobj=self.r.raw)
 
 		elif (
 			self.is_remote
 			and self.suffix == '.json'
 		):
-			self.r = requests.get(self.filename, stream=True)
+			self.s = requests.Session()
+			self.r = self.s.get(self.filename, stream=True)
 			self.r.raw.decode_content = True
 			self.f = self.r.raw
 
@@ -87,7 +89,8 @@ class JSONOpen:
 		return self.f
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
-		if self.r and self.is_remote:
+		if self.is_remote:
+			self.s.close()
 			self.r.close()
 
 		self.f.close()

@@ -369,17 +369,17 @@ def ffwd(
 	to_event:  str | None = None,
 	to_value:  str | None = None,
 ) -> None:
-	if to_value is None and to_prefix and to_event:
+	if to_value is None and to_prefix is not None and to_event is not None:
 		for prefix, event, _ in parser:
 			if prefix == to_prefix and event == to_event:
 				break
 		else: raise StopIteration
-	elif to_prefix is None and to_event and to_value:
+	elif to_prefix is None and to_event is not None and to_value is not None:
 		for _, event, value in parser:
 			if event == to_event and value == to_value:
 				break
 		else: raise StopIteration
-	elif to_event is None and to_prefix and to_value:
+	elif to_event is None and to_prefix is not None and to_value is not None:
 		for prefix, _, value in parser:
 			if prefix == to_prefix and value == to_value:
 				break
