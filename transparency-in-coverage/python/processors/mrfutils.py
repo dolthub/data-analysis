@@ -328,12 +328,12 @@ def process_in_network(in_network_items: Generator, npi_filter: set) -> Generato
 			yield in_network_item
 
 
-#TODO implement unit tests
 def process_rate(rate: dict, npi_filter: set) -> dict | None:
+	if groups := rate.get('provider_groups'):
+		rate['provider_groups'] = process_groups(groups, npi_filter)
 	if rate.get('provider_groups'):
-		groups = process_groups(rate['provider_groups'], npi_filter)
-		if groups:
-			return rate
+		return rate
+	return None
 
 process_rates = partial(process_arr, process_rate)
 
