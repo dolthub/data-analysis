@@ -82,6 +82,28 @@ class Test(unittest.TestCase):
 		rate = copy.deepcopy(sample_rate)
 		self.assertRaises(AssertionError, process_rate, rate, {'doesntmatter'})
 
+	def test_process_group(self):
+		group = copy.deepcopy(sample_group)
+		group = process_group(group, {'9889889881'})
+		assert group['npi'] == ['9889889881']
+		assert group['tin'] == {'type': 'ein', 'value': '9999999999'}
+
+	def test_process_reference_single_npi(self):
+		reference = copy.deepcopy(sample_reference)
+		reference = process_reference(reference, {'9889889881'})
+		groups = reference['provider_groups']
+		npis = groups[0]['npi']
+		assert len(npis) == 1
+		assert reference.get('provider_group_id') == 0
+
+	def test_process_reference_no_npi(self):
+		reference = copy.deepcopy(sample_reference)
+		reference = process_reference(reference, None)
+		groups = reference['provider_groups']
+		npis = groups[0]['npi']
+		assert len(npis) == 2
+		assert reference.get('provider_group_id') == 0
+
 	def test_no_references(self):
 		npi_filter = None
 		code_filter = None
@@ -134,20 +156,6 @@ class Test(unittest.TestCase):
 		second_item = next(processed_items)
 		assert second_item['billing_code'] == '1111'
 
-
-	def test_process_group(self):
-		group = sample_group.copy()
-		group = process_group(group, {'9889889881'})
-		assert group['npi'] == ['9889889881']
-		assert group['tin'] == {'type': 'ein', 'value': '9999999999'}
-
-	def test_process_reference(self):
-		reference = sample_reference.copy()
-		reference = process_reference(reference, {'9889889881'})
-		groups = reference['provider_groups']
-		npis = groups[0]['npi']
-
-		assert len(npis) == 1
 
 	def test_npi_filtering_ordered(self):
 		npi_filter = {'9889889881'}

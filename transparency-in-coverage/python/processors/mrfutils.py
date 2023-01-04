@@ -315,8 +315,9 @@ process_groups = partial(process_arr, process_group)
 
 
 def process_reference(reference: dict, npi_filter: set) -> dict | None:
-	process_groups(reference['provider_groups'], npi_filter)
-	if reference['provider_groups']:
+	groups = process_groups(reference['provider_groups'], npi_filter)
+	if groups:
+		reference['provider_groups'] = groups
 		return reference
 
 
@@ -329,14 +330,12 @@ def process_in_network(in_network_items: Generator, npi_filter: set) -> Generato
 
 
 def process_rate(rate: dict, npi_filter: set) -> dict | None:
-	# Will not work if provider references haven't been swapped out yet
+	# Will not work if references haven't been swapped out yet
 	assert rate.get('provider_references') is None
-
-	if groups := rate.get('provider_groups'):
-		rate['provider_groups'] = process_groups(groups, npi_filter)
-	if rate.get('provider_groups'):
+	groups = process_groups(rate['provider_groups'], npi_filter)
+	if groups:
+		rate['provider_groups'] = groups
 		return rate
-	return None
 
 process_rates = partial(process_arr, process_rate)
 
@@ -582,7 +581,7 @@ def swap_references(
 	and replaces it with the corresponding provider
 	groups from reference_map"""
 
-	if not reference_map:
+	if reference_map is None:
 		yield from in_network_items
 		return
 
