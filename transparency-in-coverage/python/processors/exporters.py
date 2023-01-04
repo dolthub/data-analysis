@@ -88,7 +88,16 @@ class SQLDumpExporter(AbstractExporter):
         self._out_f = open(self.out_file_path, "w", encoding="utf-8")
 
     def write_row(self, tablename, row):
-        fieldnames = SCHEMA[tablename]
+        for k in list(row.keys()):
+            v = row.get(k)
+            if v is None:
+                del row[k]
+            
+            if '"' in v:
+                v = v.replace('"', '\\"')
+                row[k] = v
+
+        fieldnames = list(row.keys())
         cols_comma_sep = ", ".join(fieldnames)
         values = list(map(lambda f: '"' + str(row.get(f, "")) + '"', fieldnames))
         values_comma_sep = ", ".join(values)
