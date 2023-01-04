@@ -45,7 +45,7 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 from itertools import product
-from typing import Generator
+from typing import Generator, Iterator
 
 import aiohttp
 import ijson
@@ -300,64 +300,40 @@ def process_arr(func, arr, *args, **kwargs):
 	return processed_arr
 
 
-def process_group(
-	group: dict,
-	npi_filter: set,
-) -> dict | None:
-
+def process_group(group: dict, npi_filter: set) -> dict | None:
 	group['npi'] = [str(n) for n in group['npi']]
 	if not npi_filter:
 		return group
 
 	group['npi'] = [n for n in group['npi'] if n in npi_filter]
-	if group['npi']:
-		return group
-	return None
+	if not group['npi']:
+		return
+
+	return group
 
 process_groups = partial(process_arr, process_group)
 
 
-def process_reference(
-	reference: dict,
-	npi_filter: set,
-) -> dict | None:
-
-	groups = reference['provider_groups']
-	groups = process_groups(groups, npi_filter)
-
-	if groups:
-		reference = {
-			'provider_group_id' : reference['provider_group_id'],
-			'provider_groups'   : groups
-		}
+def process_reference(reference: dict, npi_filter: set) -> dict | None:
+	process_groups(reference['provider_groups'], npi_filter)
+	if reference['provider_groups']:
 		return reference
-	return None
 
 
-def process_in_network(
-	in_network_items: Generator,
-	npi_filter: set,
-) -> Generator:
+def process_in_network(in_network_items: Generator, npi_filter: set) -> Generator:
 	for in_network_item in in_network_items:
-		rates = in_network_item['negotiated_rates']
-		rates = process_rates(rates, npi_filter)
+		rates = process_rates(in_network_item['negotiated_rates'], npi_filter)
 		if rates:
 			in_network_item['negotiated_rates'] = rates
 			yield in_network_item
 
 
-def process_rate(
-	rate: dict,
-	npi_filter: set,
-) -> dict | None:
-
-	if groups := rate.get('provider_groups'):
-		rate['provider_groups'] = process_groups(groups, npi_filter)
-
-	# if rate.get('provider_groups') or rate.get('provider_references'):
+#TODO implement unit tests
+def process_rate(rate: dict, npi_filter: set) -> dict | None:
 	if rate.get('provider_groups'):
-		return rate
-	return None
+		groups = process_groups(rate['provider_groups'], npi_filter)
+		if groups:
+			return rate
 
 process_rates = partial(process_arr, process_rate)
 

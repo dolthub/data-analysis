@@ -117,6 +117,7 @@ class Test(unittest.TestCase):
 		reference = process_reference(reference, {'9889889881'})
 		groups = reference['provider_groups']
 		npis = groups[0]['npi']
+
 		assert len(npis) == 1
 
 	def test_npi_filtering_ordered(self):
