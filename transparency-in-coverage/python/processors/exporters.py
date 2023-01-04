@@ -94,7 +94,7 @@ class SQLDumpExporter(AbstractExporter):
                 del row[k]
                 continue
             
-            if '"' in v:
+            if type(v) == str and '"' in v:
                 v = v.replace('"', '\\"')
                 row[k] = v
 
