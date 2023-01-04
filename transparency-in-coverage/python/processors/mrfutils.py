@@ -50,8 +50,8 @@ from typing import Generator
 import aiohttp
 import ijson
 
-from helpers.helpers import *
-from helpers.schema import SCHEMA
+from utils.helpers import *
+from utils.schema import SCHEMA
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9

@@ -10,7 +10,7 @@ line argument to do that.
 import argparse
 import logging
 
-from helpers import import_csv_to_set
+from utils.helpers import import_csv_to_set
 from mrfutils import json_mrf_to_csv
 
 logging.basicConfig()
