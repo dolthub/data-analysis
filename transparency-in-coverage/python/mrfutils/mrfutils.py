@@ -201,13 +201,6 @@ def price_row_from_dict(
 			sorted_value = [value.strip() for value in sorted(price[key])]
 			price_row[key] = json.dumps(sorted_value)
 
-	hashes = {
-		'code_hash': code_hash,
-		'filename_hash': filename_hash
-	}
-
-	price_row.update(hashes)
-
 	price_row = append_hash(price_row, 'price_hash')
 
 	return price_row
@@ -250,22 +243,26 @@ def group_rows_from_dicts(groups: list[dict]) -> list[Row]:
 	return provider_group_rows
 
 
-def prices_groups_rows_from_dicts(
+def linking_table_rows_from_dicts(
+	filename_hash: int,
+	code_row: Row,
 	price_rows: list[Row],
 	group_rows: list[Row]
 ) -> list[Row]:
 
-	prices_groups_rows = []
+	linking_table_rows = []
 	for price_row, group_row in product(price_rows, group_rows):
 
-		prices_groups_row = {
+		linking_table_row = {
+			'filename_hash': filename_hash,
+			'code_hash': code_row['code_hash'],
 			'provider_group_hash': group_row['provider_group_hash'],
 			'price_hash': price_row['price_hash'],
 		}
 
-		prices_groups_rows.append(prices_groups_row)
+		linking_table_rows.append(linking_table_row)
 
-	return prices_groups_rows
+	return linking_table_rows
 
 
 def write_in_network_item(
@@ -289,8 +286,10 @@ def write_in_network_item(
 		group_rows = group_rows_from_dicts(groups)
 		write_table(group_rows, 'provider_groups', out_dir)
 
-		prices_groups_rows = prices_groups_rows_from_dicts(price_rows, group_rows)
-		write_table(prices_groups_rows, 'prices_provider_groups', out_dir)
+		linking_table_rows = linking_table_rows_from_dicts(
+			filename_hash, code_row, price_rows, group_rows
+		)
+		write_table(linking_table_rows, 'linking_table', out_dir)
 
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']

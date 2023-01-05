@@ -21,14 +21,11 @@ SCHEMA = {
     ],
     "codes": [
         "code_hash",
-        # "negotiation_arrangement", # always ffs for now
         "billing_code_type_version",
         "billing_code",
         "billing_code_type",
     ],
     "prices": [
-        "filename_hash",
-        "code_hash",
         "price_hash",
         "billing_class",
         "negotiated_type",
@@ -44,7 +41,9 @@ SCHEMA = {
         "tin_value",
         "npi_numbers",
     ],
-    "prices_provider_groups": [
+    "linking_table": [
+        "filename_hash",
+        "code_hash",
         "provider_group_hash",
         "price_hash",
     ]
