@@ -55,7 +55,7 @@ from schema.schema import SCHEMA
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9
-assert ijson.backend == 'yajl2_c'
+assert ijson.backend in ('yajl2_c', 'yajl2_cffi')
 
 log = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s - %(message)s')
@@ -661,7 +661,7 @@ def json_mrf_to_csv(
 	isn't an optional parameter.
 	"""
 	assert url is not None
-	
+
 	if file is None:
 		file = url
 
