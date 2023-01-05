@@ -54,7 +54,10 @@ from helpers import *
 from schema.schema import SCHEMA
 
 # You can remove this if necessary, but be warned
-# Right now this only works with python 3.9
+# Right now this only works with python 3.9/3.10
+# Install on Mac with
+# brew install yajl
+# or comment out this line!
 assert ijson.backend in ('yajl2_c', 'yajl2_cffi')
 
 log = logging.getLogger(__name__)
