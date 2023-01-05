@@ -10,6 +10,10 @@ args = parser.parse_args()
 
 npi_filter = import_csv_to_set(args.npi)
 
+if args.out:
+    out_dir = args.out
+else:
+    out_dir = 'dialysis_csv_out'
 
 # https://www.aapc.com/codes/cpt-codes-range/90935-90940/
 dialysis_code_filter = {
@@ -22,7 +26,7 @@ if __name__ == "__main__":
     try:
         json_mrf_to_csv(
             url = args.url,
-            out_dir = args.out,
+            out_dir = out_dir,
             code_filter = dialysis_code_filter,
             npi_filter = npi_filter
         )
