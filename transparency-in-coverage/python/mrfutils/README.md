@@ -6,9 +6,14 @@
 
 If you plan on running any of the examples in the `examples/` folder, go to `mrfutils/` (this directory) and do
 
-```pip install -e .```
+```
+pip install -e .
+pip install -r requirements.txt
+```
 
-to make sure that this package is installed as a development module. Go to `examples` and do:
+to make sure that this package is installed as a development module with the right requirements.
+
+Then go to `examples` and do:
 
 ```bash
 python example_cli.py --file examplefile.json.gz --url 'http://example.com'
