@@ -29,6 +29,6 @@ jobs:
         popd
     - name: Run unit tests
       run: |
-        pushd transparency-in-coverage/python/mrfutils/tests
+        pushd transparency-in-coverage/python/mrfutils/test
         python tests.py
         popd
