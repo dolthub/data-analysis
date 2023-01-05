@@ -1,6 +1,6 @@
 # About `mrfutils`
 
-`mrfutils` is a python package to help filter and flatten the enormous MRF files that come from different insurance payers. 
+`mrfutils` is a python package to help filter and flatten the enormous MRF files that come from different insurance payers.
 
 ### To get started
 
@@ -22,6 +22,17 @@ brew install yajl
 ```
 
 on Mac, (not sure about Windows instructions) or just comment out the line in `mrfutils.py` to avoid an `AssertionError`.
+
+
+### The bare minimum
+
+After installing the package all you really need to do is call `json_mrf_to_csv` from `mrfutils`:
+
+```python
+>>> from mrfutils import json_mrf_to_csv
+```
+
+and call it with the right arguments. The examples show you how to pass in a list of NPIs (set of strings) and CPT codes (set of tuples).
 
 ### Specify codes and NPI numbers
 
