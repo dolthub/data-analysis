@@ -15,6 +15,14 @@ python example_cli.py --file examplefile.json.gz --url 'http://example.com'
 ```
 This should produce a debug output that explains what it's writing.
 
+You'll want/need the `yajl2_c` backend to make `mrfutils` go fast. Do
+
+```
+brew install yajl
+```
+
+on Mac, (not sure about Windows instructions) or just comment out the line in `mrfutils.py` to avoid an `AssertionError`.
+
 ### Specify codes and NPI numbers
 
 The amount of data in these files is staggering. MRFUtils will allow you to give it a list of billing codes and NPI numbers and then only take the prices from the MRF that match both the code and NPI.
