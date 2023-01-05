@@ -8,9 +8,12 @@ If you plan on running any of the examples in the `examples/` folder, go to `mrf
 
 ```pip install -e .```
 
-to make sure that this package is installed as a development module.
+to make sure that this package is installed as a development module. Go to `examples` and do:
 
-Otherwise, keep reading.
+```bash
+python example_cli.py --file examplefile.json.gz --url 'http://example.com'
+```
+This should produce a debug output that explains what it's writing.
 
 ### Specify codes and NPI numbers
 

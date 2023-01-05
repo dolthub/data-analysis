@@ -660,7 +660,8 @@ def json_mrf_to_csv(
 	As of 1/2/2023 the filename is extracted from the URL, so this
 	isn't an optional parameter.
 	"""
-
+	assert url is not None
+	
 	if file is None:
 		file = url
 
