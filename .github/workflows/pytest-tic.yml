@@ -16,18 +16,18 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Set up Python 3.10
+    - name: Set up Python 3.9
       uses: actions/setup-python@v3
       with:
-        python-version: "3.10"
+        python-version: "3.9"
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pushd transparency-in-coverage
+        pushd transparency-in-coverage/python/mrfutils
         pip install -r requirements.txt
         popd
     - name: Run unit tests
       run: |
-        pushd transparency-in-coverage/python/processors
+        pushd transparency-in-coverage/python/mrfutils/tests
         python tests.py
         popd
