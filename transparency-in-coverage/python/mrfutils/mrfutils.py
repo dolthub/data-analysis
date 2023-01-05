@@ -58,7 +58,8 @@ from schema.schema import SCHEMA
 assert ijson.backend == 'yajl2_c'
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.INFO)
+logging.basicConfig(format='%(asctime)s - %(message)s')
+log.setLevel(logging.DEBUG)
 
 # To distinguish data from rows
 Row = dict
