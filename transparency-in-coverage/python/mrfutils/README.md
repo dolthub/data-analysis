@@ -1,6 +1,6 @@
 # About `mrfutils`
 
-`mrfutils.py` is a single file pythons script to help filter and flatten the enormous MRF files that come from different insurance payers. 
+`mrfutils` is a python package to help filter and flatten the enormous MRF files that come from different insurance payers. 
 
 The amount of data in these files is staggering. MRFUtils will allow you to give it a list of billing codes and NPI numbers and then only take the prices from the MRF that match both the code and NPI.
 
