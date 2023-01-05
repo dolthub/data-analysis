@@ -8,8 +8,8 @@ from mrfutils import (
 )
 
 files = [
-	'test/test_file_ordered.json',
-	'test/test_file_out_of_order.json'
+	'test_file_ordered.json',
+	'test_file_out_of_order.json'
 ]
 
 sample_reference = {
@@ -107,7 +107,7 @@ class Test(unittest.TestCase):
 	def test_no_references(self):
 		npi_filter = None
 		code_filter = None
-		file = 'test/test_file_no_references.json'
+		file = 'test_file_no_references.json'
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 		plan = content.plan
@@ -123,7 +123,7 @@ class Test(unittest.TestCase):
 	def test_normal_ordering(self):
 		npi_filter = None
 		code_filter = None
-		file = 'test/test_file_ordered.json'
+		file = 'test_file_ordered.json'
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 
@@ -141,7 +141,7 @@ class Test(unittest.TestCase):
 	def test_reverse_ordering(self):
 		npi_filter = None
 		code_filter = None
-		file = 'test/test_file_ordered.json'
+		file = 'test_file_ordered.json'
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 
@@ -160,7 +160,7 @@ class Test(unittest.TestCase):
 	def test_npi_filtering_ordered(self):
 		npi_filter = {'9889889881'}
 		code_filter = None
-		file = 'test/test_file_ordered.json'
+		file = 'test_file_ordered.json'
 
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
@@ -177,7 +177,7 @@ class Test(unittest.TestCase):
 	def test_npi_filtering_out_of_order(self):
 		npi_filter = {'9889889881'}
 		code_filter = None
-		file = 'test/test_file_out_of_order.json'
+		file = 'test_file_out_of_order.json'
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 

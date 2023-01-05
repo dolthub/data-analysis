@@ -45,13 +45,13 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 from itertools import product
-from typing import Generator, Iterator
+from typing import Generator
 
 import aiohttp
 import ijson
 
 from helpers import *
-from schema import SCHEMA
+from schema.schema import SCHEMA
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9
