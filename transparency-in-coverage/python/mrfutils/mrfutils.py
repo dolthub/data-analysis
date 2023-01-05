@@ -201,14 +201,14 @@ def price_row_from_dict(
 			sorted_value = [value.strip() for value in sorted(price[key])]
 			price_row[key] = json.dumps(sorted_value)
 
-	price_row = append_hash(price_row, 'price_hash')
-
 	hashes = {
 		'code_hash': code_hash,
 		'filename_hash': filename_hash
 	}
 
 	price_row.update(hashes)
+
+	price_row = append_hash(price_row, 'price_hash')
 
 	return price_row
 
