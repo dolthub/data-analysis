@@ -29,8 +29,6 @@ args = parser.parse_args()
 url = args.url
 out_dir = args.out
 
-print(args.url)
-
 if args.codes:
     code_filter = import_csv_to_set(args.codes)
 else:

@@ -187,7 +187,7 @@ def price_row_from_dict(
 		'additional_information',
 	]
 
-	price_row = {key : price.get(key) for key in keys}
+	price_row = {key : price.get(key) if price.get(key) else None for key in keys}
 
 	optional_json_keys = [
 		'service_code',
@@ -201,13 +201,14 @@ def price_row_from_dict(
 			sorted_value = [value.strip() for value in sorted(price[key])]
 			price_row[key] = json.dumps(sorted_value)
 
+	price_row = append_hash(price_row, 'price_hash')
+
 	hashes = {
 		'code_hash': code_hash,
 		'filename_hash': filename_hash
 	}
 
 	price_row.update(hashes)
-	price_row = append_hash(price_row, 'price_hash')
 
 	return price_row
 

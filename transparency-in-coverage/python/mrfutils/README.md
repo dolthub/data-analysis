@@ -93,7 +93,10 @@ A: The only two files needed to start flattening the in-network `.json` files ar
 A: This will not work for _index.json_ or _allowed-amounts.json_ file as these files don't contain rates.  Index files do, however, contain links to files with rates. So you may want to write a program that loops through them and gets those files. `example2.py` shows you how to do that.
 
 #### Q: Can I contribute?
-A: I'm not seeking developers but having the tool work reliably is important. If you find a bug or a potential performance improvement, please let me know. Extra examples, plugins, and unit tests are welcome additions, but `mrfutils.py` should stay as simple as possible.
+A: This tool is open source but not necessarily open to contributions. However having the tool work reliably is important. If you find a bug or a potential performance improvement, please let me know. Extra examples, plugins, and unit tests are welcome additions, but `mrfutils.py` should stay as simple as possible. Bugs that have been found so far:
+* price hash was miscomputed (including the filename hash and code hash as part of the hash)
+* processing remote provider references would conk out (now processed as a stream)
+* requests.get was fragile (replaced with Session.get)
 
 ## Example
 
