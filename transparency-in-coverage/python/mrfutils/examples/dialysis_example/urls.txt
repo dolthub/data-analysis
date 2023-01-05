@@ -1,4 +1,3 @@
-url
 https://uhc-tic-mrf.azureedge.net/public-mrf/2023-01-01/2023-01-01_UnitedHealthcare-of-Illinois--Inc-_Insurer_Illinois-Provider-Network_ILNETWORK_in-network-rates.json.gz
 https://uhc-tic-mrf.azureedge.net/public-mrf/2023-01-01/2023-01-01_Rocky-Mountain-HMO_Insurer_Rocky-Mountain-Sky-Limited-Network-Set_RMS_in-network-rates.json.gz
 https://uhc-tic-mrf.azureedge.net/public-mrf/2023-01-01/2023-01-01_UMR--Inc-_Third-Party-Administrator_STATE-OF-OKALHOMA-MEDICARE-SUPPLEMENTAL_MDHC_in-network-rates.json.gz
