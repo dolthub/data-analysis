@@ -1,4 +1,6 @@
 {
+    "reporting_entity_name": "TEST ENTITY",
+    "version": "0.0.0",
     "in_network":
     [
         {
@@ -51,11 +53,6 @@
                                 "value": "12-1111111"
                             }
                         }
-                    ],
-                    "provider_references":
-                    [
-                        0,
-                        1
                     ]
                 }
             ],
@@ -98,10 +95,6 @@
                                 "value": "11-1111111"
                             }
                         }
-                    ],
-                    "provider_references":
-                    [
-                        1
                     ]
                 },
                 {
@@ -138,53 +131,5 @@
             ],
             "negotiation_arrangement": "ffs"
         }
-    ],
-    "last_updated_on": "9999-99-99",
-    "provider_references":
-    [
-        {
-            "location": "https://raw.githubusercontent.com/CMSgov/price-transparency-guide/master/examples/provider-reference/provider-reference.json",
-            "provider_group_id": 2
-        },
-        {
-            "provider_group_id": 0,
-            "provider_groups":
-            [
-                {
-                    "npi":
-                    [
-                        "1111111111",
-                        1234567890
-                    ],
-                    "tin":
-                    {
-                        "type": "ein",
-                        "value": "9999999999"
-                    }
-                }
-            ]
-        },
-        {
-            "provider_group_id": 1,
-            "provider_groups":
-            [
-                {
-                    "npi":
-                    [
-                        2020202020,
-                        3030303030,
-                        1111111111
-                    ],
-                    "tin":
-                    {
-                        "type": "ein",
-                        "value": "88-8888888"
-                    }
-                }
-            ]
-        }
-    ],
-    "reporting_entity_name": "TEST ENTITY",
-    "reporting_entity_type": "TEST ENTITY TYPE",
-    "version": "0.0.0"
+    ]
 }
