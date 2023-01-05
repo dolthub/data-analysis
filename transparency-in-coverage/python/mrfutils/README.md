@@ -32,7 +32,19 @@ After installing the package all you really need to do is call `json_mrf_to_csv`
 >>> from mrfutils import json_mrf_to_csv
 ```
 
-and call it with the right arguments. The examples show you how to pass in a list of NPIs (set of strings) and CPT codes (set of tuples).
+with the right arguments. 
+
+```python
+def json_mrf_to_csv(
+	url: str,
+	out_dir: str,
+	file:        str | None = None,
+	code_filter: set | None = None, # not optional for the bounty
+	npi_filter:  set | None = None, # not optional for the bounty
+) -> None:
+```
+
+The examples show you how to pass in a list of NPIs (set of strings) and CPT codes (set of tuples).
 
 ### Specify codes and NPI numbers
 
