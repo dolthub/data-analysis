@@ -25,6 +25,7 @@ jobs:
         python -m pip install --upgrade pip
         pushd transparency-in-coverage/python/mrfutils
         pip install -r requirements.txt
+        pip install -e .
         popd
     - name: Run unit tests
       run: |
