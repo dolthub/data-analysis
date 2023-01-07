@@ -33,6 +33,8 @@ def main():
                     out_dir ='../example_1')
             except InvalidMRF:
                 log.warning('Not a valid MRF.')
+            except Exception as e:
+                log.error(e)
 
 if __name__ == "__main__":
     main()
