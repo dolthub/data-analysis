@@ -45,7 +45,7 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 from itertools import product
-from typing import Generator
+from typing import Iterator, Generator
 
 import aiohttp
 import ijson
@@ -181,7 +181,6 @@ def metadata_row_from_dict(
 		'billing_class',
 		'negotiated_type',
 		'expiration_date',
-		'negotiated_rate',
 		'additional_information',
 	]
 
@@ -204,6 +203,16 @@ def metadata_row_from_dict(
 	metadata_row = append_hash(metadata_row, 'metadata_hash')
 
 	return metadata_row
+
+
+def metadata_rows_from_dicts(metadatas: list[dict]) -> list[Row]:
+
+	metadata_rows = []
+	for metadata in metadatas:
+		metadata_row = metadata_row_from_dict(metadata)
+		metadata_rows.append(metadata_row)
+
+	return metadata_rows
 
 
 def group_row_from_dict(group: dict) -> Row:
@@ -230,22 +239,31 @@ def group_rows_from_dicts(groups: list[dict]) -> list[Row]:
 
 
 def prices_rows_from_dicts(
+	filename_hash: int,
 	code_row: Row,
-	metadata_row: Row,
-	group_rows: list[Row]
+	prices: Iterator[float],
+	metadata_rows: list[Row],
+	group_rows: list[Row],
 ) -> list[Row]:
 
-	prices_groups_rows = []
-	for price_row, group_row in product(price_rows, group_rows):
+	price_rows = []
 
-		prices_groups_row = {
+	# We need to associate each price with the right metadata hash
+	metadata_hashes = (md['metadata_hash'] for md in metadata_rows)
+	prices_and_hashes = zip(prices, metadata_hashes)
+	for price_and_hash, group_row in product(prices_and_hashes, group_rows):
+		price, metadata_hash = price_and_hash
+		price_row = {
+			'filename_hash': filename_hash,
+			'code_hash': code_row['code_hash'],
 			'provider_group_hash': group_row['provider_group_hash'],
-			'price_hash': price_row['price_hash'],
+			'metadata_hash': metadata_hash,
+			'negotiated_rate': price,
 		}
 
-		prices_groups_rows.append(prices_groups_row)
+		price_rows.append(price_row)
 
-	return prices_groups_rows
+	return price_rows
 
 
 def write_in_network_item(
@@ -257,20 +275,26 @@ def write_in_network_item(
 	code_row = code_row_from_dict(in_network_item)
 	write_table(code_row, 'codes', out_dir)
 
-	code_hash = code_row['code_hash']
+	# code_hash = code_row['code_hash']
 
 	for rate in in_network_item['negotiated_rates']:
-		prices = rate['negotiated_prices']
-		groups = rate.get('provider_groups', [])
+		prices_and_metadata = rate['negotiated_prices']
+		prices = (r['negotiated_rate'] for r in prices_and_metadata)
+		groups = rate['provider_groups']
 
-		price_rows = price_rows_from_dicts(prices, code_hash, filename_hash)
-		write_table(price_rows, 'prices', out_dir)
+		metadata_rows = metadata_rows_from_dicts(prices_and_metadata)
+		write_table(metadata_rows, 'metadata', out_dir)
 
 		group_rows = group_rows_from_dicts(groups)
 		write_table(group_rows, 'provider_groups', out_dir)
 
-		prices_groups_rows = prices_groups_rows_from_dicts(price_rows, group_rows)
-		write_table(prices_groups_rows, 'prices_provider_groups', out_dir)
+		price_rows = prices_rows_from_dicts(
+			filename_hash,
+			code_row,
+			prices,
+			metadata_rows,
+			group_rows)
+		write_table(price_rows, 'prices', out_dir)
 
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']

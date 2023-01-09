@@ -34,20 +34,15 @@ CREATE TABLE IF NOT EXISTS codes (
     PRIMARY KEY (code_hash)
 );
 
-CREATE TABLE IF NOT EXISTS prices (
-    filename_hash BIGINT UNSIGNED NOT NULL,
-    code_hash BIGINT UNSIGNED NOT NULL,
-    price_hash BIGINT UNSIGNED NOT NULL,
+CREATE TABLE IF NOT EXISTS metadata (
+    metadata_hash BIGINT UNSIGNED NOT NULL,
     billing_class ENUM("professional", "institutional") COLLATE utf8mb4_general_ci,
     negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8mb4_general_ci,
     service_code JSON,
     expiration_date VARCHAR(20),
     additional_information TEXT,
     billing_code_modifier JSON,
-    negotiated_rate DECIMAL(9,2),
-    PRIMARY KEY (price_hash, filename_hash, code_hash),
-    FOREIGN KEY (code_hash) REFERENCES codes(code_hash),
-    FOREIGN KEY (filename_hash) REFERENCES files(filename_hash)
+    PRIMARY KEY (metadata_hash)
 );
 
 CREATE TABLE IF NOT EXISTS provider_groups (
@@ -58,10 +53,15 @@ CREATE TABLE IF NOT EXISTS provider_groups (
     PRIMARY KEY (provider_group_hash)
 );
 
-CREATE TABLE IF NOT EXISTS prices_provider_groups (
-    price_hash BIGINT UNSIGNED,
-    provider_group_hash BIGINT UNSIGNED,
-    PRIMARY KEY (price_hash, provider_group_hash),
-    FOREIGN KEY (price_hash) REFERENCES prices(price_hash),
-    FOREIGN KEY (provider_group_hash) REFERENCES provider_groups(provider_group_hash)
+CREATE TABLE IF NOT EXISTS prices (
+    filename_hash BIGINT UNSIGNED NOT NULL,
+    code_hash BIGINT UNSIGNED NOT NULL,
+    provider_group_hash BIGINT UNSIGNED NOT NULL,
+    metadata_hash BIGINT UNSIGNED NOT NULL,
+    negotiated_rate DECIMAL(9,2),
+    PRIMARY KEY (filename_hash, code_hash, provider_group_hash, metadata_hash, negotiated_rate),
+    FOREIGN KEY (filename_hash) REFERENCES files(filename_hash),
+    FOREIGN KEY (code_hash) REFERENCES codes(code_hash),
+    FOREIGN KEY (provider_group_hash) REFERENCES provider_groups(provider_group_hash),
+    FOREIGN KEY (metadata_hash) REFERENCES metadata(metadata_hash)
 );
