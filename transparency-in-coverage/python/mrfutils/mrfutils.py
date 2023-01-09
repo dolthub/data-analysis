@@ -173,10 +173,8 @@ def code_row_from_dict(in_network_item: dict) -> Row:
 	return code_row
 
 
-def price_row_from_dict(
-	price: dict,
-	code_hash: str,
-	filename_hash: str,
+def metadata_row_from_dict(
+	metadata: dict,
 ) -> Row:
 
 	keys = [
@@ -187,7 +185,9 @@ def price_row_from_dict(
 		'additional_information',
 	]
 
-	price_row = {key : price.get(key) if price.get(key) else None for key in keys}
+	# any of these rows can have empty strings
+	# TODO maybe put this in dicthasher?
+	metadata_row = {key : metadata.get(key) if metadata.get(key) else None for key in keys}
 
 	optional_json_keys = [
 		'service_code',
@@ -197,34 +197,13 @@ def price_row_from_dict(
 	# TODO billing code modifier can have empty strings
 	# in its JSON -- remove these before sorting
 	for key in optional_json_keys:
-		if price.get(key):
-			sorted_value = [value.strip() for value in sorted(price[key])]
-			price_row[key] = json.dumps(sorted_value)
+		if metadata.get(key):
+			sorted_value = [value.strip() for value in sorted(metadata[key])]
+			metadata_row[key] = json.dumps(sorted_value)
 
-	hashes = {
-		'code_hash': code_hash,
-		'filename_hash': filename_hash
-	}
+	metadata_row = append_hash(metadata_row, 'metadata_hash')
 
-	price_row.update(hashes)
-
-	price_row = append_hash(price_row, 'price_hash')
-
-	return price_row
-
-
-def price_rows_from_dicts(
-	prices: list[dict],
-	code_hash: str,
-	filename_hash: str,
-) -> list[Row]:
-
-	price_rows = []
-	for price in prices:
-		price_row = price_row_from_dict(price, code_hash, filename_hash)
-		price_rows.append(price_row)
-
-	return price_rows
+	return metadata_row
 
 
 def group_row_from_dict(group: dict) -> Row:
@@ -250,8 +229,9 @@ def group_rows_from_dicts(groups: list[dict]) -> list[Row]:
 	return provider_group_rows
 
 
-def prices_groups_rows_from_dicts(
-	price_rows: list[Row],
+def prices_rows_from_dicts(
+	code_row: Row,
+	metadata_row: Row,
 	group_rows: list[Row]
 ) -> list[Row]:
 

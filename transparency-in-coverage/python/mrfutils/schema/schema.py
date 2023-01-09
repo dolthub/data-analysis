@@ -26,17 +26,14 @@ SCHEMA = {
         "billing_code",
         "billing_code_type",
     ],
-    "prices": [
-        "filename_hash",
-        "code_hash",
-        "price_hash",
+    "metadata": [
+        "metadata_hash",
         "billing_class",
         "negotiated_type",
         "service_code",
         "expiration_date",
         "additional_information",
         "billing_code_modifier",
-        "negotiated_rate",
     ],
     "provider_groups": [
         "provider_group_hash",
@@ -44,10 +41,13 @@ SCHEMA = {
         "tin_value",
         "npi_numbers",
     ],
-    "prices_provider_groups": [
+    "prices": [
+        "filename_hash", # plan_hash?
+        "code_hash",
         "provider_group_hash",
-        "price_hash",
-    ]
+        "metadata_hash",
+        "negotiated_rate",
+    ],
     # "covered_services": [
     #     "root_hash_key",
     #     "in_network_hash_key",
