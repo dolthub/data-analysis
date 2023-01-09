@@ -11,8 +11,6 @@ We have given out over $100,000 to date. There is no limit on the number of part
 
 ## The scoreboard
 
-Lots of people can work on datasets in parallel. Any updates to the dataset get scored according to who changed the data last.
-
 Dolt keeps track of who submits which cells. If you update or add a cell you get a point. If someone overwrites one of your cells, you lose a point. If someone adds the same data you already added, nothing happens. Points only update when data changes.
 
 The scoreboard takes the total number of money and divides by the points (cell edits) for each person, to compute the amount we pay out.
