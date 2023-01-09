@@ -7,7 +7,7 @@ import sqlite3
 import re
 from mrfutils import JSONOpen
 
-anthem_toc_url ='https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2022-12-01_anthem_index.json.gz'
+anthem_toc_url ='https://antm-pt-prod-dataz-nogbd-nophi-us-east1.s3.amazonaws.com/anthem/2023-01-01_anthem_index.json.gz'
 dbname = "anthem-in-network.db"
 
 con = sqlite3.connect(dbname)
