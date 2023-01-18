@@ -1,33 +1,22 @@
 SCHEMA = {
-    "plans": [
-        "plan_hash",
-        "reporting_entity_name",
-        "reporting_entity_type",
-        "plan_name",
-        "plan_id",
-        "plan_id_type",
-        "plan_market_type",
-        "last_updated_on",
-        "version",
-    ],
-    "files": [
-        "filename_hash",
+    "file": [
         "filename",
         "url",
     ],
-    "plans_files": [
-        "plan_hash",
-        "filename_hash",
+    "insurer": [
+        "id",
+        "reporting_entity_name",
+        "reporting_entity_type",
+        "last_updated_on",
     ],
-    "codes": [
-        "code_hash",
-        # "negotiation_arrangement", # always ffs for now
+    "code": [
+        "id",
         "billing_code_type_version",
         "billing_code",
         "billing_code_type",
     ],
-    "metadata": [
-        "metadata_hash",
+    "price_metadata": [
+        "id",
         "billing_class",
         "negotiated_type",
         "service_code",
@@ -35,39 +24,15 @@ SCHEMA = {
         "additional_information",
         "billing_code_modifier",
     ],
-    "provider_groups": [
-        "provider_group_hash",
-        "tin_type",
-        "tin_value",
-        "npi_numbers",
-    ],
-    "prices": [
-        "filename_hash", # plan_hash?
-        "code_hash",
-        "provider_group_hash",
-        "metadata_hash",
+    "rate": [
+        "id",
+        "insurer_id",
+        "code_id",
+        "price_metadata_id",
         "negotiated_rate",
     ],
-    # "covered_services": [
-    #     "root_hash_key",
-    #     "in_network_hash_key",
-    #     "billing_code_type_version",
-    #     "description",
-    #     "billing_code",
-    #     "billing_code_type",
-    #     "covered_services_hash_key",
-    # ],
-    # "bundled_codes": [
-    #     "root_hash_key",
-    #     "in_network_hash_key",
-    #     "billing_code_type_version",
-    #     "description",
-    #     "billing_code",
-    #     "billing_code_type",
-    # ],
-    # "negotiated_rates": [
-    #     "root_hash_key",
-    #     "in_network_hash_key",
-    #     "negotiated_rates_hash_key",
-    # ],
+    "npi_rate": [
+        "rate_id",
+        "npi",
+    ],
 }
