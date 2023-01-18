@@ -1,6 +1,6 @@
-## Dolthub data bounties
+## DoltHub data bounties
 
-Dolthub data bounties are a way to make money while also
+DoltHub data bounties are a way to make money while also
 
 * learning about git
 * learning about mysql
@@ -8,6 +8,28 @@ Dolthub data bounties are a way to make money while also
 * and more
 
 We have given out over $100,000 to date. There is no limit on the number of participants for any given bounty, and anyone is welcome to submit a pull request.
+
+## The scoreboard
+
+Dolt keeps track of who submits which cells. If you update or add a cell you get a point. If someone overwrites one of your cells, you lose a point. If someone adds the same data you already added, nothing happens. Points only update when data changes.
+
+The scoreboard takes the total number of money and divides by the points (cell edits) for each person, to compute the amount we pay out.
+
+> DoltHub data bounty money usually comes from our marketing budget, but sometimes comes from companies who ask us to collect data for them. We can crowdsource datasets that need a lot of man-hours and scraping expertise, on a medium-sized budget.
+
+
+## Getting started
+
+Start by installing Dolt: https://docs.dolthub.com/introduction/installation/
+
+Dolt works just like Git, but with tables
+```
+dolt init
+dolt table import -u <table> <your-data.csv>
+dolt add .
+dolt commit -am "some commit message"
+dolt push origin main
+```
 
 ## Workflows
 
