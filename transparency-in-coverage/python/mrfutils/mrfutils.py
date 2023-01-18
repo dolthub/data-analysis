@@ -21,7 +21,7 @@ Naming conventions
 MRFs contain a lot of objects with long names. I use these names as vars just
 because typing out the full-length names gives me a headache.
 
-* top-level information --> plan
+* top-level information --> insurer_metadata
 * provider_references --> references
 * provider_groups --> groups (there are no other groups)
 * provider_group_id --> group_id
@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import partial
-from itertools import product
+import itertools
 from typing import Generator
 
 import aiohttp
@@ -66,6 +66,10 @@ log.setLevel(logging.DEBUG)
 
 # To distinguish data from rows
 Row = dict
+
+def flatten(list_of_lists):
+    return itertools.chain.from_iterable(list_of_lists)
+
 
 def write_table(
 	rows: list[Row] | Row,
@@ -93,70 +97,54 @@ def write_table(
 			writer.writerow(row)
 
 
-def plan_row_from_dict(plan: dict) -> Row:
-
-	keys = [
-		'reporting_entity_name',
-		'reporting_entity_type',
-		'plan_name',
-		'plan_id',
-		'plan_id_type',
-		'plan_market_type',
-		'last_updated_on',
-		'version',
-	]
-
-	plan_row = {key: plan.get(key) for key in keys}
-	plan_row = append_hash(plan_row, 'plan_hash')
-
-	return plan_row
-
-
 def file_row_from_filename(
 	filename: str,
-	filename_hash: int,
+	plan: dict,
 	url: str
 ) -> Row:
 
 	filename = Path(filename).stem.split('.')[0]
-	file_row = {
-		'filename': filename,
-		'filename_hash': filename_hash,
-		'url': url
-	}
+
+	file_row = dict(
+		filename = filename,
+		url = url,
+		last_updated_on = plan['last_updated_on']
+	)
 
 	return file_row
 
 
-def plan_file_row_from_row(
-	plan_row: Row,
-	filename_hash: int
-) -> Row:
-
-	plan_file_row = {
-		'plan_hash': plan_row['plan_hash'],
-		'filename_hash': filename_hash,
-	}
-
-	return plan_file_row
-
-
-def write_plan(
-	plan: dict,
-	filename_hash: int,
+def write_file(
 	filename: str,
+	plan: dict,
 	url: str,
 	out_dir: str,
 ) -> None:
 
-	file_row = file_row_from_filename(filename, filename_hash, url)
-	write_table(file_row, 'files', out_dir)
+	file_row = file_row_from_filename(filename, plan, url)
+	write_table(file_row, 'file', out_dir)
 
-	plan_row = plan_row_from_dict(plan)
-	write_table(plan_row, 'plans', out_dir)
 
-	plan_file_row = plan_file_row_from_row(plan_row, filename_hash)
-	write_table(plan_file_row, 'plans_files', out_dir)
+def insurer_row_from_dict(plan_item: dict) -> Row:
+
+	keys = [
+		'reporting_entity_name',
+		'reporting_entity_type',
+	]
+
+	insurer_row = {key : plan_item[key] for key in keys}
+	insurer_row = append_hash(insurer_row, 'id')
+
+	return insurer_row
+
+
+def write_insurer(
+	plan_metadata: dict,
+	out_dir: str,
+) -> None:
+
+	insurer_row = insurer_row_from_dict(plan_metadata)
+	write_table(insurer_row, 'insurer', out_dir)
 
 
 def code_row_from_dict(in_network_item: dict) -> Row:
@@ -167,130 +155,128 @@ def code_row_from_dict(in_network_item: dict) -> Row:
 		'billing_code',
 	]
 
-	code_row = {key : in_network_item[key].strip() for key in keys}
-	code_row = append_hash(code_row, 'code_hash')
+	code_row = {key : in_network_item[key] for key in keys}
+	code_row = append_hash(code_row, 'id')
 
 	return code_row
 
 
-def price_row_from_dict(
-	price: dict,
-	code_hash: str,
-	filename_hash: str,
-) -> Row:
+def price_metadata_price_tuple_from_dict(
+	price_item: dict,
+) -> tuple[Row, float] | None:
 
 	keys = [
 		'billing_class',
 		'negotiated_type',
 		'expiration_date',
-		'negotiated_rate',
-		'additional_information',
 	]
 
-	price_row = {key : price.get(key) if price.get(key) else None for key in keys}
+	price_metadata_row = {key: price_item[key] for key in keys}
+
+	# Optional key
+	price_metadata_row['additional_information'] = price_item.get('additional_information')
 
 	optional_json_keys = [
 		'service_code',
 		'billing_code_modifier',
 	]
 
-	# TODO billing code modifier can have empty strings
-	# in its JSON -- remove these before sorting
 	for key in optional_json_keys:
-		if price.get(key):
-			sorted_value = [value.strip() for value in sorted(price[key])]
-			price_row[key] = json.dumps(sorted_value)
+		if price_item.get(key):
+			sorted_value = sorted(price_item[key])
+			price_metadata_row[key] = json.dumps(sorted_value)
 
-	hashes = {
-		'code_hash': code_hash,
-		'filename_hash': filename_hash
-	}
+	price_metadata_row = append_hash(price_metadata_row, 'id')
+	negotiated_rate = price_item['negotiated_rate']
 
-	price_row.update(hashes)
-
-	price_row = append_hash(price_row, 'price_hash')
-
-	return price_row
+	return price_metadata_row, negotiated_rate
 
 
-def price_rows_from_dicts(
-	prices: list[dict],
-	code_hash: str,
-	filename_hash: str,
+def price_metadata_combined_rows_from_dict(rate: dict) -> list[tuple[Row, float]]:
+
+	price_metadata_combined_rows = []
+	for price in rate['negotiated_prices']:
+		price_metadata_combined_row = price_metadata_price_tuple_from_dict(price)
+		price_metadata_combined_rows.append(price_metadata_combined_row)
+
+	return price_metadata_combined_rows
+
+
+def rate_rows_from_mixed(
+	insurer_row: Row,
+	code_row: Row,
+	price_metadata_combined_rows: list[tuple[Row, float]],
 ) -> list[Row]:
 
-	price_rows = []
-	for price in prices:
-		price_row = price_row_from_dict(price, code_hash, filename_hash)
-		price_rows.append(price_row)
+	rate_rows = []
 
-	return price_rows
+	for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
+		rate_row = dict(
+			insurer_id = insurer_row['id'],
+			code_id = code_row['id'],
+			price_metadata_id = price_metadata_row['id'],
+			negotiated_rate = negotiated_rate
+		)
 
+		rate_row = append_hash(rate_row, 'id')
+		rate_rows.append(rate_row)
 
-def group_row_from_dict(group: dict) -> Row:
-
-	group_row = {
-		'npi_numbers': json.dumps(sorted(group['npi'])),
-		'tin_type':    group['tin']['type'],
-		'tin_value':   group['tin']['value'],
-	}
-
-	group_row = append_hash(group_row, 'provider_group_hash')
-
-	return group_row
+	return rate_rows
 
 
-def group_rows_from_dicts(groups: list[dict]) -> list[Row]:
-
-	provider_group_rows = []
-	for provider_group in groups:
-		provider_group_row = group_row_from_dict(provider_group)
-		provider_group_rows.append(provider_group_row)
-
-	return provider_group_rows
-
-
-def prices_groups_rows_from_dicts(
-	price_rows: list[Row],
-	group_rows: list[Row]
+def npi_rate_rows_from_mixed(
+	rate_rows: list[Row],
+	npi_list: list[str],
 ) -> list[Row]:
+	npi_rate_rows = []
 
-	prices_groups_rows = []
-	for price_row, group_row in product(price_rows, group_rows):
+	for rate_row, npi in itertools.product(rate_rows, npi_list):
+		npi_rate_row = dict(
+			rate_id = rate_row['id'],
+			npi = npi
+		)
+		npi_rate_rows.append(npi_rate_row)
 
-		prices_groups_row = {
-			'provider_group_hash': group_row['provider_group_hash'],
-			'price_hash': price_row['price_hash'],
-		}
-
-		prices_groups_rows.append(prices_groups_row)
-
-	return prices_groups_rows
+	return npi_rate_rows
 
 
 def write_in_network_item(
+	plan_metadata: dict,
 	in_network_item: dict,
-	filename_hash,
 	out_dir
 ) -> None:
 
 	code_row = code_row_from_dict(in_network_item)
-	write_table(code_row, 'codes', out_dir)
+	write_table(code_row, 'code', out_dir)
 
-	code_hash = code_row['code_hash']
+	insurer_row = insurer_row_from_dict(plan_metadata)
 
 	for rate in in_network_item['negotiated_rates']:
-		prices = rate['negotiated_prices']
-		groups = rate.get('provider_groups', [])
+		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
+		price_metadata_rows = [a[0] for a in price_metadata_combined_rows]
+		write_table(price_metadata_rows, 'price_metadata', out_dir)
 
-		price_rows = price_rows_from_dicts(prices, code_hash, filename_hash)
-		write_table(price_rows, 'prices', out_dir)
+		rate_rows = rate_rows_from_mixed(
+			insurer_row = insurer_row,
+			code_row = code_row,
+			price_metadata_combined_rows = price_metadata_combined_rows,
+		)
+		write_table(rate_rows, 'rate', out_dir)
 
-		group_rows = group_rows_from_dicts(groups)
-		write_table(group_rows, 'provider_groups', out_dir)
+		# gather all the NPIs
+		groups = rate['provider_groups']
+		npi_set = set()
+		for group in groups:
+			sub_npi_list = group['npi']
+			for npi in sub_npi_list:
+				npi_set.add(npi)
+		npi_list = list(npi_set)
 
-		prices_groups_rows = prices_groups_rows_from_dicts(price_rows, group_rows)
-		write_table(prices_groups_rows, 'prices_provider_groups', out_dir)
+		npi_rate_rows = npi_rate_rows_from_mixed(
+			rate_rows = rate_rows,
+			npi_list = npi_list,
+		)
+		write_table(npi_rate_rows, 'npi_rate', out_dir)
 
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']
@@ -338,12 +324,31 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 	# Will not work if references haven't been swapped out yet
 	assert rate.get('provider_references') is None
 	groups = process_groups(rate['provider_groups'], npi_filter)
-	if groups:
-		rate['provider_groups'] = groups
-		return rate
+	if not groups:
+		return
+
+	rate['provider_groups'] = groups
+
+	service_code_filter = ['19','20','21','22','23','24','53']
+
+	prices = []
+	for price in rate['negotiated_prices']:
+		if price['negotiated_type'] != 'percentage':
+			prices.append(price)
+			# if not price['service_code']:
+			# 	prices.append(price)
+			# else:
+			# 	price['service_code'] = [c for c in price['service_code'] if c in service_code_filter]
+			# 	if price['service_code']:
+			# 		prices.append(price)
+
+	if not prices:
+		return
+
+	rate['negotiated_prices'] = prices
+	return rate
 
 process_rates = partial(process_arr, process_rate)
-
 
 # TODO simplify
 def ffwd(
@@ -378,6 +383,12 @@ def gen_in_network_items(
 ) -> Generator:
 	builder = ijson.ObjectBuilder()
 	for prefix, event, value in parser:
+
+		if type(value) == str:
+			value = value.strip()
+			if value == '':
+				value = None
+
 		builder.event(event, value)
 
 		# This line can be commented out! but it's faster with it in
@@ -633,7 +644,7 @@ class Content:
 
 	def start_conn(self):
 		self.parser  = start_parser(self.file)
-		self.plan    = get_plan(self.parser)
+		self.plan_metadata    = get_plan(self.parser)
 		self.ref_map = get_reference_map(self.parser, self.npi_filter)
 
 	def prepare_in_network(self):
@@ -671,16 +682,17 @@ def json_mrf_to_csv(
 
 	# Explicitly make this variable up-front since both sets of tables
 	# are linked by it (in_network and plan tables)
-	filename_hash = filename_hasher(file)
 
 	content = Content(file, code_filter, npi_filter)
 	content.start_conn()
-	plan = content.plan
+	plan_metadata = content.plan_metadata
+
 	processed_items = content.in_network_items()
 
 	make_dir(out_dir)
 
 	for item in processed_items:
-		write_in_network_item(item, filename_hash, out_dir)
+		write_in_network_item(plan_metadata, item, out_dir)
 
-	write_plan(plan, filename_hash, file, url, out_dir)
+	write_file(file, plan_metadata, url, out_dir)
+	write_insurer(plan_metadata, out_dir)
