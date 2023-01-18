@@ -67,10 +67,6 @@ log.setLevel(logging.DEBUG)
 # To distinguish data from rows
 Row = dict
 
-def flatten(list_of_lists):
-    return itertools.chain.from_iterable(list_of_lists)
-
-
 def write_table(
 	rows: list[Row] | Row,
 	tablename: str,
