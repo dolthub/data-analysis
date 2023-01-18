@@ -129,9 +129,18 @@ def insurer_row_from_dict(plan_item: dict) -> Row:
 	]
 
 	insurer_row = {key : plan_item[key] for key in keys}
-	insurer_row = append_hash(plan_item, 'id')
+	insurer_row = append_hash(insurer_row, 'id')
 
 	return insurer_row
+
+
+def write_insurer(
+	plan: dict,
+	out_dir: str,
+) -> None:
+
+	insurer_row = insurer_row_from_dict(plan)
+	write_table(insurer_row, 'insurer', out_dir)
 
 
 def code_row_from_dict(in_network_item: dict) -> Row:
@@ -150,7 +159,7 @@ def code_row_from_dict(in_network_item: dict) -> Row:
 
 def price_metadata_price_tuple_from_dict(
 	price_item: dict,
-) -> tuple[Row, float]:
+) -> tuple[Row, float] | None:
 
 	keys = [
 		'billing_class',
@@ -314,10 +323,19 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 
 	rate['provider_groups'] = groups
 
+	service_code_filter = ['19','20','21','22','23','24','53']
+
 	prices = []
 	for price in rate['negotiated_prices']:
 		if price['negotiated_type'] != 'percentage':
 			prices.append(price)
+			# if not price['service_code']:
+			# 	prices.append(price)
+			# else:
+			# 	price['service_code'] = [c for c in price['service_code'] if c in service_code_filter]
+			# 	if price['service_code']:
+			# 		prices.append(price)
+
 	if not prices:
 		return
 
@@ -671,3 +689,4 @@ def json_mrf_to_csv(
 		write_in_network_item(plan, item, out_dir)
 
 	write_file(file, url, out_dir)
+	write_insurer(plan, out_dir)

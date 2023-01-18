@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS insurer (
     id BIGINT UNSIGNED,
     reporting_entity_name VARCHAR(500),
     reporting_entity_type VARCHAR(500),
-    last_updated_on VARCHAR(20),
     PRIMARY KEY (id)
 );
 
@@ -41,7 +40,7 @@ CREATE TABLE IF NOT EXISTS rate (
     price_metadata_id BIGINT UNSIGNED,
     negotiated_rate DECIMAL(9,2),
     PRIMARY KEY (id),
-    FOREIGN KEY (price_id) REFERENCES price(id),
+    FOREIGN KEY (code_id) REFERENCES code(id),
     FOREIGN KEY (insurer_id) REFERENCES insurer(id),
     FOREIGN KEY (price_metadata_id) REFERENCES price_metadata(id)
 );

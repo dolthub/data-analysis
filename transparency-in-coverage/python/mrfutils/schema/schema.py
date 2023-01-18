@@ -7,7 +7,6 @@ SCHEMA = {
         "id",
         "reporting_entity_name",
         "reporting_entity_type",
-        "last_updated_on",
     ],
     "code": [
         "id",
