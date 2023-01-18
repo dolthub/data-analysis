@@ -110,7 +110,7 @@ class Test(unittest.TestCase):
 		file = 'test_file_no_references.json'
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
-		plan = content.plan
+		plan = content.plan_metadata
 		ref_map = content.ref_map
 		assert ref_map is None
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
@@ -127,7 +127,7 @@ class Test(unittest.TestCase):
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 
-		plan = content.plan
+		plan = content.plan_metadata
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
 		processed_items = content.in_network_items()
@@ -145,7 +145,7 @@ class Test(unittest.TestCase):
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 
-		plan = content.plan
+		plan = content.plan_metadata
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
 		processed_items = content.in_network_items()
@@ -165,7 +165,7 @@ class Test(unittest.TestCase):
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 
-		plan = content.plan
+		plan = content.plan_metadata
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
 		processed_items = content.in_network_items()
@@ -181,7 +181,7 @@ class Test(unittest.TestCase):
 		content = Content(file, code_filter, npi_filter)
 		content.start_conn()
 
-		plan = content.plan
+		plan = content.plan_metadata
 		assert plan['reporting_entity_name'] == 'TEST ENTITY'
 
 		processed_items = content.in_network_items()

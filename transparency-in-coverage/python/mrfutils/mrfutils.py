@@ -21,7 +21,7 @@ Naming conventions
 MRFs contain a lot of objects with long names. I use these names as vars just
 because typing out the full-length names gives me a headache.
 
-* top-level information --> plan
+* top-level information --> insurer_metadata
 * provider_references --> references
 * provider_groups --> groups (there are no other groups)
 * provider_group_id --> group_id
@@ -99,25 +99,29 @@ def write_table(
 
 def file_row_from_filename(
 	filename: str,
+	plan: dict,
 	url: str
 ) -> Row:
 
 	filename = Path(filename).stem.split('.')[0]
-	file_row = {
-		'filename': filename,
-		'url': url
-	}
+
+	file_row = dict(
+		filename = filename,
+		url = url,
+		last_updated_on = plan['last_updated_on']
+	)
 
 	return file_row
 
 
 def write_file(
 	filename: str,
+	plan: dict,
 	url: str,
 	out_dir: str,
 ) -> None:
 
-	file_row = file_row_from_filename(filename, url)
+	file_row = file_row_from_filename(filename, plan, url)
 	write_table(file_row, 'file', out_dir)
 
 
@@ -135,11 +139,11 @@ def insurer_row_from_dict(plan_item: dict) -> Row:
 
 
 def write_insurer(
-	plan: dict,
+	plan_metadata: dict,
 	out_dir: str,
 ) -> None:
 
-	insurer_row = insurer_row_from_dict(plan)
+	insurer_row = insurer_row_from_dict(plan_metadata)
 	write_table(insurer_row, 'insurer', out_dir)
 
 
@@ -237,7 +241,7 @@ def npi_rate_rows_from_mixed(
 
 
 def write_in_network_item(
-	plan_item: dict,
+	plan_metadata: dict,
 	in_network_item: dict,
 	out_dir
 ) -> None:
@@ -245,7 +249,7 @@ def write_in_network_item(
 	code_row = code_row_from_dict(in_network_item)
 	write_table(code_row, 'code', out_dir)
 
-	insurer_row = insurer_row_from_dict(plan_item)
+	insurer_row = insurer_row_from_dict(plan_metadata)
 
 	for rate in in_network_item['negotiated_rates']:
 		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
@@ -640,7 +644,7 @@ class Content:
 
 	def start_conn(self):
 		self.parser  = start_parser(self.file)
-		self.plan    = get_plan(self.parser)
+		self.plan_metadata    = get_plan(self.parser)
 		self.ref_map = get_reference_map(self.parser, self.npi_filter)
 
 	def prepare_in_network(self):
@@ -681,14 +685,14 @@ def json_mrf_to_csv(
 
 	content = Content(file, code_filter, npi_filter)
 	content.start_conn()
-	plan = content.plan
+	plan_metadata = content.plan_metadata
 
 	processed_items = content.in_network_items()
 
 	make_dir(out_dir)
 
 	for item in processed_items:
-		write_in_network_item(plan, item, out_dir)
+		write_in_network_item(plan_metadata, item, out_dir)
 
-	write_file(file, url, out_dir)
-	write_insurer(plan, out_dir)
+	write_file(file, plan_metadata, url, out_dir)
+	write_insurer(plan_metadata, out_dir)
