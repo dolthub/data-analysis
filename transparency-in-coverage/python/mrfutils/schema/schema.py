@@ -2,6 +2,7 @@ SCHEMA = {
     "file": [
         "filename",
         "url",
+        "last_updated_on",
     ],
     "insurer": [
         "id",
