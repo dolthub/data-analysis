@@ -325,18 +325,10 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 
 	rate['provider_groups'] = groups
 
-	service_code_filter = ['19','20','21','22','23','24','53']
-
 	prices = []
 	for price in rate['negotiated_prices']:
 		if price['negotiated_type'] != 'percentage':
 			prices.append(price)
-			# if not price['service_code']:
-			# 	prices.append(price)
-			# else:
-			# 	price['service_code'] = [c for c in price['service_code'] if c in service_code_filter]
-			# 	if price['service_code']:
-			# 		prices.append(price)
 
 	if not prices:
 		return
