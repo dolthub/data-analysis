@@ -1,3 +1,9 @@
+# ⚠️ This repo is actively being developed and changed ⚠️
+
+Please don't rely on this repo for ongoing work. We're constantly integrating the lessons we learn into making this tool better, which means we're changing it constantly. 
+
+Please let me know if you find any issues!
+
 # About `mrfutils`
 
 `mrfutils` is a python package to help filter and flatten the enormous MRF files that come from different insurance payers.
