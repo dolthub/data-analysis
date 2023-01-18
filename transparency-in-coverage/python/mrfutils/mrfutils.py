@@ -165,17 +165,19 @@ def price_metadata_price_tuple_from_dict(
 		'billing_class',
 		'negotiated_type',
 		'expiration_date',
-		'additional_information',
 	]
 
 	price_metadata_row = {key: price_item[key] for key in keys}
 
-	optional_keys = [
+	# Optional key
+	price_metadata_row['additional_information'] = price_item.get('additional_information')
+
+	optional_json_keys = [
 		'service_code',
 		'billing_code_modifier',
 	]
 
-	for key in optional_keys:
+	for key in optional_json_keys:
 		if price_item.get(key):
 			sorted_value = sorted(price_item[key])
 			price_metadata_row[key] = json.dumps(sorted_value)

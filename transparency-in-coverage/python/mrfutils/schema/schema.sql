@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS rate (
 
 CREATE TABLE IF NOT EXISTS npi_rate (
     rate_id BIGINT UNSIGNED,
-    npi CHAR(10),
+    npi INT UNSIGNED,
     PRIMARY KEY (npi, rate_id),
     FOREIGN KEY (rate_id) REFERENCES rate(id)
 );
