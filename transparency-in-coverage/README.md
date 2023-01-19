@@ -80,16 +80,19 @@ if (prefix, event) == ("provider_references", "start_array"):
 
 ### Hashes as keys
 
-Before we write each dict to file, we turn it into bytes and md5 hash it.
+Before we write each dict to file, we turn it into bytes and SHA256 hash it.
 
 ```py
-def hashdict(data_dict):
-	"""Get the hash of a dict (sort, convert to bytes, then hash)
-	"""
-	sorted_dict = dict(sorted(data_dict.items()))
-	dict_as_bytes = json.dumps(sorted_dict).encode('utf-8')
-	dict_hash = hashlib.md5(dict_as_bytes).hexdigest()
-	return dict_hash
+def dicthasher(data: dict, n_bytes = 8) -> int:
+
+	if not data:
+		raise Exception("Hashed dictionary can't be empty")
+
+	data = json.dumps(data, sort_keys=True).encode('utf-8')
+	hash_s = hashlib.sha256(data).digest()[:n_bytes]
+	hash_i = int.from_bytes(hash_s, 'little')
+
+	return hash_i
 ```
 
 The reasons for this are two-fold:
