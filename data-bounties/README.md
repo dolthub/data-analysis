@@ -47,3 +47,13 @@ That will get changes on your `origin`. To get your data into our main branch yo
 Go to the bounty repo page and click the "Pull Requests" tab.
 
 Make a pull request by selecting your remote and branch. Then write a short description in the description box explaining your changes.
+
+## Keeping your PRs atomic: don't branch off of a branch
+
+To keep your branches from being dependent on each other, check out main in between making branches.
+
+1. `(branch: my_new_branch) dolt checkout main`
+1. `(branch: main) dolt checkout -b my_second_branch`
+1. `(branch: my_second_branch) dolt table import -u <table> <your-new-data.csv>`
+
+and so on.
