@@ -1,13 +1,18 @@
 SCHEMA = {
     "file": [
+        "id",
         "filename",
-        "url",
         "last_updated_on",
+        "url",
     ],
     "insurer": [
         "id",
         "reporting_entity_name",
         "reporting_entity_type",
+    ],
+    "file_rate": [
+        "file_id",
+        "rate_id",
     ],
     "code": [
         "id",

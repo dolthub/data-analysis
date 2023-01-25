@@ -1,7 +1,9 @@
 CREATE TABLE IF NOT EXISTS file (
+    file_id BIGINT UNSIGNED,
     filename VARCHAR(1000),
+    last_updated_on VARCHAR(20),
     url TEXT,
-    PRIMARY KEY (filename)
+    PRIMARY KEY (file_id)
 );
 
 CREATE TABLE IF NOT EXISTS insurer (
@@ -22,7 +24,7 @@ CREATE TABLE IF NOT EXISTS code (
 CREATE TABLE IF NOT EXISTS price_metadata (
     id BIGINT UNSIGNED,
     billing_class ENUM("professional", "institutional") COLLATE utf8mb4_general_ci,
-    negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8mb4_general_ci,
+--    negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8mb4_general_ci,
     service_code JSON,
     expiration_date VARCHAR(20),
     additional_information TEXT,
@@ -43,6 +45,16 @@ CREATE TABLE IF NOT EXISTS rate (
     FOREIGN KEY (code_id) REFERENCES code(id),
     FOREIGN KEY (insurer_id) REFERENCES insurer(id),
     FOREIGN KEY (price_metadata_id) REFERENCES price_metadata(id)
+);
+
+-- Bookkeeping table
+
+CREATE TABLE IF NOT EXISTS file_rate (
+    file_id VARCHAR(1000),
+    rate_id BIGINT UNSIGNED,
+    PRIMARY KEY (file_id, rate_id),
+    FOREIGN KEY (file_id) REFERENCES file(id),
+    FOREIGN KEY (rate_id) REFERENCES rate(id)
 );
 
 -- There may be many providers associated with each rate
