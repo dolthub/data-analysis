@@ -8,6 +8,12 @@ Please let me know if you find any issues!
 
 `mrfutils` is a python package to help filter and flatten the enormous MRF files that come from different insurance payers.
 
+### Opinions
+
+1. we pre-filter for `negotiated_type` = `"negotiated"` (this can be changed, but it's the default setting.) This is the amount the insurer directly pays the hospital for a service. It's easy to reason about. It's much harder to understand `"capitation"`, `"derived"`, `"bundle"` or `"fee schedule"` payments.
+2. we have a `file_rate` table to track which rates come from which files. This table is for bookkeeping and can be deleted if you trust the data.
+3. if a file has its `last_updated_on` anywhere but the top of the file, it's ignored. This was by design to make `mrfutils.py` easier to debug. Most files have it at the top, so this only affects a minority of them.
+
 ### To get started
 
 If you plan on running any of the examples in the `examples/` folder, go to `mrfutils/` (this directory) and do
