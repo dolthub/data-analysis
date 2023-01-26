@@ -186,6 +186,7 @@ def price_metadata_price_tuple_from_dict(
 
 	for key in optional_json_keys:
 		if price_item.get(key):
+			price_item[key] = [value for value in price_item[key] if value is not None]
 			sorted_value = sorted(price_item[key])
 			price_metadata_row[key] = json.dumps(sorted_value)
 

@@ -1,9 +1,9 @@
 CREATE TABLE IF NOT EXISTS file (
-    file_id BIGINT UNSIGNED,
+    id BIGINT UNSIGNED,
     filename VARCHAR(1000),
     last_updated_on VARCHAR(20),
     url TEXT,
-    PRIMARY KEY (file_id)
+    PRIMARY KEY (id)
 );
 
 CREATE TABLE IF NOT EXISTS insurer (
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS rate (
 -- Bookkeeping table
 
 CREATE TABLE IF NOT EXISTS file_rate (
-    file_id VARCHAR(1000),
+    file_id BIGINT UNSIGNED,
     rate_id BIGINT UNSIGNED,
     PRIMARY KEY (file_id, rate_id),
     FOREIGN KEY (file_id) REFERENCES file(id),
