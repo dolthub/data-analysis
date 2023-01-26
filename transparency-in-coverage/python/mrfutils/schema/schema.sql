@@ -50,9 +50,9 @@ CREATE TABLE IF NOT EXISTS rate (
 -- Bookkeeping table
 
 CREATE TABLE IF NOT EXISTS file_rate (
-    file_id BIGINT UNSIGNED,
     rate_id BIGINT UNSIGNED,
-    PRIMARY KEY (file_id, rate_id),
+    file_id BIGINT UNSIGNED,
+    PRIMARY KEY (rate_id),
     FOREIGN KEY (file_id) REFERENCES file(id),
     FOREIGN KEY (rate_id) REFERENCES rate(id)
 );

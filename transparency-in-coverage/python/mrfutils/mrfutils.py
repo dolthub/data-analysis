@@ -158,7 +158,7 @@ def code_row_from_dict(in_network_item: dict) -> Row:
 		'billing_code',
 	]
 
-	code_row = {key : in_network_item[key] for key in keys}
+	code_row = {key : in_network_item.get(key) for key in keys}
 	code_row = append_hash(code_row, 'id')
 
 	return code_row
