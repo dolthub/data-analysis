@@ -1,2 +1,2 @@
 class InvalidMRF(Exception):
-	pass
+    pass

@@ -58,10 +58,10 @@ from schema.schema import SCHEMA
 # Install on Mac with
 # brew install yajl
 # or comment out this line!
-assert ijson.backend in ('yajl2_c', 'yajl2_cffi')
+assert ijson.backend in ("yajl2_c", "yajl2_cffi")
 
 log = logging.getLogger(__name__)
-logging.basicConfig(format='%(asctime)s - %(message)s')
+logging.basicConfig(format="%(asctime)s - %(message)s")
 log.setLevel(logging.DEBUG)
 
 # To distinguish data from rows
@@ -69,650 +69,639 @@ Row = dict
 
 
 def extract_filename_from_url(url: str) -> str:
-	return Path(url).stem.split('.')[0]
+    return Path(url).stem.split(".")[0]
 
 
 def write_table(
-	rows: list[Row] | Row,
-	tablename: str,
-	out_dir: str,
+    rows: list[Row] | Row,
+    tablename: str,
+    out_dir: str,
 ) -> None:
 
-	fieldnames = SCHEMA[tablename]
-	file_loc = f'{out_dir}/{tablename}.csv'
-	file_exists = os.path.exists(file_loc)
+    fieldnames = SCHEMA[tablename]
+    file_loc = f"{out_dir}/{tablename}.csv"
+    file_exists = os.path.exists(file_loc)
 
-	# newline = '' is to prevent Windows
-	# from adding \r\n\n to the end of each line
-	with open(file_loc, 'a', newline='') as f:
-		writer = csv.DictWriter(f, fieldnames=fieldnames)
+    # newline = '' is to prevent Windows
+    # from adding \r\n\n to the end of each line
+    with open(file_loc, "a", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
 
-		if not file_exists:
-			writer.writeheader()
+        if not file_exists:
+            writer.writeheader()
 
-		if type(rows) == list:
-			writer.writerows(rows)
+        if type(rows) == list:
+            writer.writerows(rows)
 
-		if type(rows) == dict:
-			row = rows
-			writer.writerow(row)
+        if type(rows) == dict:
+            row = rows
+            writer.writerow(row)
 
 
-def file_row_from_mixed(
-	plan: dict,
-	url: str
-) -> Row:
+def file_row_from_mixed(plan: dict, url: str) -> Row:
 
-	filename = extract_filename_from_url(url)
+    filename = extract_filename_from_url(url)
 
-	file_row = dict(
-		filename = filename,
-		last_updated_on = plan['last_updated_on']
-	)
+    file_row = dict(filename=filename, last_updated_on=plan["last_updated_on"])
 
-	file_row = append_hash(file_row, 'id')
+    file_row = append_hash(file_row, "id")
 
-	# URL is excluded from the hash
-	file_row['url'] = url
+    # URL is excluded from the hash
+    file_row["url"] = url
 
-	return file_row
+    return file_row
 
 
 def write_file(
-	plan: dict,
-	url: str,
-	out_dir: str,
+    plan: dict,
+    url: str,
+    out_dir: str,
 ) -> None:
 
-	file_row = file_row_from_mixed(plan, url)
-	write_table(file_row, 'file', out_dir)
+    file_row = file_row_from_mixed(plan, url)
+    write_table(file_row, "file", out_dir)
 
 
 def insurer_row_from_dict(plan_item: dict) -> Row:
 
-	keys = [
-		'reporting_entity_name',
-		'reporting_entity_type',
-	]
+    keys = [
+        "reporting_entity_name",
+        "reporting_entity_type",
+    ]
 
-	insurer_row = {key : plan_item[key] for key in keys}
-	insurer_row = append_hash(insurer_row, 'id')
+    insurer_row = {key: plan_item[key] for key in keys}
+    insurer_row = append_hash(insurer_row, "id")
 
-	return insurer_row
+    return insurer_row
 
 
 def write_insurer(
-	plan_metadata: dict,
-	out_dir: str,
+    plan_metadata: dict,
+    out_dir: str,
 ) -> None:
 
-	insurer_row = insurer_row_from_dict(plan_metadata)
-	write_table(insurer_row, 'insurer', out_dir)
+    insurer_row = insurer_row_from_dict(plan_metadata)
+    write_table(insurer_row, "insurer", out_dir)
 
 
 def code_row_from_dict(in_network_item: dict) -> Row:
 
-	keys = [
-		'billing_code_type',
-		'billing_code_type_version',
-		'billing_code',
-	]
+    keys = [
+        "billing_code_type",
+        "billing_code_type_version",
+        "billing_code",
+    ]
 
-	code_row = {key : in_network_item[key] for key in keys}
-	code_row = append_hash(code_row, 'id')
+    code_row = {key: in_network_item[key] for key in keys}
+    code_row = append_hash(code_row, "id")
 
-	return code_row
+    return code_row
 
 
 def price_metadata_price_tuple_from_dict(
-	price_item: dict,
+    price_item: dict,
 ) -> tuple[Row, float] | None:
 
-	keys = [
-		'billing_class',
-		'negotiated_type',
-		'expiration_date',
-	]
+    keys = [
+        "billing_class",
+        "negotiated_type",
+        "expiration_date",
+    ]
 
-	price_metadata_row = {key: price_item[key] for key in keys}
+    price_metadata_row = {key: price_item[key] for key in keys}
 
-	# Optional key
-	price_metadata_row['additional_information'] = price_item.get('additional_information')
+    # Optional key
+    price_metadata_row["additional_information"] = price_item.get(
+        "additional_information"
+    )
 
-	optional_json_keys = [
-		'service_code',
-		'billing_code_modifier',
-	]
+    optional_json_keys = [
+        "service_code",
+        "billing_code_modifier",
+    ]
 
-	for key in optional_json_keys:
-		if price_item.get(key):
-			price_item[key] = [value for value in price_item[key] if value is not None]
-			sorted_value = sorted(price_item[key])
-			price_metadata_row[key] = json.dumps(sorted_value)
+    for key in optional_json_keys:
+        if price_item.get(key):
+            price_item[key] = [value for value in price_item[key] if value is not None]
+            sorted_value = sorted(price_item[key])
+            price_metadata_row[key] = json.dumps(sorted_value)
 
-	price_metadata_row = append_hash(price_metadata_row, 'id')
-	negotiated_rate = price_item['negotiated_rate']
+    price_metadata_row = append_hash(price_metadata_row, "id")
+    negotiated_rate = price_item["negotiated_rate"]
 
-	return price_metadata_row, negotiated_rate
+    return price_metadata_row, negotiated_rate
 
 
 def price_metadata_combined_rows_from_dict(rate: dict) -> list[tuple[Row, float]]:
 
-	price_metadata_combined_rows = []
-	for price in rate['negotiated_prices']:
-		price_metadata_combined_row = price_metadata_price_tuple_from_dict(price)
-		price_metadata_combined_rows.append(price_metadata_combined_row)
+    price_metadata_combined_rows = []
+    for price in rate["negotiated_prices"]:
+        price_metadata_combined_row = price_metadata_price_tuple_from_dict(price)
+        price_metadata_combined_rows.append(price_metadata_combined_row)
 
-	return price_metadata_combined_rows
+    return price_metadata_combined_rows
 
 
 def file_rate_rows_from_mixed(
-	rate_rows: list[Row],
-	file_id: str,
+    rate_rows: list[Row],
+    file_id: str,
 ) -> list[Row]:
 
-	rate_ids = [row['id'] for row in rate_rows]
+    rate_ids = [row["id"] for row in rate_rows]
 
-	file_rate_rows = [
-		dict(file_id = file_id, rate_id = rate_id)
-		for rate_id in rate_ids
-	]
+    file_rate_rows = [dict(file_id=file_id, rate_id=rate_id) for rate_id in rate_ids]
 
-	return file_rate_rows
+    return file_rate_rows
 
 
 def rate_rows_from_mixed(
-	insurer_row: Row,
-	code_row: Row,
-	price_metadata_combined_rows: list[tuple[Row, float]],
+    insurer_row: Row,
+    code_row: Row,
+    price_metadata_combined_rows: list[tuple[Row, float]],
 ) -> list[Row]:
 
-	rate_rows = []
+    rate_rows = []
 
-	for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
-		rate_row = dict(
-			insurer_id = insurer_row['id'],
-			code_id = code_row['id'],
-			price_metadata_id = price_metadata_row['id'],
-			negotiated_rate = negotiated_rate
-		)
+    for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
+        rate_row = dict(
+            insurer_id=insurer_row["id"],
+            code_id=code_row["id"],
+            price_metadata_id=price_metadata_row["id"],
+            negotiated_rate=negotiated_rate,
+        )
 
-		rate_row = append_hash(rate_row, 'id')
-		rate_rows.append(rate_row)
+        rate_row = append_hash(rate_row, "id")
+        rate_rows.append(rate_row)
 
-	return rate_rows
+    return rate_rows
 
 
 def npi_rate_rows_from_mixed(
-	rate_rows: list[Row],
-	npi_list: list[str],
+    rate_rows: list[Row],
+    npi_list: list[str],
 ) -> list[Row]:
-	npi_rate_rows = []
+    npi_rate_rows = []
 
-	for rate_row, npi in itertools.product(rate_rows, npi_list):
-		npi_rate_row = dict(
-			rate_id = rate_row['id'],
-			npi = npi
-		)
-		npi_rate_rows.append(npi_rate_row)
+    for rate_row, npi in itertools.product(rate_rows, npi_list):
+        npi_rate_row = dict(rate_id=rate_row["id"], npi=npi)
+        npi_rate_rows.append(npi_rate_row)
 
-	return npi_rate_rows
+    return npi_rate_rows
 
 
 def write_in_network_item(
-	plan_metadata: dict,
-	file_id: str,
-	in_network_item: dict,
-	out_dir
+    plan_metadata: dict, file_id: str, in_network_item: dict, out_dir
 ) -> None:
 
-	code_row = code_row_from_dict(in_network_item)
-	write_table(code_row, 'code', out_dir)
+    code_row = code_row_from_dict(in_network_item)
+    write_table(code_row, "code", out_dir)
 
-	insurer_row = insurer_row_from_dict(plan_metadata)
+    insurer_row = insurer_row_from_dict(plan_metadata)
 
-	for rate in in_network_item['negotiated_rates']:
-		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
-		price_metadata_rows = [a[0] for a in price_metadata_combined_rows]
-		write_table(price_metadata_rows, 'price_metadata', out_dir)
+    for rate in in_network_item["negotiated_rates"]:
+        price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
+        price_metadata_rows = [a[0] for a in price_metadata_combined_rows]
+        write_table(price_metadata_rows, "price_metadata", out_dir)
 
-		rate_rows = rate_rows_from_mixed(
-			insurer_row = insurer_row,
-			code_row = code_row,
-			price_metadata_combined_rows = price_metadata_combined_rows,
-		)
-		write_table(rate_rows, 'rate', out_dir)
+        rate_rows = rate_rows_from_mixed(
+            insurer_row=insurer_row,
+            code_row=code_row,
+            price_metadata_combined_rows=price_metadata_combined_rows,
+        )
+        write_table(rate_rows, "rate", out_dir)
 
-		file_rate_rows = file_rate_rows_from_mixed(rate_rows, file_id)
-		write_table(file_rate_rows, 'file_rate', out_dir)
+        file_rate_rows = file_rate_rows_from_mixed(rate_rows, file_id)
+        write_table(file_rate_rows, "file_rate", out_dir)
 
-		# gather all the NPIs
-		groups = rate['provider_groups']
-		npi_set = set()
-		for group in groups:
-			sub_npi_list = group['npi']
-			for npi in sub_npi_list:
-				npi_set.add(npi)
-		npi_list = list(npi_set)
+        # gather all the NPIs
+        groups = rate["provider_groups"]
+        npi_set = set()
+        for group in groups:
+            sub_npi_list = group["npi"]
+            for npi in sub_npi_list:
+                npi_set.add(npi)
+        npi_list = list(npi_set)
 
-		npi_rate_rows = npi_rate_rows_from_mixed(
-			rate_rows = rate_rows,
-			npi_list = npi_list,
-		)
-		write_table(npi_rate_rows, 'npi_rate', out_dir)
+        npi_rate_rows = npi_rate_rows_from_mixed(
+            rate_rows=rate_rows,
+            npi_list=npi_list,
+        )
+        write_table(npi_rate_rows, "npi_rate", out_dir)
 
-	code_type = in_network_item['billing_code_type']
-	code = in_network_item['billing_code']
-	log.debug(f'Wrote {code_type} {code}')
+    code_type = in_network_item["billing_code_type"]
+    code = in_network_item["billing_code"]
+    log.debug(f"Wrote {code_type} {code}")
 
 
 def process_arr(func, arr, *args, **kwargs):
-	processed_arr = []
-	for item in arr:
-		if processed_item := func(item, *args, **kwargs):
-			processed_arr.append(processed_item)
-	return processed_arr
+    processed_arr = []
+    for item in arr:
+        if processed_item := func(item, *args, **kwargs):
+            processed_arr.append(processed_item)
+    return processed_arr
 
 
 def process_group(group: dict, npi_filter: set) -> dict | None:
-	group['npi'] = [str(n) for n in group['npi']]
-	if not npi_filter:
-		return group
+    group["npi"] = [str(n) for n in group["npi"]]
+    if not npi_filter:
+        return group
 
-	group['npi'] = [n for n in group['npi'] if n in npi_filter]
-	if not group['npi']:
-		return
+    group["npi"] = [n for n in group["npi"] if n in npi_filter]
+    if not group["npi"]:
+        return
 
-	return group
+    return group
+
 
 process_groups = partial(process_arr, process_group)
 
 
 def process_reference(reference: dict, npi_filter: set) -> dict | None:
-	groups = process_groups(reference['provider_groups'], npi_filter)
-	if groups:
-		reference['provider_groups'] = groups
-		return reference
+    groups = process_groups(reference["provider_groups"], npi_filter)
+    if groups:
+        reference["provider_groups"] = groups
+        return reference
 
 
 def process_in_network(in_network_items: Generator, npi_filter: set) -> Generator:
-	for in_network_item in in_network_items:
-		rates = process_rates(in_network_item['negotiated_rates'], npi_filter)
-		if rates:
-			in_network_item['negotiated_rates'] = rates
-			yield in_network_item
+    for in_network_item in in_network_items:
+        rates = process_rates(in_network_item["negotiated_rates"], npi_filter)
+        if rates:
+            in_network_item["negotiated_rates"] = rates
+            yield in_network_item
 
 
 def process_rate(rate: dict, npi_filter: set) -> dict | None:
-	# Will not work if references haven't been swapped out yet
-	assert rate.get('provider_references') is None
-	groups = process_groups(rate['provider_groups'], npi_filter)
-	if not groups:
-		return
+    # Will not work if references haven't been swapped out yet
+    assert rate.get("provider_references") is None
+    groups = process_groups(rate["provider_groups"], npi_filter)
+    if not groups:
+        return
 
-	rate['provider_groups'] = groups
+    rate["provider_groups"] = groups
 
-	prices = []
-	for price in rate['negotiated_prices']:
-		if price['negotiated_type'] == 'negotiated':
-			prices.append(price)
+    prices = []
+    for price in rate["negotiated_prices"]:
+        if price["negotiated_type"] == "negotiated":
+            prices.append(price)
 
-	if not prices:
-		return
+    if not prices:
+        return
 
-	rate['negotiated_prices'] = prices
-	return rate
+    rate["negotiated_prices"] = prices
+    return rate
+
 
 process_rates = partial(process_arr, process_rate)
 
 # TODO simplify
 def ffwd(
-	parser: Generator,
-	to_prefix,
-	to_event = None,
-	to_value = None,
+    parser: Generator,
+    to_prefix,
+    to_event=None,
+    to_value=None,
 ) -> None:
-	# Must have at least one of these arguments selected
-	assert not all(arg is None for arg in (to_event, to_value))
+    # Must have at least one of these arguments selected
+    assert not all(arg is None for arg in (to_event, to_value))
 
-	if to_value is None:
-		for prefix, event, _ in parser:
-			if prefix == to_prefix and event == to_event:
-				break
-		else:
-			raise StopIteration
+    if to_value is None:
+        for prefix, event, _ in parser:
+            if prefix == to_prefix and event == to_event:
+                break
+        else:
+            raise StopIteration
 
-	elif to_event is None:
-		for prefix, _, value in parser:
-			if prefix == to_prefix and value == to_value:
-				break
-		else:
-			raise StopIteration
-	else:
-		raise NotImplementedError
+    elif to_event is None:
+        for prefix, _, value in parser:
+            if prefix == to_prefix and value == to_value:
+                break
+        else:
+            raise StopIteration
+    else:
+        raise NotImplementedError
 
 
 def gen_in_network_items(
-	parser: Generator,
-	code_filter: set,
+    parser: Generator,
+    code_filter: set,
 ) -> Generator:
-	builder = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
+    builder = ijson.ObjectBuilder()
+    for prefix, event, value in parser:
 
-		if type(value) == str:
-			value = value.strip()
-			if value == '':
-				value = None
+        if type(value) == str:
+            value = value.strip()
+            if value == "":
+                value = None
 
-		builder.event(event, value)
+        builder.event(event, value)
 
-		# This line can be commented out! but it's faster with it in
-		if hasattr(builder, 'value') and len(builder.value) > 0:
-			skip_item_by_code(parser, builder, code_filter)
+        # This line can be commented out! but it's faster with it in
+        if hasattr(builder, "value") and len(builder.value) > 0:
+            skip_item_by_code(parser, builder, code_filter)
 
-		if (prefix, event) == ('in_network.item', 'end_map'):
-			in_network_item = builder.value.pop()
-			yield in_network_item
+        if (prefix, event) == ("in_network.item", "end_map"):
+            in_network_item = builder.value.pop()
+            yield in_network_item
 
-		elif (prefix, event) == ('in_network', 'end_array'):
-			return
+        elif (prefix, event) == ("in_network", "end_array"):
+            return
 
 
 def gen_references(parser: Generator) -> Generator:
 
-	builder = ijson.ObjectBuilder()
-	# builder.event('start_array', None)
+    builder = ijson.ObjectBuilder()
+    # builder.event('start_array', None)
 
-	for prefix, event, value in parser:
-		builder.event(event, value)
-		if (prefix, event) == ('provider_references.item', 'end_map'):
-			reference = builder.value.pop()
-			yield reference
+    for prefix, event, value in parser:
+        builder.event(event, value)
+        if (prefix, event) == ("provider_references.item", "end_map"):
+            reference = builder.value.pop()
+            yield reference
 
-		elif (prefix, event) == ('provider_references', 'end_array'):
-			return
+        elif (prefix, event) == ("provider_references", "end_array"):
+            return
 
 
 def skip_item_by_code(
-	parser: Generator,
-	builder: ijson.ObjectBuilder,
-	code_filter: set,
+    parser: Generator,
+    builder: ijson.ObjectBuilder,
+    code_filter: set,
 ):
-	"""
-	This stops us from having to build in-network objects (which are large)
-	when their billing codes or arrangement don't fit the filter. It's kind of a
-	hack which is why I bundled these changes into one function.
-	"""
-	item = builder.value[-1]
-	code_type = item.get('billing_code_type')
-	code = item.get('billing_code')
+    """
+    This stops us from having to build in-network objects (which are large)
+    when their billing codes or arrangement don't fit the filter. It's kind of a
+    hack which is why I bundled these changes into one function.
+    """
+    item = builder.value[-1]
+    code_type = item.get("billing_code_type")
+    code = item.get("billing_code")
 
-	if code and code_type and code_filter:
-		if (code_type, str(code)) not in code_filter:
-			log.debug(f'Skipping {code_type} {code}: filtered out')
-			ffwd(parser, to_prefix='in_network.item', to_event='end_map')
-			builder.value.pop()
-			builder.containers.pop()
-			return
+    if code and code_type and code_filter:
+        if (code_type, str(code)) not in code_filter:
+            log.debug(f"Skipping {code_type} {code}: filtered out")
+            ffwd(parser, to_prefix="in_network.item", to_event="end_map")
+            builder.value.pop()
+            builder.containers.pop()
+            return
 
-	arrangement = item.get('negotiation_arrangement')
-	if arrangement and arrangement != 'ffs':
-		log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
-		ffwd(parser, to_prefix='in_network.item', to_event='end_map')
-		builder.value.pop()
-		builder.containers.pop()
-		return
+    arrangement = item.get("negotiation_arrangement")
+    if arrangement and arrangement != "ffs":
+        log.debug(f"Skipping item: arrangement: {arrangement} not 'ffs'")
+        ffwd(parser, to_prefix="in_network.item", to_event="end_map")
+        builder.value.pop()
+        builder.containers.pop()
+        return
 
 
 async def fetch_remote_reference(
-	session: aiohttp.client.ClientSession,
-	url: str,
+    session: aiohttp.client.ClientSession,
+    url: str,
 ):
-	response = await session.get(url)
-	assert response.status == 200
+    response = await session.get(url)
+    assert response.status == 200
 
-	log.debug(f'Opened remote provider reference: {url}')
+    log.debug(f"Opened remote provider reference: {url}")
 
-	data = await response.read()
-	reference = json.loads(data)
-	return reference
+    data = await response.read()
+    reference = json.loads(data)
+    return reference
 
 
 # TODO I hate this function name
 # and think this needs to be broken down into
 # smaller funcs
 async def append_processed_remote_reference(
-	queue: asyncio.Queue,
-	processed_references: list[dict],
-	npi_filter: set,
+    queue: asyncio.Queue,
+    processed_references: list[dict],
+    npi_filter: set,
 ):
-	while True:
-		try:
-			# Get a "work item" out of the queue.
-			session, url, group_id = await queue.get()
+    while True:
+        try:
+            # Get a "work item" out of the queue.
+            session, url, group_id = await queue.get()
 
-			reference = await fetch_remote_reference(session, url)
-			reference['provider_group_id'] = group_id
-			reference = process_reference(reference, npi_filter)
+            reference = await fetch_remote_reference(session, url)
+            reference["provider_group_id"] = group_id
+            reference = process_reference(reference, npi_filter)
 
-			if reference:
-				processed_references.append(reference)
+            if reference:
+                processed_references.append(reference)
 
-		except AssertionError:
-			# Response status was 404 or something
-			log.debug(f'Encountered bad response status')
-		finally:
-			# Notify the queue that the "work item" has been processed.
-			queue.task_done()
+        except AssertionError:
+            # Response status was 404 or something
+            log.debug(f"Encountered bad response status")
+        finally:
+            # Notify the queue that the "work item" has been processed.
+            queue.task_done()
 
 
 # TODO simplify
-async def make_reference_map(
-	references: Generator,
-	npi_filter: set
-):
-	"""
-	Processes all provider references and return a map like:
-	{
-		1: [group1, group2, ...],
-		2: [group1, group2, ...],
-	}
-	where each provider group has been filtered to only contain
-	the NPIs contained in `npi_filter`.
-	"""
-	# Create a queue that we will use to store our "workload".
-	queue: asyncio.Queue = asyncio.Queue()
+async def make_reference_map(references: Generator, npi_filter: set):
+    """
+    Processes all provider references and return a map like:
+    {
+            1: [group1, group2, ...],
+            2: [group1, group2, ...],
+    }
+    where each provider group has been filtered to only contain
+    the NPIs contained in `npi_filter`.
+    """
+    # Create a queue that we will use to store our "workload".
+    queue: asyncio.Queue = asyncio.Queue()
 
-	# Tasks hold the consumers. reference is appended to
-	# by consumers and by the main loop of this function
-	tasks = []
-	processed_references: list[dict] = []
+    # Tasks hold the consumers. reference is appended to
+    # by consumers and by the main loop of this function
+    tasks = []
+    processed_references: list[dict] = []
 
-	for i in range(200):
-		coro = append_processed_remote_reference(queue, processed_references, npi_filter)
-		task = asyncio.create_task(coro)
-		tasks.append(task)
+    for i in range(200):
+        coro = append_processed_remote_reference(
+            queue, processed_references, npi_filter
+        )
+        task = asyncio.create_task(coro)
+        tasks.append(task)
 
-	async with aiohttp.client.ClientSession() as session:
-		for reference in references:
-			if url := reference.get('location'):
-				group_id = reference['provider_group_id']
-				queue.put_nowait((session, url, group_id))
-				continue
+    async with aiohttp.client.ClientSession() as session:
+        for reference in references:
+            if url := reference.get("location"):
+                group_id = reference["provider_group_id"]
+                queue.put_nowait((session, url, group_id))
+                continue
 
-			reference = process_reference(reference, npi_filter)
-			if reference:
-				processed_references.append(reference)
+            reference = process_reference(reference, npi_filter)
+            if reference:
+                processed_references.append(reference)
 
-		# Block until all items in the queue have been received and processed
-		await queue.join()
+        # Block until all items in the queue have been received and processed
+        await queue.join()
 
-	# To understand why this sleep is here, see:
-	# https://docs.aiohttp.org/en/stable/client_advanced.html#graceful-shutdown
-	await asyncio.sleep(.250)
+    # To understand why this sleep is here, see:
+    # https://docs.aiohttp.org/en/stable/client_advanced.html#graceful-shutdown
+    await asyncio.sleep(0.250)
 
-	# Cancel our worker tasks
-	for task in tasks:
-		task.cancel()
+    # Cancel our worker tasks
+    for task in tasks:
+        task.cancel()
 
-	# Wait until all worker tasks are cancelled.
-	await asyncio.gather(*tasks, return_exceptions=True)
+    # Wait until all worker tasks are cancelled.
+    await asyncio.gather(*tasks, return_exceptions=True)
 
-	reference_map = {
-		reference['provider_group_id']: reference['provider_groups']
-		for reference in processed_references
-	}
-	return reference_map
+    reference_map = {
+        reference["provider_group_id"]: reference["provider_groups"]
+        for reference in processed_references
+    }
+    return reference_map
 
 
 async def _get_reference_map(parser, npi_filter) -> dict | None:
-	"""Possible file structures.
-	1. {    ...
-		'provider_references': <-- here (most common)
-		'in_network': ...
-	}
-	2. {    ...
-		'in_network': ...
-		'provider_references': <-- here (rarely)
-	}
-	3. {    ...
-		'in_network': ...
-	} (aka nowhere, semi-common)
+    """Possible file structures.
+    1. {    ...
+            'provider_references': <-- here (most common)
+            'in_network': ...
+    }
+    2. {    ...
+            'in_network': ...
+            'provider_references': <-- here (rarely)
+    }
+    3. {    ...
+            'in_network': ...
+    } (aka nowhere, semi-common)
 
-	This function checks the MRF in order (1, 2, 3). First we look for
-	case (1). If we don't find it, we try case (2), and if we hit a
-	StopIteration, we know we have case (3).
-	"""
-	# Case (1)`
-	next_, parser = peek(parser)
-	if next_ == ('provider_references', 'start_array', None):
-		references = gen_references(parser)
-		return await make_reference_map(references, npi_filter)
-	try:
-		# Case (2)
-		ffwd(parser, to_prefix='', to_value='provider_references')
-	except StopIteration:
-		# StopIteration -> they don't exist (3)
-		return None
-	else:
-		# Collect them (ends on ('', 'end_map', None))
-		references = gen_references(parser)
-		return await make_reference_map(references, npi_filter)
+    This function checks the MRF in order (1, 2, 3). First we look for
+    case (1). If we don't find it, we try case (2), and if we hit a
+    StopIteration, we know we have case (3).
+    """
+    # Case (1)`
+    next_, parser = peek(parser)
+    if next_ == ("provider_references", "start_array", None):
+        references = gen_references(parser)
+        return await make_reference_map(references, npi_filter)
+    try:
+        # Case (2)
+        ffwd(parser, to_prefix="", to_value="provider_references")
+    except StopIteration:
+        # StopIteration -> they don't exist (3)
+        return None
+    else:
+        # Collect them (ends on ('', 'end_map', None))
+        references = gen_references(parser)
+        return await make_reference_map(references, npi_filter)
 
 
 def get_reference_map(parser, npi_filter):
-	"""Wrapper to turn _get_reference_map into a sync function"""
-	return asyncio.run(_get_reference_map(parser, npi_filter))
+    """Wrapper to turn _get_reference_map into a sync function"""
+    return asyncio.run(_get_reference_map(parser, npi_filter))
 
 
 def swap_references(
-	in_network_items: Generator,
-	reference_map: dict,
+    in_network_items: Generator,
+    reference_map: dict,
 ) -> Generator:
-	"""Takes the provider reference ID in the rate
-	and replaces it with the corresponding provider
-	groups from reference_map"""
+    """Takes the provider reference ID in the rate
+    and replaces it with the corresponding provider
+    groups from reference_map"""
 
-	if reference_map is None:
-		yield from in_network_items
-		return
+    if reference_map is None:
+        yield from in_network_items
+        return
 
-	for item in in_network_items:
-		rates = item['negotiated_rates']
-		for rate in rates:
-			references = rate.get('provider_references')
-			if not references:
-				continue
-			groups = rate.get('provider_groups', [])
-			for reference in references:
-				addl_groups = reference_map.get(reference, [])
-				groups.extend(addl_groups)
-			rate.pop('provider_references')
-			rate['provider_groups'] = groups
+    for item in in_network_items:
+        rates = item["negotiated_rates"]
+        for rate in rates:
+            references = rate.get("provider_references")
+            if not references:
+                continue
+            groups = rate.get("provider_groups", [])
+            for reference in references:
+                addl_groups = reference_map.get(reference, [])
+                groups.extend(addl_groups)
+            rate.pop("provider_references")
+            rate["provider_groups"] = groups
 
-		item['negotiated_rates'] = [rate for rate in rates if rate.get('provider_groups')]
+        item["negotiated_rates"] = [
+            rate for rate in rates if rate.get("provider_groups")
+        ]
 
-		if item['negotiated_rates']:
-			yield item
+        if item["negotiated_rates"]:
+            yield item
 
 
 def start_parser(filename) -> Generator:
-	with JSONOpen(filename) as f:
-		yield from ijson.parse(f, use_float = True)
+    with JSONOpen(filename) as f:
+        yield from ijson.parse(f, use_float=True)
 
 
 def get_plan(parser) -> dict:
-	builder = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
-		builder.event(event, value)
-		if value in ('provider_references', 'in_network'):
-			return builder.value
-	else:
-		raise InvalidMRF
+    builder = ijson.ObjectBuilder()
+    for prefix, event, value in parser:
+        builder.event(event, value)
+        if value in ("provider_references", "in_network"):
+            return builder.value
+    else:
+        raise InvalidMRF
 
 
 class Content:
+    def __init__(self, file, code_filter, npi_filter):
+        self.file = file
+        self.npi_filter = npi_filter
+        self.code_filter = code_filter
 
-	def __init__(self, file, code_filter, npi_filter):
-		self.file        = file
-		self.npi_filter  = npi_filter
-		self.code_filter = code_filter
+    def start_conn(self):
+        self.parser = start_parser(self.file)
+        self.plan_metadata = get_plan(self.parser)
+        self.ref_map = get_reference_map(self.parser, self.npi_filter)
 
-	def start_conn(self):
-		self.parser  = start_parser(self.file)
-		self.plan_metadata    = get_plan(self.parser)
-		self.ref_map = get_reference_map(self.parser, self.npi_filter)
+    def prepare_in_network(self):
+        next_, parser = peek(self.parser)
+        if next_ in [("", "end_map", None), None]:
+            self.parser = start_parser(self.file)
+            ffwd(self.parser, to_prefix="", to_value="in_network")
 
-	def prepare_in_network(self):
-		next_, parser = peek(self.parser)
-		if next_ in [('', 'end_map', None), None]:
-			self.parser = start_parser(self.file)
-			ffwd(self.parser, to_prefix='', to_value='in_network')
-
-	def in_network_items(self) -> Generator:
-		self.prepare_in_network()
-		filtered_items = gen_in_network_items(self.parser, self.code_filter)
-		swapped_items  = swap_references(filtered_items, self.ref_map)
-		return process_in_network(swapped_items, self.npi_filter)
+    def in_network_items(self) -> Generator:
+        self.prepare_in_network()
+        filtered_items = gen_in_network_items(self.parser, self.code_filter)
+        swapped_items = swap_references(filtered_items, self.ref_map)
+        return process_in_network(swapped_items, self.npi_filter)
 
 
 def json_mrf_to_csv(
-	url: str,
-	out_dir: str,
-	file:        str | None = None,
-	code_filter: set | None = None,
-	npi_filter:  set | None = None,
+    url: str,
+    out_dir: str,
+    file: str | None = None,
+    code_filter: set | None = None,
+    npi_filter: set | None = None,
 ) -> None:
-	"""
-	Writes MRF content to a flat file CSV in a specific schema.
-	The filename parameter is optional. If you only pass a URL we assume
-	that it's a remote file. If you pass a filename, you must also pass a URL.
+    """
+    Writes MRF content to a flat file CSV in a specific schema.
+    The filename parameter is optional. If you only pass a URL we assume
+    that it's a remote file. If you pass a filename, you must also pass a URL.
 
-	As of 1/2/2023 the filename is extracted from the URL, so this
-	isn't an optional parameter.
-	"""
-	assert url is not None
+    As of 1/2/2023 the filename is extracted from the URL, so this
+    isn't an optional parameter.
+    """
+    assert url is not None
 
-	if file is None:
-		file = url
+    if file is None:
+        file = url
 
-	filename = extract_filename_from_url(url)
+    filename = extract_filename_from_url(url)
 
-	# Explicitly make this variable up-front since both sets of tables
-	# are linked by it (in_network and plan tables)
+    # Explicitly make this variable up-front since both sets of tables
+    # are linked by it (in_network and plan tables)
 
-	content = Content(file, code_filter, npi_filter)
-	content.start_conn()
-	plan_metadata = content.plan_metadata
+    content = Content(file, code_filter, npi_filter)
+    content.start_conn()
+    plan_metadata = content.plan_metadata
 
-	file_row = file_row_from_mixed(plan_metadata, url)
-	file_id  = file_row['id']
+    file_row = file_row_from_mixed(plan_metadata, url)
+    file_id = file_row["id"]
 
-	make_dir(out_dir)
+    make_dir(out_dir)
 
-	processed_items = content.in_network_items()
-	for item in processed_items:
-		write_in_network_item(plan_metadata, file_id, item, out_dir)
+    processed_items = content.in_network_items()
+    for item in processed_items:
+        write_in_network_item(plan_metadata, file_id, item, out_dir)
 
-	write_file(plan_metadata, url, out_dir)
-	write_insurer(plan_metadata, out_dir)
+    write_file(plan_metadata, url, out_dir)
+    write_insurer(plan_metadata, out_dir)

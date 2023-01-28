@@ -14,15 +14,15 @@ from helpers import import_csv_to_set
 from mrfutils import json_mrf_to_csv
 
 logging.basicConfig()
-log = logging.getLogger('mrfutils')
+log = logging.getLogger("mrfutils")
 log.setLevel(logging.DEBUG)
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-f', '--file')
-parser.add_argument('-u', '--url')
-parser.add_argument('-o', '--out', default = 'csv_output')
-parser.add_argument('-c', '--codes')
-parser.add_argument('-n', '--npis')
+parser.add_argument("-f", "--file")
+parser.add_argument("-u", "--url")
+parser.add_argument("-o", "--out", default="csv_output")
+parser.add_argument("-c", "--codes")
+parser.add_argument("-n", "--npis")
 
 args = parser.parse_args()
 
@@ -40,9 +40,9 @@ else:
     npi_filter = None
 
 json_mrf_to_csv(
-    file = args.file,
-    url = args.url,
-    npi_filter = npi_filter,
-    code_filter = code_filter,
-    out_dir = out_dir
+    file=args.file,
+    url=args.url,
+    npi_filter=npi_filter,
+    code_filter=code_filter,
+    out_dir=out_dir,
 )

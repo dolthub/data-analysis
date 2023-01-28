@@ -13,9 +13,13 @@ urls = []
 
 # Get the list of in-network files from Kaiser's page
 # Capture only the negotiated rates files (ignore table of contents and allowed amounts files)
-resp = requests.get("https://healthy.kaiserpermanente.org/pricing/innetwork/2022-08_List.txt")
+resp = requests.get(
+    "https://healthy.kaiserpermanente.org/pricing/innetwork/2022-08_List.txt"
+)
 for line in resp.text.split("\n"):
-    url = "https://healthy.kaiserpermanente.org/pricing/innetwork" + line.split("  ")[0].strip().replace(" ", "")
+    url = "https://healthy.kaiserpermanente.org/pricing/innetwork" + line.split("  ")[
+        0
+    ].strip().replace(" ", "")
     print(url)
     if "in-network-rates" in url:
         urls.append(url)
@@ -23,12 +27,13 @@ for line in resp.text.split("\n"):
     elif "KPWA_FILE" in url:
         urls.append(url)
 
+
 async def fetch_url_sizes(table, urls):
     """
     Simple async function for getting all the file sizes in a list of urls
     and writing those to a SQLite table
     """
-    
+
     session = aiohttp.ClientSession()
     fs = [session.head(url) for url in urls]
 
@@ -38,10 +43,11 @@ async def fetch_url_sizes(table, urls):
         size = int(resp.headers.get("content-length", -1))
         cur.execute(f"""INSERT OR IGNORE INTO {table} VALUES ("{url}", {size})""")
         con.commit()
-        
+
     await session.close()
 
-print("Fetching URLs and their sizes...")    
+
+print("Fetching URLs and their sizes...")
 asyncio.run(fetch_url_sizes("in_network_files", urls))
 total = cur.execute("SELECT SUM(size) FROM in_network_files").fetchone()[0]
 
