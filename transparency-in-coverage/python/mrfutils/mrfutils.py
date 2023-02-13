@@ -43,7 +43,6 @@ that you can track your depth in the JSON tree.
 from __future__ import annotations
 
 import asyncio
-from functools import partial
 import itertools
 from typing import Generator
 
@@ -55,7 +54,7 @@ from schema.schema import SCHEMA
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9/3.10
-# Install on Mac with
+# install on Mac with
 # brew install yajl
 # or comment out this line!
 assert ijson.backend in ('yajl2_c', 'yajl2_cffi')
@@ -67,39 +66,40 @@ log.setLevel(logging.DEBUG)
 # To distinguish data from rows
 Row = dict
 
+# TODO handle npi_set and code_set in a custom data class
+
 
 def extract_filename_from_url(url: str) -> str:
 	return Path(url).stem.split('.')[0]
 
 
 def write_table(
-	rows: list[Row] | Row,
-	tablename: str,
+	row_data: list[Row] | Row,
+	table_name: str,
 	out_dir: str,
 ) -> None:
 
-	fieldnames = SCHEMA[tablename]
-	file_loc = f'{out_dir}/{tablename}.csv'
+	fieldnames = SCHEMA[table_name]
+	file_loc = f'{out_dir}/{table_name}.csv'
 	file_exists = os.path.exists(file_loc)
 
 	# newline = '' is to prevent Windows
 	# from adding \r\n\n to the end of each line
-	with open(file_loc, 'a', newline='') as f:
+	with open(file_loc, 'a', newline = '') as f:
 		writer = csv.DictWriter(f, fieldnames=fieldnames)
 
 		if not file_exists:
 			writer.writeheader()
 
-		if type(rows) == list:
-			writer.writerows(rows)
+		if isinstance(row_data, list):
+			writer.writerows(row_data)
 
-		if type(rows) == dict:
-			row = rows
-			writer.writerow(row)
+		elif isinstance(row_data, dict):
+			writer.writerow(row_data)
 
 
 def file_row_from_mixed(
-	plan: dict,
+	plan_data: dict,
 	url: str
 ) -> Row:
 
@@ -107,7 +107,7 @@ def file_row_from_mixed(
 
 	file_row = dict(
 		filename = filename,
-		last_updated_on = plan['last_updated_on']
+		last_updated_on = plan_data['last_updated_on']
 	)
 
 	file_row = append_hash(file_row, 'id')
@@ -128,14 +128,14 @@ def write_file(
 	write_table(file_row, 'file', out_dir)
 
 
-def insurer_row_from_dict(plan_item: dict) -> Row:
+def insurer_row_from_dict(plan_data: dict) -> Row:
 
 	keys = [
 		'reporting_entity_name',
 		'reporting_entity_type',
 	]
 
-	insurer_row = {key : plan_item[key] for key in keys}
+	insurer_row = {key : plan_data[key] for key in keys}
 	insurer_row = append_hash(insurer_row, 'id')
 
 	return insurer_row
@@ -158,6 +158,10 @@ def code_row_from_dict(in_network_item: dict) -> Row:
 		'billing_code',
 	]
 
+	# We use .get instead of [] because sometimes
+	# the insurance companies use improperly formatted files!
+	# ideally, because these fields aren't optional, we should do
+	# in_network_item[key]
 	code_row = {key : in_network_item.get(key) for key in keys}
 	code_row = append_hash(code_row, 'id')
 
@@ -288,11 +292,7 @@ def write_in_network_item(
 
 		# gather all the NPIs
 		groups = rate['provider_groups']
-		npi_set = set()
-		for group in groups:
-			sub_npi_list = group['npi']
-			for npi in sub_npi_list:
-				npi_set.add(npi)
+		npi_set = {npi for group in groups for npi in group['npi']}
 		npi_list = list(npi_set)
 
 		npi_rate_rows = npi_rate_rows_from_mixed(
@@ -325,7 +325,13 @@ def process_group(group: dict, npi_filter: set) -> dict | None:
 
 	return group
 
-process_groups = partial(process_arr, process_group)
+
+def process_groups(groups: list[dict], npi_filter: set) -> list[dict] | None:
+	processed_arr = []
+	for group in groups:
+		if processed_item := process_group(group, npi_filter):
+			processed_arr.append(processed_item)
+	return processed_arr
 
 
 def process_reference(reference: dict, npi_filter: set) -> dict | None:
@@ -347,6 +353,7 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 	# Will not work if references haven't been swapped out yet
 	assert rate.get('provider_references') is None
 	groups = process_groups(rate['provider_groups'], npi_filter)
+
 	if not groups:
 		return
 
@@ -363,7 +370,14 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 	rate['negotiated_prices'] = prices
 	return rate
 
-process_rates = partial(process_arr, process_rate)
+
+def process_rates(rates: list[dict], npi_filter: set) -> list[dict] | None:
+	processed_arr = []
+	for rate in rates:
+		if processed_item := process_rate(rate, npi_filter):
+			processed_arr.append(processed_item)
+	return processed_arr
+
 
 # TODO simplify
 def ffwd(
@@ -421,7 +435,6 @@ def gen_in_network_items(
 def gen_references(parser: Generator) -> Generator:
 
 	builder = ijson.ObjectBuilder()
-	# builder.event('start_array', None)
 
 	for prefix, event, value in parser:
 		builder.event(event, value)
@@ -659,8 +672,8 @@ class Content:
 		self.code_filter = code_filter
 
 	def start_conn(self):
-		self.parser  = start_parser(self.file)
-		self.plan_metadata    = get_plan(self.parser)
+		self.parser = start_parser(self.file)
+		self.plan_metadata = get_plan(self.parser)
 		self.ref_map = get_reference_map(self.parser, self.npi_filter)
 
 	def prepare_in_network(self):
