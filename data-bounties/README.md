@@ -57,3 +57,15 @@ To keep your branches from being dependent on each other, check out main in betw
 1. `(branch: my_second_branch) dolt table import -u <table> <your-new-data.csv>`
 
 and so on.
+
+## Staying up to date with the main bounty repo
+
+If we make changes to the bounty repo and you have an existing fork, doing `dolt pull` won't get those changes into your local copy. It'll just pull in the changes from your own fork, which doesn't have the changes from the bounty repo.
+
+Here's an easy way to get those changes. 
+
+1. Find the last common ancestor you have with the bounty repo. Copy the commit hash. Usually it's the commit that's labeled "initialize data repository"
+1. do `dolt reset --hard {commit hash}`
+1. `dolt add remote dolthub dolthub/{repo-name}`
+1. `dolt pull dolthub main` (this will add those changes to your repo)
+1. `dolt push origin main -f` (force push the changes to your remote copy)
