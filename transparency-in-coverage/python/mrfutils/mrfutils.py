@@ -68,10 +68,8 @@ Row = dict
 
 # TODO handle npi_set and code_set in a custom data class
 
-
 def extract_filename_from_url(url: str) -> str:
 	return Path(url).stem.split('.')[0]
-
 
 def write_table(
 	row_data: list[Row] | Row,
@@ -192,7 +190,11 @@ def price_metadata_price_tuple_from_dict(
 		if price_item.get(key):
 			price_item[key] = [value for value in price_item[key] if value is not None]
 			sorted_value = sorted(price_item[key])
-			price_metadata_row[key] = json.dumps(sorted_value)
+			if not sorted_value:
+				# [] should resove to None in the database
+				price_metadata_row[key] = None
+			else:
+				price_metadata_row[key] = json.dumps(sorted_value)
 
 	price_metadata_row = append_hash(price_metadata_row, 'id')
 	negotiated_rate = price_item['negotiated_rate']
@@ -361,7 +363,7 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 
 	prices = []
 	for price in rate['negotiated_prices']:
-		if price['negotiated_type'] == 'negotiated':
+		if price['negotiated_type'] in ('negotiated', 'fee_schedule'):
 			prices.append(price)
 
 	if not prices:
@@ -513,7 +515,7 @@ async def append_processed_remote_reference(
 
 		except AssertionError:
 			# Response status was 404 or something
-			log.debug(f'Encountered bad response status')
+			log.debug('Encountered bad response status')
 		finally:
 			# Notify the queue that the "work item" has been processed.
 			queue.task_done()
@@ -709,7 +711,7 @@ def json_mrf_to_csv(
 	if file is None:
 		file = url
 
-	filename = extract_filename_from_url(url)
+	# filename = extract_filename_from_url(url)
 
 	# Explicitly make this variable up-front since both sets of tables
 	# are linked by it (in_network and plan tables)

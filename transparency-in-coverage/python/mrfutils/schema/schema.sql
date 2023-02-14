@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS price_metadata (
     id BIGINT UNSIGNED,
     billing_class ENUM("professional", "institutional") COLLATE utf8mb4_general_ci,
 --    negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8mb4_general_ci,
+    negotiated_type ENUM("negotiated", "fee schedule") COLLATE utf8mb4_general_ci,
     service_code JSON,
     expiration_date VARCHAR(20),
     additional_information TEXT,

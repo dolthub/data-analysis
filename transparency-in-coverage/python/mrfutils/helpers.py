@@ -55,14 +55,17 @@ class JSONOpen:
 		self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
 		if self.suffix not in ('.json.gz', '.json'):
-			raise InvalidMRF(f'Suffix not JSON: {self.filename}')
+			raise InvalidMRF(f'Suffix not JSON: {self.filename=} {self.suffix=}')
 
 		self.is_remote = parsed_url.scheme in ('http', 'https')
 
 	def __enter__(self):
 		if (
 			self.is_remote
-			and self.suffix == '.json.gz'
+			# endswith is used to protect against the case
+			# where the filename contains lots of dots
+			# insurer.stuff.json.gz
+			and self.suffix.endswith('.json.gz')
 		):
 			self.s = requests.Session()
 			self.r = self.s.get(self.filename, stream=True)
@@ -70,7 +73,7 @@ class JSONOpen:
 
 		elif (
 			self.is_remote
-			and self.suffix == '.json'
+			and self.suffix.endswith('.json')
 		):
 			self.s = requests.Session()
 			self.r = self.s.get(self.filename, stream=True)
