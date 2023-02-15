@@ -221,18 +221,18 @@ def tin_rate_file_rows_from_mixed(
 	rate_ids = [row['id'] for row in rate_rows]
 	tin_ids = [row['id'] for row in tin_rows]
 
-	file_tin_rate_rows = []
+	tin_rate_file_rows = []
 
 	for rate_id, tin_id in itertools.product(rate_ids, tin_ids):
-		file_tin_rate_row = Row(
-			file_id = file_id,
-			rate_id = rate_id,
+		tin_rate_file_row = Row(
 			tin_id = tin_id,
+			rate_id = rate_id,
+			file_id = file_id,
 		)
 
-		file_tin_rate_rows.append(file_tin_rate_row)
+		tin_rate_file_rows.append(tin_rate_file_row)
 
-	return file_tin_rate_rows
+	return tin_rate_file_rows
 
 
 def rate_rows_from_mixed(
