@@ -38,8 +38,8 @@ SCHEMA = {
         "tin_value",
     ],
     "tin_rate_file": [
-        "rate_id",
         "tin_id",
+        "rate_id",
         "file_id",
     ],
     "npi_tin": [

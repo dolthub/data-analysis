@@ -213,8 +213,8 @@ def price_metadata_combined_rows_from_dict(rate: dict) -> list[tuple[Row, float]
 
 
 def tin_rate_file_rows_from_mixed(
-	rate_rows: list[Row],
 	tin_rows: list[Row],
+	rate_rows: list[Row],
 	file_id: str,
 ) -> list[Row]:
 
