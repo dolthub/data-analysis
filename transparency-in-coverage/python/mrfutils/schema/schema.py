@@ -36,8 +36,17 @@ SCHEMA = {
         "price_metadata_id",
         "negotiated_rate",
     ],
-    "npi_rate": [
-        "rate_id",
-        "npi",
+    "tin": [
+        "id",
+        "tin_type",
+        "tin_value",
     ],
+    "tin_rate": [
+        "rate_id",
+        "tin_id",
+    ],
+    "npi_tin": [
+        "npi",
+        "tin_id",
+    ]
 }

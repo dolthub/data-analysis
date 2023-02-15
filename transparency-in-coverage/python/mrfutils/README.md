@@ -85,7 +85,7 @@ and `npis.csv`
 and so on. To run, first pick an `in-network-rates.json` file, and then do:
 
 ```bash
-python3 example_cli.py --url <url> --out <output_dir> --codes <code_file_location> --npis <npi_file_location>
+python3 example_cli.py --url <url> --out-dir <output_dir> --code-file <code_file_location> --npi-file <npi_file_location>
 ```
 
 where the flags are

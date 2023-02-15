@@ -20,22 +20,22 @@ log.setLevel(logging.DEBUG)
 parser = argparse.ArgumentParser()
 parser.add_argument('-f', '--file')
 parser.add_argument('-u', '--url')
-parser.add_argument('-o', '--out', default = 'csv_output')
-parser.add_argument('-c', '--codes')
-parser.add_argument('-n', '--npis')
+parser.add_argument('-o', '--out-dir', default = 'csv_output')
+parser.add_argument('-c', '--code-file')
+parser.add_argument('-n', '--npi-file')
 
 args = parser.parse_args()
 
 url = args.url
-out_dir = args.out
+out_dir = args.out_dir
 
-if args.codes:
-    code_filter = import_csv_to_set(args.codes)
+if args.code_file:
+    code_filter = import_csv_to_set(args.code_file)
 else:
     code_filter = None
 
-if args.npis:
-    npi_filter = import_csv_to_set(args.npis)
+if args.npi_file:
+    npi_filter = import_csv_to_set(args.npi_file)
 else:
     npi_filter = None
 

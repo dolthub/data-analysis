@@ -220,7 +220,7 @@ def file_rate_rows_from_mixed(
 	rate_ids = [row['id'] for row in rate_rows]
 
 	file_rate_rows = [
-		dict(file_id = file_id, rate_id = rate_id)
+		Row(file_id = file_id, rate_id = rate_id)
 		for rate_id in rate_ids
 	]
 
@@ -236,7 +236,7 @@ def rate_rows_from_mixed(
 	rate_rows = []
 
 	for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
-		rate_row = dict(
+		rate_row = Row(
 			insurer_id = insurer_row['id'],
 			code_id = code_row['id'],
 			price_metadata_id = price_metadata_row['id'],
@@ -249,20 +249,41 @@ def rate_rows_from_mixed(
 	return rate_rows
 
 
-def npi_rate_rows_from_mixed(
-	rate_rows: list[Row],
-	npi_list: list[str],
-) -> list[Row]:
-	npi_rate_rows = []
-
-	for rate_row, npi in itertools.product(rate_rows, npi_list):
-		npi_rate_row = dict(
-			rate_id = rate_row['id'],
-			npi = npi
+def tin_rows_and_npi_tin_rows_from_dict(
+	groups: dict,
+) -> tuple(list[Row], list[Row]):
+	tin_rows = []
+	npi_tin_rows = []
+	for group in groups:
+		tin_row = Row(
+			tin_type = group['tin']['type'],
+			tin_value = group['tin']['value']
 		)
-		npi_rate_rows.append(npi_rate_row)
+		tin_row = append_hash(tin_row, 'id')
+		tin_rows.append(tin_row)
 
-	return npi_rate_rows
+		for npi in group['npi']:
+			npi_tin_row = Row(
+				tin_id = tin_row['id'],
+				npi = npi,
+			)
+			npi_tin_rows.append(npi_tin_row)
+
+	return tin_rows, npi_tin_rows
+
+
+def tin_rate_rows_from_rows(
+	rate_rows: list[Row],
+	tin_rows: list[Row],
+) -> list[Row]:
+	tin_rate_rows = []
+	for rate_row, tin_row in itertools.product(rate_rows, tin_rows):
+		tin_rate_row = Row(
+			rate_id = rate_row['id'],
+			tin_id = tin_row['id'],
+		)
+		tin_rate_rows.append(tin_rate_row)
+	return tin_rate_rows
 
 
 def write_in_network_item(
@@ -278,6 +299,7 @@ def write_in_network_item(
 	insurer_row = insurer_row_from_dict(plan_metadata)
 
 	for rate in in_network_item['negotiated_rates']:
+
 		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
 		price_metadata_rows = [a[0] for a in price_metadata_combined_rows]
 		write_table(price_metadata_rows, 'price_metadata', out_dir)
@@ -292,16 +314,15 @@ def write_in_network_item(
 		file_rate_rows = file_rate_rows_from_mixed(rate_rows, file_id)
 		write_table(file_rate_rows, 'file_rate', out_dir)
 
-		# gather all the NPIs
 		groups = rate['provider_groups']
-		npi_set = {npi for group in groups for npi in group['npi']}
-		npi_list = list(npi_set)
 
-		npi_rate_rows = npi_rate_rows_from_mixed(
-			rate_rows = rate_rows,
-			npi_list = npi_list,
-		)
-		write_table(npi_rate_rows, 'npi_rate', out_dir)
+		tin_rows, npi_tin_rows = tin_rows_and_npi_tin_rows_from_dict(groups)
+		write_table(tin_rows, 'tin', out_dir)
+		write_table(npi_tin_rows, 'npi_tin', out_dir)
+
+		tin_rate_rows = tin_rate_rows_from_rows(rate_rows, tin_rows)
+		write_table(tin_rate_rows, 'tin_rate', out_dir)
+
 
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']

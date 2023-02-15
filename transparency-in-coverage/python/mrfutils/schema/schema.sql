@@ -60,9 +60,24 @@ CREATE TABLE IF NOT EXISTS file_rate (
 
 -- There may be many providers associated with each rate
 
-CREATE TABLE IF NOT EXISTS npi_rate (
+CREATE TABLE IF NOT EXISTS tin (
+    id BIGINT UNSIGNED,
+    tin_type ENUM("ein", "npi") COLLATE utf8mb4_general_ci,
+    tin_value VARCHAR(11),
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS tin_rate (
     rate_id BIGINT UNSIGNED,
+    tin_id BIGINT UNSIGNED,
+    PRIMARY KEY (tin_id, rate_id),
+    FOREIGN KEY (rate_id) REFERENCES rate(id),
+    FOREIGN KEY (tin_id) REFERENCES tin(id)
+);
+
+CREATE TABLE IF NOT EXISTS npi_tin (
     npi INT UNSIGNED,
-    PRIMARY KEY (npi, rate_id),
-    FOREIGN KEY (rate_id) REFERENCES rate(id)
+    tin_id BIGINT UNSIGNED,
+    PRIMARY KEY (npi, tin_id),
+    FOREIGN KEY (tin_id) REFERENCES tin(id)
 );

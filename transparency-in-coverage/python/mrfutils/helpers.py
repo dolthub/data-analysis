@@ -54,7 +54,10 @@ class JSONOpen:
 		parsed_url = urlparse(self.filename)
 		self.suffix = ''.join(Path(parsed_url.path).suffixes)
 
-		if self.suffix not in ('.json.gz', '.json'):
+		if not (
+			self.suffix.endswith('.json.gz') or
+			self.suffix.endswith('.json')
+		):
 			raise InvalidMRF(f'Suffix not JSON: {self.filename=} {self.suffix=}')
 
 		self.is_remote = parsed_url.scheme in ('http', 'https')
