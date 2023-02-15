@@ -212,19 +212,27 @@ def price_metadata_combined_rows_from_dict(rate: dict) -> list[tuple[Row, float]
 	return price_metadata_combined_rows
 
 
-def file_rate_rows_from_mixed(
+def tin_rate_file_rows_from_mixed(
 	rate_rows: list[Row],
+	tin_rows: list[Row],
 	file_id: str,
 ) -> list[Row]:
 
 	rate_ids = [row['id'] for row in rate_rows]
+	tin_ids = [row['id'] for row in tin_rows]
 
-	file_rate_rows = [
-		Row(file_id = file_id, rate_id = rate_id)
-		for rate_id in rate_ids
-	]
+	file_tin_rate_rows = []
 
-	return file_rate_rows
+	for rate_id, tin_id in itertools.product(rate_ids, tin_ids):
+		file_tin_rate_row = Row(
+			file_id = file_id,
+			rate_id = rate_id,
+			tin_id = tin_id,
+		)
+
+		file_tin_rate_rows.append(file_tin_rate_row)
+
+	return file_tin_rate_rows
 
 
 def rate_rows_from_mixed(
@@ -252,8 +260,10 @@ def rate_rows_from_mixed(
 def tin_rows_and_npi_tin_rows_from_dict(
 	groups: dict,
 ) -> tuple(list[Row], list[Row]):
+
 	tin_rows = []
 	npi_tin_rows = []
+
 	for group in groups:
 		tin_row = Row(
 			tin_type = group['tin']['type'],
@@ -270,20 +280,6 @@ def tin_rows_and_npi_tin_rows_from_dict(
 			npi_tin_rows.append(npi_tin_row)
 
 	return tin_rows, npi_tin_rows
-
-
-def tin_rate_rows_from_rows(
-	rate_rows: list[Row],
-	tin_rows: list[Row],
-) -> list[Row]:
-	tin_rate_rows = []
-	for rate_row, tin_row in itertools.product(rate_rows, tin_rows):
-		tin_rate_row = Row(
-			rate_id = rate_row['id'],
-			tin_id = tin_row['id'],
-		)
-		tin_rate_rows.append(tin_rate_row)
-	return tin_rate_rows
 
 
 def write_in_network_item(
@@ -311,18 +307,18 @@ def write_in_network_item(
 		)
 		write_table(rate_rows, 'rate', out_dir)
 
-		file_rate_rows = file_rate_rows_from_mixed(rate_rows, file_id)
-		write_table(file_rate_rows, 'file_rate', out_dir)
-
 		groups = rate['provider_groups']
 
 		tin_rows, npi_tin_rows = tin_rows_and_npi_tin_rows_from_dict(groups)
 		write_table(tin_rows, 'tin', out_dir)
 		write_table(npi_tin_rows, 'npi_tin', out_dir)
 
-		tin_rate_rows = tin_rate_rows_from_rows(rate_rows, tin_rows)
-		write_table(tin_rate_rows, 'tin_rate', out_dir)
-
+		tin_rate_file_rows = tin_rate_file_rows_from_mixed(
+			rate_rows = rate_rows,
+			tin_rows = tin_rows,
+			file_id = file_id
+		)
+		write_table(tin_rate_file_rows, 'tin_rate_file', out_dir)
 
 	code_type = in_network_item['billing_code_type']
 	code = in_network_item['billing_code']
