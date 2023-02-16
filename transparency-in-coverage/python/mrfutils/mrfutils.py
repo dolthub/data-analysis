@@ -380,7 +380,7 @@ def process_rate(rate: dict, npi_filter: set) -> dict | None:
 
 	prices = []
 	for price in rate['negotiated_prices']:
-		if price['negotiated_type'] in ('negotiated', 'fee_schedule'):
+		if price['negotiated_type'] in ('negotiated', 'fee schedule'):
 			prices.append(price)
 
 	if not prices:
