@@ -69,3 +69,26 @@ Here's an easy way to get those changes.
 1. `dolt add remote dolthub dolthub/{repo-name}`
 1. `dolt pull dolthub main` (this will add those changes to your repo)
 1. `dolt push origin main -f` (force push the changes to your remote copy)
+
+## Code of Conduct
+
+Trust, transparency, and attitude play a huge part in the success of producing a quality dataset via DoltHub's contest format. 
+
+By participating, bounty hunters implicitly agree to the following **Code of Conduct**:
+
+1. I will treat all participants and channel members with respect
+1. I have checked my submissions for mistakes
+1. The data that I submit is my own
+
+Example violations of the Code of Conduct include:
+
+* negative talk about other people in the channel
+* regularly making low-quality submissions
+* not following bounty instructions
+* disguising another persons's submission as my own, or vice versa
+
+and in general, anything else that passes the common-sense test. Ask yourself if it's worth the risk. And if you have to ask, the answer is probably "no."
+
+Bounty hunters who violate the code of conduct won't be allowed to participate in bounties, and potentially forfeit their outstanding winnings, depending on the context. They may or may not be notified prior to taking action.
+
+If you have questions, just DM me @spacelove on Discord.
