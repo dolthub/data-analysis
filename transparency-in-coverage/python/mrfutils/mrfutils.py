@@ -236,7 +236,7 @@ def tin_rate_file_rows_from_mixed(
 
 
 def rate_rows_from_mixed(
-	insurer_row: Row,
+	insurer_id: str,
 	code_row: Row,
 	price_metadata_combined_rows: list[tuple[Row, float]],
 ) -> list[Row]:
@@ -245,7 +245,7 @@ def rate_rows_from_mixed(
 
 	for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
 		rate_row = Row(
-			insurer_id = insurer_row['id'],
+			insurer_id = insurer_id,
 			code_id = code_row['id'],
 			price_metadata_id = price_metadata_row['id'],
 			negotiated_rate = negotiated_rate
@@ -283,7 +283,7 @@ def tin_rows_and_npi_tin_rows_from_dict(
 
 
 def write_in_network_item(
-	plan_metadata: dict,
+	insurer_id: str,
 	file_id: str,
 	in_network_item: dict,
 	out_dir
@@ -292,8 +292,6 @@ def write_in_network_item(
 	code_row = code_row_from_dict(in_network_item)
 	write_table(code_row, 'code', out_dir)
 
-	insurer_row = insurer_row_from_dict(plan_metadata)
-
 	for rate in in_network_item['negotiated_rates']:
 
 		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
@@ -301,7 +299,7 @@ def write_in_network_item(
 		write_table(price_metadata_rows, 'price_metadata', out_dir)
 
 		rate_rows = rate_rows_from_mixed(
-			insurer_row = insurer_row,
+			insurer_id = insurer_id,
 			code_row = code_row,
 			price_metadata_combined_rows = price_metadata_combined_rows,
 		)
@@ -597,7 +595,7 @@ async def make_reference_map(
 	return reference_map
 
 
-async def _get_reference_map(parser, npi_filter) -> dict | None:
+async def _get_reference_map(parser, npi_filter) -> dict:
 	"""Possible file structures.
 	1. {    ...
 		'provider_references': <-- here (most common)
@@ -615,7 +613,7 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 	case (1). If we don't find it, we try case (2), and if we hit a
 	StopIteration, we know we have case (3).
 	"""
-	# Case (1)`
+	# Case (1)
 	next_, parser = peek(parser)
 	if next_ == ('provider_references', 'start_array', None):
 		references = gen_references(parser)
@@ -625,7 +623,7 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 		ffwd(parser, to_prefix='', to_value='provider_references')
 	except StopIteration:
 		# StopIteration -> they don't exist (3)
-		return None
+		return {}
 	else:
 		# Collect them (ends on ('', 'end_map', None))
 		references = gen_references(parser)
@@ -673,41 +671,6 @@ def start_parser(filename) -> Generator:
 		yield from ijson.parse(f, use_float = True)
 
 
-def get_plan(parser) -> dict:
-	builder = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
-		builder.event(event, value)
-		if value in ('provider_references', 'in_network'):
-			return builder.value
-	else:
-		raise InvalidMRF
-
-
-class Content:
-
-	def __init__(self, file, code_filter, npi_filter):
-		self.file        = file
-		self.npi_filter  = npi_filter
-		self.code_filter = code_filter
-
-	def start_conn(self):
-		self.parser = start_parser(self.file)
-		self.plan_metadata = get_plan(self.parser)
-		self.ref_map = get_reference_map(self.parser, self.npi_filter)
-
-	def prepare_in_network(self):
-		next_, parser = peek(self.parser)
-		if next_ in [('', 'end_map', None), None]:
-			self.parser = start_parser(self.file)
-			ffwd(self.parser, to_prefix='', to_value='in_network')
-
-	def in_network_items(self) -> Generator:
-		self.prepare_in_network()
-		filtered_items = gen_in_network_items(self.parser, self.code_filter)
-		swapped_items  = swap_references(filtered_items, self.ref_map)
-		return process_in_network(swapped_items, self.npi_filter)
-
-
 def json_mrf_to_csv(
 	url: str,
 	out_dir: str,
@@ -725,26 +688,69 @@ def json_mrf_to_csv(
 	"""
 	assert url is not None
 
+	make_dir(out_dir)
+
 	if file is None:
 		file = url
 
-	# filename = extract_filename_from_url(url)
+	in_network_written = False
+	ref_map = None
+	second_scan = False
 
-	# Explicitly make this variable up-front since both sets of tables
-	# are linked by it (in_network and plan tables)
+	metadata = ijson.ObjectBuilder()
 
-	content = Content(file, code_filter, npi_filter)
-	content.start_conn()
-	plan_metadata = content.plan_metadata
+	parser = start_parser(file)
 
-	file_row = file_row_from_mixed(plan_metadata, url)
-	file_id  = file_row['id']
+	while True:
 
-	make_dir(out_dir)
+		try:
+			prefix, event, value = next(parser)
+		except StopIteration:
+			if in_network_written:
+				break
+			else:
+				parser = start_parser(file)
+				ffwd(parser, to_prefix='', to_value='in_network')
+				second_scan = True
 
-	processed_items = content.in_network_items()
-	for item in processed_items:
-		write_in_network_item(plan_metadata, file_id, item, out_dir)
+		if value == 'provider_references':
+			ref_map = get_reference_map(parser, npi_filter)
 
-	write_file(plan_metadata, url, out_dir)
-	write_insurer(plan_metadata, out_dir)
+		elif value == 'in_network':
+			# There are four things that need to come before in_network
+			# 1. reporting_entity_name
+			# 2. reporting_entity_type
+			# 3. provider_references
+			# 4. last_updated_on
+
+			if not (
+				(ref_map is not None or second_scan)
+				and 'value' in dir(metadata)
+				and metadata.value.get('reporting_entity_name')
+				and metadata.value.get('reporting_entity_type')
+				and metadata.value.get('last_updated_on')
+			):
+				ffwd(parser, to_prefix = 'in_network', to_event = 'end_array')
+				continue
+
+			# We enter this block when those conditions are met
+			insurer_row = insurer_row_from_dict(metadata.value)
+			insurer_id = insurer_row['id']
+
+			file_row = file_row_from_mixed(metadata.value, url)
+			file_id = file_row['id']
+
+			filtered_items = gen_in_network_items(parser, code_filter)
+			swapped_items = swap_references(filtered_items, ref_map)
+
+			for item in process_in_network(swapped_items, npi_filter):
+				write_in_network_item(insurer_id, file_id, item, out_dir)
+
+			in_network_written = True
+			if second_scan:
+				break
+		else:
+			metadata.event(event, value)
+
+	write_file(metadata.value, url, out_dir)
+	write_insurer(metadata.value, out_dir)
