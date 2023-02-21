@@ -687,48 +687,52 @@ def json_mrf_to_csv(
 	isn't an optional parameter.
 	"""
 	assert url is not None
-
 	make_dir(out_dir)
 
-	if file is None:
-		file = url
+	if file is None: file = url
 
-	in_network_written = False
+	completed = False
 	ref_map = None
-	second_scan = False
 
 	metadata = ijson.ObjectBuilder()
-
 	parser = start_parser(file)
 
 	while True:
+		# This loop runs as long as there's a parser.
+		# We don't use
+		# >>> While parser
+		# since we occasionally create a new parser instance
+		# when the file is out of order.
 
+		# There are basically three cases we need to consider:
+		# 1. We hit the provider_references
+		# 2. We hit the in_network items
+		# 3. Everything else
 		try:
 			prefix, event, value = next(parser)
 		except StopIteration:
-			if in_network_written:
-				break
-			else:
-				parser = start_parser(file)
-				ffwd(parser, to_prefix='', to_value='in_network')
-				second_scan = True
+			if completed: break
+			if ref_map is None: ref_map = {}
+			parser = start_parser(file)
+			ffwd(parser, to_prefix='', to_value='in_network')
+			prefix, event, value = ('', 'map_key', 'in_network')
+			prepend(('', 'map_key', 'in_network'), parser)
 
 		if value == 'provider_references':
 			ref_map = get_reference_map(parser, npi_filter)
 
+		# There are four things that need to come before in_network
+		# 1. reporting_entity_name
+		# 2. reporting_entity_type
+		# 3. provider_references
+		# 4. last_updated_on
 		elif value == 'in_network':
-			# There are four things that need to come before in_network
-			# 1. reporting_entity_name
-			# 2. reporting_entity_type
-			# 3. provider_references
-			# 4. last_updated_on
-
-			if not (
-				(ref_map is not None or second_scan)
-				and 'value' in dir(metadata)
-				and metadata.value.get('reporting_entity_name')
-				and metadata.value.get('reporting_entity_type')
-				and metadata.value.get('last_updated_on')
+			if (
+				ref_map is None or
+				'value' not in dir(metadata) or
+				not metadata.value.get('reporting_entity_name') or
+				not metadata.value.get('reporting_entity_type') or
+				not metadata.value.get('last_updated_on')
 			):
 				ffwd(parser, to_prefix = 'in_network', to_event = 'end_array')
 				continue
@@ -746,10 +750,9 @@ def json_mrf_to_csv(
 			for item in process_in_network(swapped_items, npi_filter):
 				write_in_network_item(insurer_id, file_id, item, out_dir)
 
-			in_network_written = True
-			if second_scan:
-				break
-		else:
+			completed = True
+
+		elif not completed:
 			metadata.event(event, value)
 
 	write_file(metadata.value, url, out_dir)
