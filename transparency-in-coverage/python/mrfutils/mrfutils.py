@@ -477,8 +477,8 @@ def skip_item_by_code(
 	code_type = item.get('billing_code_type')
 	code = item.get('billing_code')
 
-	if code and code_type and code_filter:
-		if (code_type, str(code)) not in code_filter:
+	if code_type:
+		if code_type != 'NDC':
 			log.debug(f'Skipping {code_type} {code}: filtered out')
 			ffwd(parser, to_prefix='in_network.item', to_event='end_map')
 			builder.value.pop()
