@@ -286,13 +286,35 @@ def write_in_network_item(
 	insurer_id: str,
 	file_id: str,
 	in_network_item: dict,
-	out_dir
+	comb_filter,
+	out_dir,
 ) -> None:
 
 	code_row = code_row_from_dict(in_network_item)
 	write_table(code_row, 'code', out_dir)
 
 	for rate in in_network_item['negotiated_rates']:
+		groups = rate['provider_groups']
+		# Now we only want to add the NPIs which match that
+		# billing code
+		new_groups = []
+		for group in groups:
+			npis = group['npi']
+			billing_code = in_network_item['billing_code']
+			npis = [npi for npi in npis if npi in comb_filter[billing_code]]
+
+			if not npis:
+				continue
+
+			new_groups.append(dict(
+				npi = npis,
+				tin = group['tin']
+			))
+
+		groups = new_groups
+
+		if not groups:
+			continue
 
 		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
 		price_metadata_rows = [a[0] for a in price_metadata_combined_rows]
@@ -304,8 +326,6 @@ def write_in_network_item(
 			price_metadata_combined_rows = price_metadata_combined_rows,
 		)
 		write_table(rate_rows, 'rate', out_dir)
-
-		groups = rate['provider_groups']
 
 		tin_rows, npi_tin_rows = tin_rows_and_npi_tin_rows_from_dict(groups)
 		write_table(tin_rows, 'tin', out_dir)
@@ -676,6 +696,7 @@ def json_mrf_to_csv(
 	out_dir: str,
 	file:        str | None = None,
 	code_filter: set | None = None,
+	comb_filter: dict | None = None,
 	npi_filter:  set | None = None,
 ) -> None:
 	"""
@@ -690,6 +711,17 @@ def json_mrf_to_csv(
 	make_dir(out_dir)
 
 	if file is None: file = url
+
+	if comb_filter:
+		log.debug('Making code filter')
+		code_filter = {('HCPCS' if key[0] in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' else 'CPT', key) for key in comb_filter.keys()}
+		log.debug('Made code filter')
+		log.debug('Making NPI filter')
+		npi_filter = set()
+		for k, v in comb_filter.items():
+			for npi in v:
+				npi_filter.add(npi)
+		log.debug('Made NPI filter')
 
 	completed = False
 	ref_map = None
@@ -720,6 +752,8 @@ def json_mrf_to_csv(
 
 		if value == 'provider_references':
 			ref_map = get_reference_map(parser, npi_filter)
+			from time import sleep
+			sleep(4)
 
 		# There are four things that need to come before in_network
 		# 1. reporting_entity_name
@@ -748,7 +782,7 @@ def json_mrf_to_csv(
 			swapped_items = swap_references(filtered_items, ref_map)
 
 			for item in process_in_network(swapped_items, npi_filter):
-				write_in_network_item(insurer_id, file_id, item, out_dir)
+				write_in_network_item(insurer_id, file_id, item, comb_filter, out_dir)
 
 			completed = True
 

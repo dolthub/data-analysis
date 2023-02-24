@@ -116,6 +116,18 @@ def import_csv_to_set(filename: str):
 		return items
 
 
+from collections import defaultdict
+def import_comb_to_dict(filename: str):
+	items = defaultdict(list)
+
+	with open(filename, 'r') as f:
+		reader = csv.DictReader(f)
+		for row in reader:
+			items[row['billing_code']].append(str(row['npi']))
+
+		return items
+
+
 def make_dir(out_dir):
 
 	if not os.path.exists(out_dir):
