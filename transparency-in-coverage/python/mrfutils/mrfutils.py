@@ -725,6 +725,7 @@ def json_mrf_to_csv(
 
 	completed = False
 	ref_map = None
+	metadata_written = False
 
 	metadata = ijson.ObjectBuilder()
 	parser = start_parser(file)
@@ -778,6 +779,11 @@ def json_mrf_to_csv(
 			file_row = file_row_from_mixed(metadata.value, url)
 			file_id = file_row['id']
 
+			if not metadata_written:
+				write_file(metadata.value, url, out_dir)
+				write_insurer(metadata.value, out_dir)
+				metadata_written = True
+
 			filtered_items = gen_in_network_items(parser, code_filter)
 			swapped_items = swap_references(filtered_items, ref_map)
 
@@ -788,6 +794,3 @@ def json_mrf_to_csv(
 
 		elif not completed:
 			metadata.event(event, value)
-
-	write_file(metadata.value, url, out_dir)
-	write_insurer(metadata.value, out_dir)
