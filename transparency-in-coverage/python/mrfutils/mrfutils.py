@@ -105,7 +105,7 @@ def file_row_from_mixed(
 
 	file_row = dict(
 		filename = filename,
-		last_updated_on = plan_data['last_updated_on']
+		last_updated_on = plan_data.get('last_updated_on')
 	)
 
 	file_row = append_hash(file_row, 'id')
