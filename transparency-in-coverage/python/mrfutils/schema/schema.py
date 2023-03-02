@@ -9,6 +9,10 @@ SCHEMA = {
         "id",
         "reporting_entity_name",
         "reporting_entity_type",
+        'plan_name',
+	'plan_id_type',
+	'plan_id',
+	'plan_market_type',
     ],
     "code": [
         "id",

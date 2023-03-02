@@ -136,6 +136,17 @@ def insurer_row_from_dict(plan_data: dict) -> Row:
 	insurer_row = {key : plan_data[key] for key in keys}
 	insurer_row = append_hash(insurer_row, 'id')
 
+	optional_keys = [
+		'plan_name',
+		'plan_id_type',
+		'plan_id',
+		'plan_market_type',
+	]
+
+	insurer_row.update(
+		{key: plan_data.get(key) for key in optional_keys}
+	)
+
 	return insurer_row
 
 
