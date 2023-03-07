@@ -1,4 +1,4 @@
-from mrfutils import json_mrf_to_csv
+from mrfutils import in_network_file_to_csv
 from helpers import import_csv_to_set
 import argparse
 
@@ -24,7 +24,7 @@ dialysis_code_filter = {
 
 if __name__ == "__main__":
     try:
-        json_mrf_to_csv(
+        in_network_file_to_csv(
             url = args.url,
             out_dir = out_dir,
             code_filter = dialysis_code_filter,

@@ -11,7 +11,7 @@ import argparse
 import logging
 
 from helpers import import_csv_to_set
-from mrfutils import json_mrf_to_csv
+from mrfutils import in_network_file_to_csv
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
@@ -39,7 +39,7 @@ if args.npi_file:
 else:
     npi_filter = None
 
-json_mrf_to_csv(
+in_network_file_to_csv(
     file = args.file,
     url = args.url,
     npi_filter = npi_filter,

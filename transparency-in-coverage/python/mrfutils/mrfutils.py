@@ -105,7 +105,7 @@ def file_row_from_mixed(
 
 	file_row = dict(
 		filename = filename,
-		last_updated_on = plan_data['last_updated_on']
+		# last_updated_on = plan_data['last_updated_on']
 	)
 
 	file_row = append_hash(file_row, 'id')
@@ -135,6 +135,17 @@ def insurer_row_from_dict(plan_data: dict) -> Row:
 
 	insurer_row = {key : plan_data[key] for key in keys}
 	insurer_row = append_hash(insurer_row, 'id')
+
+	optional_keys = [
+		'plan_name',
+		'plan_id_type',
+		'plan_id',
+		'plan_market_type',
+	]
+
+	insurer_row.update(
+		{key: plan_data.get(key) for key in optional_keys}
+	)
 
 	return insurer_row
 
@@ -236,7 +247,7 @@ def tin_rate_file_rows_from_mixed(
 
 
 def rate_rows_from_mixed(
-	insurer_row: Row,
+	insurer_id: str,
 	code_row: Row,
 	price_metadata_combined_rows: list[tuple[Row, float]],
 ) -> list[Row]:
@@ -245,7 +256,7 @@ def rate_rows_from_mixed(
 
 	for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
 		rate_row = Row(
-			insurer_id = insurer_row['id'],
+			insurer_id = insurer_id,
 			code_id = code_row['id'],
 			price_metadata_id = price_metadata_row['id'],
 			negotiated_rate = negotiated_rate
@@ -283,7 +294,7 @@ def tin_rows_and_npi_tin_rows_from_dict(
 
 
 def write_in_network_item(
-	plan_metadata: dict,
+	insurer_id: str,
 	file_id: str,
 	in_network_item: dict,
 	out_dir
@@ -292,8 +303,6 @@ def write_in_network_item(
 	code_row = code_row_from_dict(in_network_item)
 	write_table(code_row, 'code', out_dir)
 
-	insurer_row = insurer_row_from_dict(plan_metadata)
-
 	for rate in in_network_item['negotiated_rates']:
 
 		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
@@ -301,7 +310,7 @@ def write_in_network_item(
 		write_table(price_metadata_rows, 'price_metadata', out_dir)
 
 		rate_rows = rate_rows_from_mixed(
-			insurer_row = insurer_row,
+			insurer_id = insurer_id,
 			code_row = code_row,
 			price_metadata_combined_rows = price_metadata_combined_rows,
 		)
@@ -452,11 +461,10 @@ def gen_in_network_items(
 
 
 def gen_references(parser: Generator) -> Generator:
-
 	builder = ijson.ObjectBuilder()
-
 	for prefix, event, value in parser:
 		builder.event(event, value)
+
 		if (prefix, event) == ('provider_references.item', 'end_map'):
 			reference = builder.value.pop()
 			yield reference
@@ -597,7 +605,7 @@ async def make_reference_map(
 	return reference_map
 
 
-async def _get_reference_map(parser, npi_filter) -> dict | None:
+async def _get_reference_map(parser, npi_filter) -> dict:
 	"""Possible file structures.
 	1. {    ...
 		'provider_references': <-- here (most common)
@@ -615,7 +623,7 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 	case (1). If we don't find it, we try case (2), and if we hit a
 	StopIteration, we know we have case (3).
 	"""
-	# Case (1)`
+	# Case (1)
 	next_, parser = peek(parser)
 	if next_ == ('provider_references', 'start_array', None):
 		references = gen_references(parser)
@@ -625,7 +633,7 @@ async def _get_reference_map(parser, npi_filter) -> dict | None:
 		ffwd(parser, to_prefix='', to_value='provider_references')
 	except StopIteration:
 		# StopIteration -> they don't exist (3)
-		return None
+		return {}
 	else:
 		# Collect them (ends on ('', 'end_map', None))
 		references = gen_references(parser)
@@ -673,42 +681,7 @@ def start_parser(filename) -> Generator:
 		yield from ijson.parse(f, use_float = True)
 
 
-def get_plan(parser) -> dict:
-	builder = ijson.ObjectBuilder()
-	for prefix, event, value in parser:
-		builder.event(event, value)
-		if value in ('provider_references', 'in_network'):
-			return builder.value
-	else:
-		raise InvalidMRF
-
-
-class Content:
-
-	def __init__(self, file, code_filter, npi_filter):
-		self.file        = file
-		self.npi_filter  = npi_filter
-		self.code_filter = code_filter
-
-	def start_conn(self):
-		self.parser = start_parser(self.file)
-		self.plan_metadata = get_plan(self.parser)
-		self.ref_map = get_reference_map(self.parser, self.npi_filter)
-
-	def prepare_in_network(self):
-		next_, parser = peek(self.parser)
-		if next_ in [('', 'end_map', None), None]:
-			self.parser = start_parser(self.file)
-			ffwd(self.parser, to_prefix='', to_value='in_network')
-
-	def in_network_items(self) -> Generator:
-		self.prepare_in_network()
-		filtered_items = gen_in_network_items(self.parser, self.code_filter)
-		swapped_items  = swap_references(filtered_items, self.ref_map)
-		return process_in_network(swapped_items, self.npi_filter)
-
-
-def json_mrf_to_csv(
+def in_network_file_to_csv(
 	url: str,
 	out_dir: str,
 	file:        str | None = None,
@@ -724,27 +697,138 @@ def json_mrf_to_csv(
 	isn't an optional parameter.
 	"""
 	assert url is not None
-
-	if file is None:
-		file = url
-
-	# filename = extract_filename_from_url(url)
-
-	# Explicitly make this variable up-front since both sets of tables
-	# are linked by it (in_network and plan tables)
-
-	content = Content(file, code_filter, npi_filter)
-	content.start_conn()
-	plan_metadata = content.plan_metadata
-
-	file_row = file_row_from_mixed(plan_metadata, url)
-	file_id  = file_row['id']
-
 	make_dir(out_dir)
 
-	processed_items = content.in_network_items()
-	for item in processed_items:
-		write_in_network_item(plan_metadata, file_id, item, out_dir)
+	if file is None: file = url
 
-	write_file(plan_metadata, url, out_dir)
-	write_insurer(plan_metadata, out_dir)
+	completed = False
+	ref_map = None
+
+	metadata = ijson.ObjectBuilder()
+	parser = start_parser(file)
+
+	while True:
+		# This loop runs as long as there's a parser.
+		# We don't use
+		# >>> While parser
+		# since we occasionally create a new parser instance
+		# when the file is out of order.
+
+		# There are basically three cases we need to consider:
+		# 1. We hit the provider_references
+		# 2. We hit the in_network items
+		# 3. Everything else
+		try:
+			prefix, event, value = next(parser)
+		except StopIteration:
+			if completed: break
+			if ref_map is None: ref_map = {}
+			parser = start_parser(file)
+			ffwd(parser, to_prefix='', to_value='in_network')
+			prefix, event, value = ('', 'map_key', 'in_network')
+			prepend(('', 'map_key', 'in_network'), parser)
+
+		if value == 'provider_references':
+			ref_map = get_reference_map(parser, npi_filter)
+
+		# There are four things that need to come before in_network
+		# 1. reporting_entity_name
+		# 2. reporting_entity_type
+		# 3. provider_references
+		# 4. last_updated_on
+		elif value == 'in_network':
+			if (
+				ref_map is None or
+				'value' not in dir(metadata) or
+				not metadata.value.get('reporting_entity_name') or
+				not metadata.value.get('reporting_entity_type') or
+				not metadata.value.get('last_updated_on')
+			):
+				ffwd(parser, to_prefix = 'in_network', to_event = 'end_array')
+				continue
+
+			# We enter this block when those conditions are met
+			insurer_row = insurer_row_from_dict(metadata.value)
+			insurer_id = insurer_row['id']
+
+			file_row = file_row_from_mixed(metadata.value, url)
+			file_id = file_row['id']
+
+			filtered_items = gen_in_network_items(parser, code_filter)
+			swapped_items = swap_references(filtered_items, ref_map)
+
+			for item in process_in_network(swapped_items, npi_filter):
+				write_in_network_item(insurer_id, file_id, item, out_dir)
+
+			completed = True
+
+		elif not completed:
+			metadata.event(event, value)
+
+	write_file(metadata.value, url, out_dir)
+	write_insurer(metadata.value, out_dir)
+
+# New functions for importing Table of Contents files (index.json)
+def gen_plan(parser) -> dict:
+
+    builder = ijson.ObjectBuilder()
+    for prefix, event, value in parser:
+        builder.event(event, value)
+
+        if (prefix, event) == ('reporting_structure.item', 'end_map'):
+            yield builder.value
+
+        elif (prefix, event, value) == ('reporting_structure', 'end_array', None):
+            return
+
+
+def gen_plan_row(plan) -> Row:
+    reporting_plans = plan['reporting_plans']
+    in_network_files = plan['in_network_files']
+
+    for in_network_file in in_network_files:
+        url = in_network_file['location']
+        filename = extract_filename_from_url(url)
+        file_row = dict(
+            filename = filename,
+        )
+        file_row = append_hash(file_row, 'id')
+        file_row['url'] = url
+
+        for reporting_plan in reporting_plans:
+
+            plan_row = dict(
+                file_id = file_row['id'],
+                plan_name = reporting_plan['plan_name'],
+                plan_id_type = reporting_plan['plan_id_type'],
+                plan_id = reporting_plan['plan_id'],
+                plan_market_type = reporting_plan['plan_market_type'],
+            )
+            yield plan_row
+
+
+def index_file_to_csv(
+	url: str,
+	out_dir: str,
+	file: str | None = None,
+) -> None:
+	"""
+	Write a Table of Contents file to a CSV. Does not do deduplication yet.
+	Still figuring out schema work.
+	"""
+	assert url is not None
+	make_dir(out_dir)
+
+	if file is None: file = url
+
+	metadata = ijson.ObjectBuilder()
+	parser = start_parser(file)
+
+	for prefix, event, value in parser:
+
+		if (prefix, event, value) == ('reporting_structure', 'start_array', None):
+			for plan in gen_plan(parser):
+				for plan_row in gen_plan_row(plan):
+					write_table(plan_row, 'table_of_contents', 'test')
+		else:
+			metadata.event(event, value)
