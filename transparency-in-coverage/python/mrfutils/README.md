@@ -47,7 +47,7 @@ on Mac, (not sure about Windows instructions) or just comment out the line in `m
 After installing the package all you really need to do is call `json_mrf_to_csv` from `mrfutils`:
 
 ```python
->>> from mrfutils import json_mrf_to_csv
+>> > from mrfutils import in_network_file_to_csv
 ```
 
 with the right arguments. 

@@ -1,4 +1,4 @@
-from mrfutils import import_csv_to_set, json_mrf_to_csv
+from mrfutils import import_csv_to_set, in_network_file_to_csv
 from exceptions import InvalidMRF
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm import tqdm
@@ -23,7 +23,7 @@ urls = [
 for url in tqdm(urls):
     with logging_redirect_tqdm():
         try:
-            json_mrf_to_csv(
+            in_network_file_to_csv(
                 url = url,
                 npi_filter = npi_filter,
                 code_filter = code_filter,

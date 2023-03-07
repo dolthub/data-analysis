@@ -105,7 +105,7 @@ def file_row_from_mixed(
 
 	file_row = dict(
 		filename = filename,
-		last_updated_on = plan_data['last_updated_on']
+		# last_updated_on = plan_data['last_updated_on']
 	)
 
 	file_row = append_hash(file_row, 'id')
@@ -461,11 +461,10 @@ def gen_in_network_items(
 
 
 def gen_references(parser: Generator) -> Generator:
-
 	builder = ijson.ObjectBuilder()
-
 	for prefix, event, value in parser:
 		builder.event(event, value)
+
 		if (prefix, event) == ('provider_references.item', 'end_map'):
 			reference = builder.value.pop()
 			yield reference
@@ -682,7 +681,7 @@ def start_parser(filename) -> Generator:
 		yield from ijson.parse(f, use_float = True)
 
 
-def json_mrf_to_csv(
+def in_network_file_to_csv(
 	url: str,
 	out_dir: str,
 	file:        str | None = None,
@@ -768,3 +767,68 @@ def json_mrf_to_csv(
 
 	write_file(metadata.value, url, out_dir)
 	write_insurer(metadata.value, out_dir)
+
+# New functions for importing Table of Contents files (index.json)
+def gen_plan(parser) -> dict:
+
+    builder = ijson.ObjectBuilder()
+    for prefix, event, value in parser:
+        builder.event(event, value)
+
+        if (prefix, event) == ('reporting_structure.item', 'end_map'):
+            yield builder.value
+
+        elif (prefix, event, value) == ('reporting_structure', 'end_array', None):
+            return
+
+
+def gen_plan_row(plan) -> Row:
+    reporting_plans = plan['reporting_plans']
+    in_network_files = plan['in_network_files']
+
+    for in_network_file in in_network_files:
+        url = in_network_file['location']
+        filename = extract_filename_from_url(url)
+        file_row = dict(
+            filename = filename,
+        )
+        file_row = append_hash(file_row, 'id')
+        file_row['url'] = url
+
+        for reporting_plan in reporting_plans:
+
+            plan_row = dict(
+                file_id = file_row['id'],
+                plan_name = reporting_plan['plan_name'],
+                plan_id_type = reporting_plan['plan_id_type'],
+                plan_id = reporting_plan['plan_id'],
+                plan_market_type = reporting_plan['plan_market_type'],
+            )
+            yield plan_row
+
+
+def index_file_to_csv(
+	url: str,
+	out_dir: str,
+	file: str | None = None,
+) -> None:
+	"""
+	Write a Table of Contents file to a CSV. Does not do deduplication yet.
+	Still figuring out schema work.
+	"""
+	assert url is not None
+	make_dir(out_dir)
+
+	if file is None: file = url
+
+	metadata = ijson.ObjectBuilder()
+	parser = start_parser(file)
+
+	for prefix, event, value in parser:
+
+		if (prefix, event, value) == ('reporting_structure', 'start_array', None):
+			for plan in gen_plan(parser):
+				for plan_row in gen_plan_row(plan):
+					write_table(plan_row, 'table_of_contents', 'test')
+		else:
+			metadata.event(event, value)

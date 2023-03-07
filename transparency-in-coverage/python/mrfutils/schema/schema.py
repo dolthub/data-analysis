@@ -49,5 +49,12 @@ SCHEMA = {
     "npi_tin": [
         "npi",
         "tin_id",
+    ],
+    "table_of_contents": [
+        "plan_name",
+        "plan_market_type",
+        "plan_id_type",
+        "plan_id",
+        "file_id",
     ]
 }
