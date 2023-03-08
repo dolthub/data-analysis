@@ -793,7 +793,7 @@ def gen_plan(parser) -> dict:
             return
 
 
-def gen_plan_row(plan, metadata) -> Row:
+def gen_plan_row(plan, metadata, url) -> Row:
 
 	reporting_plans = plan['reporting_plans']
 	in_network_files = plan.get('in_network_files')
@@ -802,24 +802,26 @@ def gen_plan_row(plan, metadata) -> Row:
 		return
 
 	for in_network_file in in_network_files:
-		url = in_network_file['location']
-		filename = extract_filename_from_url(url)
+		in_network_url = in_network_file['location']
+		filename = extract_filename_from_url(in_network_url)
 		file_row = dict(
                         filename = filename,
                 )
 		file_row = append_hash(file_row, 'id')
-		file_row['url'] = url
+		file_row['url'] = in_network_url
 
-		for reporting_plan in reporting_plans:
+		for reporting_plan in reporting_plans[:1]:
 
 			plan_row = dict(
-                                file_id = file_row['id'],
+                                in_network_file_id = file_row['id'],
+				reporting_entity_name = metadata['reporting_entity_name'],
+				table_of_contents_url = url,
                                 plan_name = reporting_plan['plan_name'],
                                 plan_id_type = reporting_plan['plan_id_type'],
                                 plan_id = reporting_plan['plan_id'],
                                 plan_market_type = reporting_plan['plan_market_type'],
-	                        reporting_entity_name = metadata['reporting_entity_name'],
 	                        reporting_entity_type = metadata['reporting_entity_type'],
+				in_network_file_url = in_network_url,
                         )
 
 			yield plan_row
@@ -867,10 +869,8 @@ def index_file_to_csv(
 
 			for plan in gen_plan(parser):
 				metadata_value = metadata.value
-				for plan_row in gen_plan_row(plan, metadata_value):
+				for plan_row in gen_plan_row(plan, metadata_value, url):
 					write_table(plan_row, 'table_of_contents', out_dir)
-					# Hack workaround to avoid printing multiple plans
-					break
 
 			completed = True
 

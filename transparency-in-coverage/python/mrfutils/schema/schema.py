@@ -51,12 +51,14 @@ SCHEMA = {
         "tin_id",
     ],
     "table_of_contents": [
-        "file_id",
+        "in_network_file_id",
         "reporting_entity_name",
+        "table_of_contents_url",
         "reporting_entity_type",
         "plan_name",
         "plan_id",
         "plan_id_type",
         "plan_market_type",
+        "index_file_url",
     ]
 }

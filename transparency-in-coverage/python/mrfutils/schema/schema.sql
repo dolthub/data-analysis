@@ -73,12 +73,14 @@ CREATE TABLE IF NOT EXISTS tin_rate_file (
 );
 
 CREATE TABLE IF NOT EXISTS table_of_contents (
-    file_id BIGINT UNSIGNED,
+    in_network_file_id BIGINT UNSIGNED,
     reporting_entity_name VARCHAR(500),
+    table_of_contents_url VARCHAR(2000),
     reporting_entity_type VARCHAR(500),
     plan_name VARCHAR(1000),
     plan_id VARCHAR(11),
     plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
     plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
+    in_network_file_url VARCHAR(2000),
     PRIMARY KEY (file_id, reporting_entity_name)
 );
