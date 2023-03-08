@@ -39,6 +39,8 @@ you're looking at.
 * Possible room for optimization: basic_parse instead of parse. You'd probably
 need to write a +1/-1 tracker every time you hit a start_map/end_map event, so
 that you can track your depth in the JSON tree.
+
+Anything tagged #HOTFIX is a quick fix for a broken implementation of an MRF
 """
 from __future__ import annotations
 
@@ -343,7 +345,14 @@ def process_arr(func, arr, *args, **kwargs):
 
 
 def process_group(group: dict, npi_filter: set) -> dict | None:
-	group['npi'] = [str(n) for n in group['npi']]
+	try:
+		group['npi'] = [str(n) for n in group['npi']]
+	except KeyError:
+		# I was alerted that sometimes this key is capitalized
+		# HOTFIX
+		group['npi'] = [str(n) for n in group['NPI']]
+
+	# I was alerted that some
 	if not npi_filter:
 		return group
 
@@ -856,7 +865,7 @@ def index_file_to_csv(
 			for plan in gen_plan(parser):
 				metadata_value = metadata.value
 				for plan_row in gen_plan_row(plan, metadata_value):
-					write_table(plan_row, 'table_of_contents', 'test')
+					write_table(plan_row, 'index', out_dir)
 			completed = True
 
 		elif not completed:

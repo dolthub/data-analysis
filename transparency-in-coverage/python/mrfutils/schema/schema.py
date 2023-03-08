@@ -50,13 +50,13 @@ SCHEMA = {
         "npi",
         "tin_id",
     ],
-    "table_of_contents": [
-        "plan_name",
-        "plan_market_type",
-        "plan_id_type",
-        "plan_id",
+    "index": [
         "file_id",
         "reporting_entity_name",
         "reporting_entity_type",
+        "plan_name",
+        "plan_id",
+        "plan_id_type",
+        "plan_market_type",
     ]
 }
