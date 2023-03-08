@@ -796,7 +796,10 @@ def gen_plan(parser) -> dict:
 def gen_plan_row(plan, metadata) -> Row:
 
 	reporting_plans = plan['reporting_plans']
-	in_network_files = plan['in_network_files']
+	in_network_files = plan.get('in_network_files')
+
+	if not in_network_files:
+		return
 
 	for in_network_file in in_network_files:
 		url = in_network_file['location']
@@ -866,6 +869,9 @@ def index_file_to_csv(
 				metadata_value = metadata.value
 				for plan_row in gen_plan_row(plan, metadata_value):
 					write_table(plan_row, 'table_of_contents', out_dir)
+					# Hack workaround to avoid printing multiple plans
+					break
+
 			completed = True
 
 		elif not completed:
