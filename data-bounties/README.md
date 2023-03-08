@@ -17,6 +17,11 @@ The scoreboard takes the total number of money and divides by the points (cell e
 
 > DoltHub data bounty money usually comes from our marketing budget, but sometimes comes from companies who ask us to collect data for them. We can crowdsource datasets that need a lot of man-hours and scraping expertise, on a medium-sized budget.
 
+## Teams and Discord
+
+You can form a team and I can split the money evenly between all team members. Before a bounty forms, let @spacelove on Discord know who you'd like to be on your team. When that bounty period ends, I'll split any money earned by team members evenly before sending out checks.
+
+It's strongly encouraged (though not yet enforced) that your Discord handle in [#data-bounties](https://discord.gg/sTXsQKKEHC) matches your DoltHub username.
 
 ## Getting started
 
