@@ -865,7 +865,7 @@ def index_file_to_csv(
 			for plan in gen_plan(parser):
 				metadata_value = metadata.value
 				for plan_row in gen_plan_row(plan, metadata_value):
-					write_table(plan_row, 'index', out_dir)
+					write_table(plan_row, 'table_of_contents', out_dir)
 			completed = True
 
 		elif not completed:

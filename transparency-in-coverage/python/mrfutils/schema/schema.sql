@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS tin_rate_file (
     FOREIGN KEY (tin_id) REFERENCES tin(id)
 );
 
-CREATE TABLE IF NOT EXISTS index (
+CREATE TABLE IF NOT EXISTS table_of_contents (
     file_id BIGINT UNSIGNED,
     reporting_entity_name VARCHAR(500),
     reporting_entity_type VARCHAR(500),
@@ -81,4 +81,4 @@ CREATE TABLE IF NOT EXISTS index (
     plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
     plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
     PRIMARY KEY (file_id, reporting_entity_name)
-)
+);

@@ -50,7 +50,7 @@ SCHEMA = {
         "npi",
         "tin_id",
     ],
-    "index": [
+    "table_of_contents": [
         "file_id",
         "reporting_entity_name",
         "reporting_entity_type",
