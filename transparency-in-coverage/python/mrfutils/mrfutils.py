@@ -769,6 +769,8 @@ def in_network_file_to_csv(
 	write_insurer(metadata.value, out_dir)
 
 # New functions for importing Table of Contents files (index.json)
+###################################################################
+
 def gen_plan(parser) -> dict:
 
     builder = ijson.ObjectBuilder()
@@ -818,7 +820,6 @@ def index_file_to_csv(
 ) -> None:
 	"""
 	Write a Table of Contents file to a CSV. Does not do deduplication yet.
-	Still figuring out schema work.
 	"""
 	assert url is not None
 	make_dir(out_dir)
