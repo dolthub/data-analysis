@@ -21,7 +21,7 @@ The scoreboard takes the total number of money and divides by the points (cell e
 
 You can form a team and I can split the money evenly between all team members. Before a bounty forms, let @spacelove on Discord know who you'd like to be on your team. When that bounty period ends, I'll split any money earned by team members evenly before sending out checks.
 
-It's strongly encouraged (though not yet enforced) that your Discord handle in [#data-bounties](https://discord.gg/sTXsQKKEHC) matches your DoltHub username.
+It's strongly encouraged (though not yet enforced) that your Discord handle in [#data-bounties](https://discord.gg/sTXsQKKEHC) match your DoltHub username.
 
 ## Getting started
 
