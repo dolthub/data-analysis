@@ -782,29 +782,33 @@ def gen_plan(parser) -> dict:
             return
 
 
-def gen_plan_row(plan) -> Row:
-    reporting_plans = plan['reporting_plans']
-    in_network_files = plan['in_network_files']
+def gen_plan_row(plan, metadata) -> Row:
 
-    for in_network_file in in_network_files:
-        url = in_network_file['location']
-        filename = extract_filename_from_url(url)
-        file_row = dict(
-            filename = filename,
-        )
-        file_row = append_hash(file_row, 'id')
-        file_row['url'] = url
+	reporting_plans = plan['reporting_plans']
+	in_network_files = plan['in_network_files']
 
-        for reporting_plan in reporting_plans:
+	for in_network_file in in_network_files:
+		url = in_network_file['location']
+		filename = extract_filename_from_url(url)
+		file_row = dict(
+                        filename = filename,
+                )
+		file_row = append_hash(file_row, 'id')
+		file_row['url'] = url
 
-            plan_row = dict(
-                file_id = file_row['id'],
-                plan_name = reporting_plan['plan_name'],
-                plan_id_type = reporting_plan['plan_id_type'],
-                plan_id = reporting_plan['plan_id'],
-                plan_market_type = reporting_plan['plan_market_type'],
-            )
-            yield plan_row
+		for reporting_plan in reporting_plans:
+
+			plan_row = dict(
+                                file_id = file_row['id'],
+                                plan_name = reporting_plan['plan_name'],
+                                plan_id_type = reporting_plan['plan_id_type'],
+                                plan_id = reporting_plan['plan_id'],
+                                plan_market_type = reporting_plan['plan_market_type'],
+	                        reporting_entity_name = metadata['reporting_entity_name'],
+	                        reporting_entity_type = metadata['reporting_entity_type'],
+                        )
+
+			yield plan_row
 
 
 def index_file_to_csv(
@@ -823,12 +827,36 @@ def index_file_to_csv(
 
 	metadata = ijson.ObjectBuilder()
 	parser = start_parser(file)
+	completed = False
 
-	for prefix, event, value in parser:
+	while True:
+		try:
+			prefix, event, value = next(parser)
+			print(prefix, event, value)
+			if 'value' in dir(metadata):
+				print(metadata.value)
+		except StopIteration:
+			if completed: break
+			else:
+				parser = start_parser(file)
+				ffwd(parser, to_prefix='', to_value='reporting_structure')
+				state = ('', 'map_key', 'reporting_structure')
+				prepend(state, parser)
 
 		if (prefix, event, value) == ('reporting_structure', 'start_array', None):
+			if (
+				'value' not in dir(metadata) or
+				not metadata.value.get('reporting_entity_name') or
+				not metadata.value.get('reporting_entity_type')
+			):
+				ffwd(parser, to_prefix = 'reporting_structure', to_event = 'end_array')
+				continue
+
 			for plan in gen_plan(parser):
-				for plan_row in gen_plan_row(plan):
+				metadata_value = metadata.value
+				for plan_row in gen_plan_row(plan, metadata_value):
 					write_table(plan_row, 'table_of_contents', 'test')
-		else:
+			completed = True
+
+		elif not completed:
 			metadata.event(event, value)

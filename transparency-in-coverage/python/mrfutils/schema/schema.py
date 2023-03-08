@@ -56,5 +56,7 @@ SCHEMA = {
         "plan_id_type",
         "plan_id",
         "file_id",
+        "reporting_entity_name",
+        "reporting_entity_type",
     ]
 }
