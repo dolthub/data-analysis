@@ -59,6 +59,6 @@ SCHEMA = {
         "plan_id",
         "plan_id_type",
         "plan_market_type",
-        "index_file_url",
+        "in_network_file_url",
     ]
 }

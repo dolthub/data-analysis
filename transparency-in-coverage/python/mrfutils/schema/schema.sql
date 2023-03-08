@@ -81,6 +81,6 @@ CREATE TABLE IF NOT EXISTS table_of_contents (
     plan_id VARCHAR(11),
     plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
     plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
-    in_network_url VARCHAR(2000),
+    in_network_file_url VARCHAR(2000),
     PRIMARY KEY (in_network_file_id, reporting_entity_name)
 );
