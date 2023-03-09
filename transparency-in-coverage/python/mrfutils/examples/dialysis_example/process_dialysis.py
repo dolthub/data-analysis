@@ -1,5 +1,5 @@
 from mrfutils import in_network_file_to_csv
-from helpers import import_csv_to_set
+from mrfutils.helpers import import_csv_to_set
 import argparse
 
 parser = argparse.ArgumentParser()

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mrfutils"
+version = "1.0"
+authors = [
+  { name="Alex Stein", email="alec@dolthub.com" },
+]
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.urls]
+"Homepage" = "https://github.com/dolthub/data-analysis/tree/main/transparency-in-coverage/python/mrfutils"

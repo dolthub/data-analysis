@@ -51,8 +51,8 @@ from typing import Generator
 import aiohttp
 import ijson
 
-from helpers import *
-from schema.schema import SCHEMA
+from mrfutils.helpers import *
+from mrfutils.schema.schema import SCHEMA
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9/3.10

@@ -12,7 +12,7 @@ Examples:
 
 import logging
 import sys
-from idxutils import gen_in_network_links
+from mrfutils.idxutils import gen_in_network_links
 
 logging.basicConfig()
 log = logging.getLogger('idxutils')

@@ -1,5 +1,5 @@
 from mrfutils import import_csv_to_set, in_network_file_to_csv
-from exceptions import InvalidMRF
+from mrfutils.exceptions import InvalidMRF
 from tqdm.contrib.logging import logging_redirect_tqdm
 from tqdm import tqdm
 from pathlib import Path
