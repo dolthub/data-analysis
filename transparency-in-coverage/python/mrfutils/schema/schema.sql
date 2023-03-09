@@ -72,15 +72,19 @@ CREATE TABLE IF NOT EXISTS tin_rate_file (
     FOREIGN KEY (tin_id) REFERENCES tin(id)
 );
 
-CREATE TABLE IF NOT EXISTS table_of_contents (
-    in_network_file_id BIGINT UNSIGNED,
-    reporting_entity_name VARCHAR(500),
-    table_of_contents_url VARCHAR(2000),
-    reporting_entity_type VARCHAR(500),
-    plan_name VARCHAR(1000),
-    plan_id VARCHAR(11),
-    plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
-    plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
-    in_network_file_url VARCHAR(2000),
-    PRIMARY KEY (in_network_file_id, reporting_entity_name)
+CREATE TABLE IF NOT EXISTS toc (
+    id BIGINT UNSIGNED,
+    filename VARCHAR(1000),
+    url TEXT,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS toc_insurer (
+    toc_id BIGINT UNSIGNED,
+    file_id BIGINT UNSIGNED,
+    insurer_id BIGINT UNSIGNED,
+    url TEXT,
+    PRIMARY KEY (toc_id, file_id, insurer_id),
+    FOREIGN KEY (toc_id) REFERENCES toc(id),
+    FOREIGN KEY (insurer_id) REFERENCES insurer(id)
 );

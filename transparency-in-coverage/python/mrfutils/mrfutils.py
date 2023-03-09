@@ -793,7 +793,7 @@ def gen_plan(parser) -> dict:
             return
 
 
-def gen_plan_row(plan, metadata, url) -> Row:
+def gen_plan_row(plan) -> Row:
 
 	reporting_plans = plan['reporting_plans']
 	in_network_files = plan.get('in_network_files')
@@ -813,18 +813,13 @@ def gen_plan_row(plan, metadata, url) -> Row:
 		for reporting_plan in reporting_plans[:1]:
 
 			plan_row = dict(
-                                in_network_file_id = file_row['id'],
-				reporting_entity_name = metadata['reporting_entity_name'],
-				table_of_contents_url = url,
                                 plan_name = reporting_plan['plan_name'],
                                 plan_id_type = reporting_plan['plan_id_type'],
                                 plan_id = reporting_plan['plan_id'],
                                 plan_market_type = reporting_plan['plan_market_type'],
-	                        reporting_entity_type = metadata['reporting_entity_type'],
-				in_network_file_url = in_network_url,
                         )
 
-			yield plan_row
+			yield plan_row, file_row
 
 
 def index_file_to_csv(
@@ -844,12 +839,15 @@ def index_file_to_csv(
 	parser = start_parser(file)
 	completed = False
 
+	toc_row = dict(
+		filename = extract_filename_from_url(url)
+	)
+	toc_row = append_hash(toc_row, 'id')
+	toc_row['url'] = url
+
 	while True:
 		try:
 			prefix, event, value = next(parser)
-			print(prefix, event, value)
-			if 'value' in dir(metadata):
-				print(metadata.value)
 		except StopIteration:
 			if completed: break
 			else:
@@ -868,11 +866,21 @@ def index_file_to_csv(
 				continue
 
 			for plan in gen_plan(parser):
-				metadata_value = metadata.value
-				for plan_row in gen_plan_row(plan, metadata_value, url):
-					write_table(plan_row, 'table_of_contents', out_dir)
+				for plan_row, file_row in gen_plan_row(plan):
+					plan_row.update(metadata.value)
+					insurer_row = insurer_row_from_dict(plan_row)
+					write_table(insurer_row, 'insurer', out_dir)
+					toc_insurer_row = dict(
+						insurer_id = insurer_row['id'],
+						file_id = file_row['id'],
+						url = file_row['url'],
+						toc_id = toc_row['id'],
+					)
+					write_table(toc_insurer_row, 'toc_insurer', out_dir)
 
 			completed = True
 
 		elif not completed:
 			metadata.event(event, value)
+
+	write_table(toc_row, 'toc', out_dir)

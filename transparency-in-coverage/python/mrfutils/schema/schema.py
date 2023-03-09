@@ -50,15 +50,15 @@ SCHEMA = {
         "npi",
         "tin_id",
     ],
-    "table_of_contents": [
-        "in_network_file_id",
-        "reporting_entity_name",
-        "table_of_contents_url",
-        "reporting_entity_type",
-        "plan_name",
-        "plan_id",
-        "plan_id_type",
-        "plan_market_type",
-        "in_network_file_url",
+    "toc_insurer": [
+        "insurer_id",
+        "file_id",
+        "toc_id",
+        "url",
+    ],
+    "toc": [
+        "id",
+        "filename",
+        "url",
     ]
 }
