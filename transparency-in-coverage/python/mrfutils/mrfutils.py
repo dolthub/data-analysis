@@ -807,7 +807,7 @@ def gen_plan_row(plan) -> Row:
 		file_row = dict(
                         filename = filename,
                 )
-		file_row = append_hash(file_row, 'id')
+		file_row = append_hash(file_row, 'file_id')
 		file_row['url'] = in_network_url
 
 		for reporting_plan in reporting_plans[:1]:
@@ -819,7 +819,8 @@ def gen_plan_row(plan) -> Row:
                                 plan_market_type = reporting_plan['plan_market_type'],
                         )
 
-			yield plan_row, file_row
+			plan_row.update(file_row)
+			yield plan_row
 
 
 def index_file_to_csv(
@@ -866,17 +867,18 @@ def index_file_to_csv(
 				continue
 
 			for plan in gen_plan(parser):
-				for plan_row, file_row in gen_plan_row(plan):
+				for plan_row in gen_plan_row(plan):
 					plan_row.update(metadata.value)
-					insurer_row = insurer_row_from_dict(plan_row)
-					write_table(insurer_row, 'insurer', out_dir)
-					toc_insurer_row = dict(
-						insurer_id = insurer_row['id'],
-						file_id = file_row['id'],
-						url = file_row['url'],
+					toc_plan_row = dict(
 						toc_id = toc_row['id'],
+						file_id = plan_row['file_id'],
+						selected_plan_name = plan_row['plan_name'],
+                                                selected_plan_id_type = plan_row['plan_id_type'],
+                                                selected_plan_id = plan_row['plan_id'],
+                                                selected_plan_market_type = plan_row['plan_market_type'],
+						url = plan_row['url']
 					)
-					write_table(toc_insurer_row, 'toc_insurer', out_dir)
+					write_table(toc_plan_row, 'toc_plan', out_dir)
 
 			completed = True
 

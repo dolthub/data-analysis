@@ -79,12 +79,14 @@ CREATE TABLE IF NOT EXISTS toc (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS toc_insurer (
+CREATE TABLE IF NOT EXISTS toc_plan (
     toc_id BIGINT UNSIGNED,
     file_id BIGINT UNSIGNED,
-    insurer_id BIGINT UNSIGNED,
+    selected_plan_name VARCHAR(200),
+    selected_plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
+    selected_plan_id VARCHAR(11),
+    selected_plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
     url TEXT,
-    PRIMARY KEY (toc_id, file_id, insurer_id),
+    PRIMARY KEY (toc_id, file_id),
     FOREIGN KEY (toc_id) REFERENCES toc(id),
-    FOREIGN KEY (insurer_id) REFERENCES insurer(id)
 );
