@@ -2,7 +2,7 @@
 # Usage: bash import.sh <out_dir> 
 # <out_dir> is where your root.csv (etc.) files are saved
 
-for table in file insurer code price_metadata rate tin tin_rate_file npi_tin;
+for table in file insurer code price_metadata rate tin tin_rate_file npi_tin toc toc_insurer;
 do
   echo WRITING TABLE $table
   dolt table import -u $table $1/$table.csv
