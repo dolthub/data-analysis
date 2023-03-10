@@ -14,3 +14,6 @@ log.txt
 *.tfstate.backup
 *.plan
 do_token.txt
+
+# Ignore files from building
+transparency-in-coverage/python/mrfutils/mrfutils.egg-info/*
