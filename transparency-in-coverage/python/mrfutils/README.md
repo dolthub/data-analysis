@@ -20,8 +20,7 @@ Please let me know if you find any issues!
 If you plan on running any of the examples in the `examples/` folder, go to `mrfutils/` (this directory) and do
 
 ```
-pip install -e .
-pip install -r requirements.txt
+pip install .
 ```
 
 to make sure that this package is installed as a development module with the right requirements.
