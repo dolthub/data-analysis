@@ -2,14 +2,14 @@ CREATE TABLE IF NOT EXISTS file (
     id BIGINT UNSIGNED,
     filename VARCHAR(1000),
     last_updated_on VARCHAR(20),
+    reporting_entity_name VARCHAR(200),
+    reporting_entity_type VARCHAR(200),
+    plan_name VARCHAR(200),
+    plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
+    plan_id VARCHAR(11),
+    plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
+    version VARCHAR(30),
     url TEXT,
-    PRIMARY KEY (id)
-);
-
-CREATE TABLE IF NOT EXISTS insurer (
-    id BIGINT UNSIGNED,
-    reporting_entity_name VARCHAR(500),
-    reporting_entity_type VARCHAR(500),
     PRIMARY KEY (id)
 );
 
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS code (
     PRIMARY KEY (id)
 );
 
-CREATE TABLE IF NOT EXISTS price_metadata (
+CREATE TABLE IF NOT EXISTS rate_metadata (
     id BIGINT UNSIGNED,
     billing_class ENUM("professional", "institutional") COLLATE utf8mb4_general_ci,
 --    negotiated_type ENUM("negotiated", "derived", "fee schedule", "percentage", "per diem") COLLATE utf8mb4_general_ci,
@@ -38,14 +38,12 @@ CREATE TABLE IF NOT EXISTS price_metadata (
 
 CREATE TABLE IF NOT EXISTS rate (
     id BIGINT UNSIGNED,
-    insurer_id BIGINT UNSIGNED,
     code_id BIGINT UNSIGNED,
-    price_metadata_id BIGINT UNSIGNED,
+    rate_metadata_id BIGINT UNSIGNED,
     negotiated_rate DECIMAL(9,2),
     PRIMARY KEY (id),
     FOREIGN KEY (code_id) REFERENCES code(id),
-    FOREIGN KEY (insurer_id) REFERENCES insurer(id),
-    FOREIGN KEY (price_metadata_id) REFERENCES price_metadata(id)
+    FOREIGN KEY (rate_metadata_id) REFERENCES rate_metadata(id)
 );
 
 CREATE TABLE IF NOT EXISTS tin (
@@ -70,23 +68,4 @@ CREATE TABLE IF NOT EXISTS tin_rate_file (
     FOREIGN KEY (file_id) REFERENCES file(id),
     FOREIGN KEY (rate_id) REFERENCES rate(id),
     FOREIGN KEY (tin_id) REFERENCES tin(id)
-);
-
-CREATE TABLE IF NOT EXISTS toc (
-    id BIGINT UNSIGNED,
-    filename VARCHAR(1000),
-    url TEXT,
-    PRIMARY KEY (id)
-);
-
-CREATE TABLE IF NOT EXISTS toc_plan (
-    toc_id BIGINT UNSIGNED,
-    file_id BIGINT UNSIGNED,
-    selected_plan_name VARCHAR(200),
-    selected_plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
-    selected_plan_id VARCHAR(11),
-    selected_plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
-    url TEXT,
-    PRIMARY KEY (toc_id, file_id),
-    FOREIGN KEY (toc_id) REFERENCES toc(id),
 );

@@ -98,8 +98,8 @@ def write_table(
 			writer.writerow(row_data)
 
 
-def file_row_from_mixed(
-	plan_data: dict,
+def file_row_from_url(
+	# plan_data: dict,
 	url: str
 ) -> Row:
 
@@ -107,25 +107,22 @@ def file_row_from_mixed(
 
 	file_row = dict(
 		filename = filename,
-		# last_updated_on = plan_data['last_updated_on']
+		# last_updated_on = plan_data['last_updated_on'],
 	)
 
 	file_row = append_hash(file_row, 'id')
 
-	# URL is excluded from the hash
-	file_row['url'] = url
-
 	return file_row
 
 
-def write_file(
-	plan: dict,
-	url: str,
-	out_dir: str,
-) -> None:
-
-	file_row = file_row_from_mixed(plan, url)
-	write_table(file_row, 'file', out_dir)
+# def write_file(
+# 	plan: dict,
+# 	url: str,
+# 	out_dir: str,
+# ) -> None:
+#
+# 	file_row = file_row_from_url(plan, url)
+# 	write_table(file_row, 'file', out_dir)
 
 
 def insurer_row_from_dict(plan_data: dict) -> Row:
@@ -179,8 +176,8 @@ def code_row_from_dict(in_network_item: dict) -> Row:
 	return code_row
 
 
-def price_metadata_price_tuple_from_dict(
-	price_item: dict,
+def rate_metadata_rate_tuple_from_dict(
+	rate_item: dict,
 ) -> tuple[Row, float] | None:
 
 	keys = [
@@ -189,10 +186,10 @@ def price_metadata_price_tuple_from_dict(
 		'expiration_date',
 	]
 
-	price_metadata_row = {key: price_item[key] for key in keys}
+	rate_metadata_row = {key: rate_item[key] for key in keys}
 
 	# Optional key
-	price_metadata_row['additional_information'] = price_item.get('additional_information')
+	rate_metadata_row['additional_information'] = rate_item.get('additional_information')
 
 	optional_json_keys = [
 		'service_code',
@@ -200,29 +197,29 @@ def price_metadata_price_tuple_from_dict(
 	]
 
 	for key in optional_json_keys:
-		if price_item.get(key):
-			price_item[key] = [value for value in price_item[key] if value is not None]
-			sorted_value = sorted(price_item[key])
+		if rate_item.get(key):
+			rate_item[key] = [value for value in rate_item[key] if value is not None]
+			sorted_value = sorted(rate_item[key])
 			if not sorted_value:
 				# [] should resove to None in the database
-				price_metadata_row[key] = None
+				rate_metadata_row[key] = None
 			else:
-				price_metadata_row[key] = json.dumps(sorted_value)
+				rate_metadata_row[key] = json.dumps(sorted_value)
 
-	price_metadata_row = append_hash(price_metadata_row, 'id')
-	negotiated_rate = price_item['negotiated_rate']
+	rate_metadata_row = append_hash(rate_metadata_row, 'id')
+	negotiated_rate = rate_item['negotiated_rate']
 
-	return price_metadata_row, negotiated_rate
+	return rate_metadata_row, negotiated_rate
 
 
-def price_metadata_combined_rows_from_dict(rate: dict) -> list[tuple[Row, float]]:
+def rate_metadata_combined_rows_from_dict(rate: dict) -> list[tuple[Row, float]]:
 
-	price_metadata_combined_rows = []
+	rate_metadata_combined_rows = []
 	for price in rate['negotiated_prices']:
-		price_metadata_combined_row = price_metadata_price_tuple_from_dict(price)
-		price_metadata_combined_rows.append(price_metadata_combined_row)
+		rate_metadata_combined_row = rate_metadata_rate_tuple_from_dict(price)
+		rate_metadata_combined_rows.append(rate_metadata_combined_row)
 
-	return price_metadata_combined_rows
+	return rate_metadata_combined_rows
 
 
 def tin_rate_file_rows_from_mixed(
@@ -249,18 +246,16 @@ def tin_rate_file_rows_from_mixed(
 
 
 def rate_rows_from_mixed(
-	insurer_id: str,
 	code_row: Row,
-	price_metadata_combined_rows: list[tuple[Row, float]],
+	rate_metadata_combined_rows: list[tuple[Row, float]],
 ) -> list[Row]:
 
 	rate_rows = []
 
-	for price_metadata_row, negotiated_rate in price_metadata_combined_rows:
+	for rate_metadata_row, negotiated_rate in rate_metadata_combined_rows:
 		rate_row = Row(
-			insurer_id = insurer_id,
 			code_id = code_row['id'],
-			price_metadata_id = price_metadata_row['id'],
+			rate_metadata_id = rate_metadata_row['id'],
 			negotiated_rate = negotiated_rate
 		)
 
@@ -296,7 +291,6 @@ def tin_rows_and_npi_tin_rows_from_dict(
 
 
 def write_in_network_item(
-	insurer_id: str,
 	file_id: str,
 	in_network_item: dict,
 	out_dir
@@ -307,14 +301,13 @@ def write_in_network_item(
 
 	for rate in in_network_item['negotiated_rates']:
 
-		price_metadata_combined_rows = price_metadata_combined_rows_from_dict(rate)
-		price_metadata_rows = [a[0] for a in price_metadata_combined_rows]
-		write_table(price_metadata_rows, 'price_metadata', out_dir)
+		rate_metadata_combined_rows = rate_metadata_combined_rows_from_dict(rate)
+		rate_metadata_rows = [a[0] for a in rate_metadata_combined_rows]
+		write_table(rate_metadata_rows, 'rate_metadata', out_dir)
 
 		rate_rows = rate_rows_from_mixed(
-			insurer_id = insurer_id,
 			code_row = code_row,
-			price_metadata_combined_rows = price_metadata_combined_rows,
+			rate_metadata_combined_rows = rate_metadata_combined_rows,
 		)
 		write_table(rate_rows, 'rate', out_dir)
 
@@ -716,6 +709,9 @@ def in_network_file_to_csv(
 	metadata = ijson.ObjectBuilder()
 	parser = start_parser(file)
 
+	file_row = file_row_from_url(url)
+	file_id = file_row['id']
+
 	while True:
 		# This loop runs as long as there's a parser.
 		# We don't use
@@ -746,143 +742,20 @@ def in_network_file_to_csv(
 		# 3. provider_references
 		# 4. last_updated_on
 		elif value == 'in_network':
-			if (
-				ref_map is None or
-				'value' not in dir(metadata) or
-				not metadata.value.get('reporting_entity_name') or
-				not metadata.value.get('reporting_entity_type') or
-				not metadata.value.get('last_updated_on')
-			):
+			if ref_map is None:
 				ffwd(parser, to_prefix = 'in_network', to_event = 'end_array')
 				continue
-
-			# We enter this block when those conditions are met
-			insurer_row = insurer_row_from_dict(metadata.value)
-			insurer_id = insurer_row['id']
-
-			file_row = file_row_from_mixed(metadata.value, url)
-			file_id = file_row['id']
 
 			filtered_items = gen_in_network_items(parser, code_filter)
 			swapped_items = swap_references(filtered_items, ref_map)
 
 			for item in process_in_network(swapped_items, npi_filter):
-				write_in_network_item(insurer_id, file_id, item, out_dir)
+				write_in_network_item(file_id, item, out_dir)
 
 			completed = True
 
 		elif not completed:
 			metadata.event(event, value)
 
-	write_file(metadata.value, url, out_dir)
-	write_insurer(metadata.value, out_dir)
-
-# New functions for importing Table of Contents files (index.json)
-###################################################################
-
-def gen_plan(parser) -> dict:
-
-    builder = ijson.ObjectBuilder()
-    for prefix, event, value in parser:
-        builder.event(event, value)
-
-        if (prefix, event) == ('reporting_structure.item', 'end_map'):
-            yield builder.value
-
-        elif (prefix, event, value) == ('reporting_structure', 'end_array', None):
-            return
-
-
-def gen_plan_row(plan) -> Row:
-
-	reporting_plans = plan['reporting_plans']
-	in_network_files = plan.get('in_network_files')
-
-	if not in_network_files:
-		return
-
-	for in_network_file in in_network_files:
-		in_network_url = in_network_file['location']
-		filename = extract_filename_from_url(in_network_url)
-		file_row = dict(
-                        filename = filename,
-                )
-		file_row = append_hash(file_row, 'file_id')
-		file_row['url'] = in_network_url
-
-		for reporting_plan in reporting_plans[:1]:
-
-			plan_row = dict(
-                                plan_name = reporting_plan['plan_name'],
-                                plan_id_type = reporting_plan['plan_id_type'],
-                                plan_id = reporting_plan['plan_id'],
-                                plan_market_type = reporting_plan['plan_market_type'],
-                        )
-
-			plan_row.update(file_row)
-			yield plan_row
-
-
-def index_file_to_csv(
-	url: str,
-	out_dir: str,
-	file: str | None = None,
-) -> None:
-	"""
-	Write a Table of Contents file to a CSV. Does not do deduplication yet.
-	"""
-	assert url is not None
-	make_dir(out_dir)
-
-	if file is None: file = url
-
-	metadata = ijson.ObjectBuilder()
-	parser = start_parser(file)
-	completed = False
-
-	toc_row = dict(
-		filename = extract_filename_from_url(url)
-	)
-	toc_row = append_hash(toc_row, 'id')
-	toc_row['url'] = url
-
-	while True:
-		try:
-			prefix, event, value = next(parser)
-		except StopIteration:
-			if completed: break
-			else:
-				parser = start_parser(file)
-				ffwd(parser, to_prefix='', to_value='reporting_structure')
-				state = ('', 'map_key', 'reporting_structure')
-				prepend(state, parser)
-
-		if (prefix, event, value) == ('reporting_structure', 'start_array', None):
-			if (
-				'value' not in dir(metadata) or
-				not metadata.value.get('reporting_entity_name') or
-				not metadata.value.get('reporting_entity_type')
-			):
-				ffwd(parser, to_prefix = 'reporting_structure', to_event = 'end_array')
-				continue
-
-			for plan in gen_plan(parser):
-				for plan_row in gen_plan_row(plan):
-					plan_row.update(metadata.value)
-					toc_plan_row = dict(
-						toc_id = toc_row['id'],
-						file_id = plan_row['file_id'],
-						selected_plan_name = plan_row['plan_name'],
-                                                selected_plan_id_type = plan_row['plan_id_type'],
-                                                selected_plan_id = plan_row['plan_id'],
-                                                selected_plan_market_type = plan_row['plan_market_type'],
-						url = plan_row['url']
-					)
-					write_table(toc_plan_row, 'toc_plan', out_dir)
-
-			completed = True
-
-		elif not completed:
-			metadata.event(event, value)
-
-	write_table(toc_row, 'toc', out_dir)
+	file_row.update(metadata.value)
+	write_table(file_row, 'file', out_dir)

@@ -2,17 +2,15 @@ SCHEMA = {
     "file": [
         "id",
         "filename",
-        "last_updated_on",
-        "url",
-    ],
-    "insurer": [
-        "id",
         "reporting_entity_name",
         "reporting_entity_type",
         'plan_name',
 	'plan_id_type',
 	'plan_id',
 	'plan_market_type',
+        "last_updated_on",
+        "version",
+        "url",
     ],
     "code": [
         "id",
@@ -20,7 +18,7 @@ SCHEMA = {
         "billing_code",
         "billing_code_type",
     ],
-    "price_metadata": [
+    "rate_metadata": [
         "id",
         "billing_class",
         "negotiated_type",
@@ -31,9 +29,8 @@ SCHEMA = {
     ],
     "rate": [
         "id",
-        "insurer_id",
         "code_id",
-        "price_metadata_id",
+        "rate_metadata_id",
         "negotiated_rate",
     ],
     "tin": [
