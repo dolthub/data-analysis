@@ -823,6 +823,7 @@ def gen_plan_row(plan) -> Row:
 			yield plan_row
 
 
+
 def index_file_to_csv(
 	url: str,
 	out_dir: str,
@@ -845,6 +846,9 @@ def index_file_to_csv(
 	)
 	toc_row = append_hash(toc_row, 'id')
 	toc_row['url'] = url
+
+    # For deduplicating
+	written_lines = set()
 
 	while True:
 		try:
@@ -878,7 +882,14 @@ def index_file_to_csv(
                                                 selected_plan_market_type = plan_row['plan_market_type'],
 						url = plan_row['url']
 					)
-					write_table(toc_plan_row, 'toc_plan', out_dir)
+					# check if line has already been written
+					line = ','.join(str(val) for val in toc_plan_row.values())
+					if line in written_lines:
+						continue
+					else:
+						written_lines.add(line)
+						write_table(toc_plan_row, 'toc_plan', out_dir)
+
 
 			completed = True
 
