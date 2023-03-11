@@ -106,8 +106,7 @@ def file_row_from_url(
 	filename = extract_filename_from_url(url)
 
 	file_row = dict(
-		filename = filename,
-		# last_updated_on = plan_data['last_updated_on'],
+		filename = filename, url = url
 	)
 
 	file_row = append_hash(file_row, 'id')
