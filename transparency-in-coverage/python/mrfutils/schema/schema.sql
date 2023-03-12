@@ -1,15 +1,15 @@
 CREATE TABLE IF NOT EXISTS file (
     id BIGINT UNSIGNED,
-    filename VARCHAR(1000),
-    last_updated_on VARCHAR(20),
-    reporting_entity_name VARCHAR(200),
-    reporting_entity_type VARCHAR(200),
+    filename VARCHAR(1000) NOT NULL,
+    last_updated_on VARCHAR(20) NOT NULL,
+    reporting_entity_name VARCHAR(200) NOT NULL,
+    reporting_entity_type VARCHAR(200) NOT NULL,
     plan_name VARCHAR(200),
     plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
     plan_id VARCHAR(11),
     plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
     version VARCHAR(30),
-    url TEXT,
+    url TEXT NOT NULL,
     PRIMARY KEY (id)
 );
 

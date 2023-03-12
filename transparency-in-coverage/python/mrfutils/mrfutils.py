@@ -59,7 +59,7 @@ from schema.schema import SCHEMA
 # install on Mac with
 # brew install yajl
 # or comment out this line!
-assert ijson.backend in ('yajl2_c', 'yajl2_cffi')
+# assert ijson.backend in ('yajl2_c', 'yajl2_cffi')
 
 log = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s - %(message)s')
@@ -99,7 +99,6 @@ def write_table(
 
 
 def file_row_from_url(
-	# plan_data: dict,
 	url: str
 ) -> Row:
 
@@ -107,55 +106,12 @@ def file_row_from_url(
 
 	file_row = dict(
 		filename = filename,
-		# last_updated_on = plan_data['last_updated_on'],
 	)
 
 	file_row = append_hash(file_row, 'id')
+	file_row['url'] = url
 
 	return file_row
-
-
-# def write_file(
-# 	plan: dict,
-# 	url: str,
-# 	out_dir: str,
-# ) -> None:
-#
-# 	file_row = file_row_from_url(plan, url)
-# 	write_table(file_row, 'file', out_dir)
-
-
-def insurer_row_from_dict(plan_data: dict) -> Row:
-
-	keys = [
-		'reporting_entity_name',
-		'reporting_entity_type',
-	]
-
-	insurer_row = {key : plan_data[key] for key in keys}
-	insurer_row = append_hash(insurer_row, 'id')
-
-	optional_keys = [
-		'plan_name',
-		'plan_id_type',
-		'plan_id',
-		'plan_market_type',
-	]
-
-	insurer_row.update(
-		{key: plan_data.get(key) for key in optional_keys}
-	)
-
-	return insurer_row
-
-
-def write_insurer(
-	plan_metadata: dict,
-	out_dir: str,
-) -> None:
-
-	insurer_row = insurer_row_from_dict(plan_metadata)
-	write_table(insurer_row, 'insurer', out_dir)
 
 
 def code_row_from_dict(in_network_item: dict) -> Row:
@@ -699,6 +655,7 @@ def in_network_file_to_csv(
 	isn't an optional parameter.
 	"""
 	assert url is not None
+	assert validate_url(url)
 	make_dir(out_dir)
 
 	if file is None: file = url
@@ -710,6 +667,7 @@ def in_network_file_to_csv(
 	parser = start_parser(file)
 
 	file_row = file_row_from_url(url)
+	file_row['url'] = url
 	file_id = file_row['id']
 
 	while True:
