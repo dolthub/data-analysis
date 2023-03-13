@@ -53,6 +53,8 @@ class JSONOpen:
 
 		parsed_url = urlparse(self.filename)
 		self.suffix = ''.join(Path(parsed_url.path).suffixes)
+		if not self.suffix:
+			self.suffix = ''.join(Path(parsed_url.query).suffixes)
 
 		if not (
 			self.suffix.endswith('.json.gz') or
