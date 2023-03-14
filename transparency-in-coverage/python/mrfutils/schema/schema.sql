@@ -119,9 +119,9 @@ CREATE TABLE IF NOT EXISTS toc_plan (
 );
 
 CREATE TABLE IF NOT EXISTS toc_file (
+    id BIGINT UNSIGNED,
     toc_id BIGINT UNSIGNED,
     toc_plan_file_link BIGINT UNSIGNED,
-    id BIGINT UNSIGNED,
     description TEXT,
     filename VARCHAR(1000),
     url TEXT,

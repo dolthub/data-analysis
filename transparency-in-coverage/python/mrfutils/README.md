@@ -112,7 +112,7 @@ Note that you always have the pass the source URL.
 
 You can use the `import_in_network.sh` shell script to quickly import in-network files produced by `in_network_file_to_csv()`. The same goes for `import_toc.sh`.
 
-### Q: Why does `mrfutils` create so many duplicate rows in the CSVs?
+#### Q: Why does `mrfutils` create so many duplicate rows in the CSVs?
 
 `mrfutils` doesn't know what data its seen before and will write everything as it sees it. For example, it writes a TIN value every time it comes across one while writing a rate. On the one hand, this means it only writes what it uses. On the other, it means that what it does use, it can write multiple times. The only way to avoid duplicating the information on saving is to either rewrite the program logic or to use a database. 
 
