@@ -96,6 +96,9 @@ where the flags are
 --url <mrf url>
 ```
 
+#### Q: What if I want to use a local file?
+Pass the local file to `--file` and the url as `--url`. `mrfutils.py` will read from the local file but use the URL to get the filename. The URL that appears in the database will come from the URL. 
+
 #### Q: What python version do I need?
 A: Right now it works best under python 3.9, since `ijson` has not released its high performance C backend for 3.10+ yet.
 

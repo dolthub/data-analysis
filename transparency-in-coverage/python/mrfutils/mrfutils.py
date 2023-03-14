@@ -295,11 +295,11 @@ def process_arr(func, arr, *args, **kwargs):
 
 def process_group(group: dict, npi_filter: set) -> dict | None:
 	try:
-		group['npi'] = [str(n) for n in group['npi']]
+		group['npi'] = [int(n) for n in group['npi']]
 	except KeyError:
 		# I was alerted that sometimes this key is capitalized
 		# HOTFIX
-		group['npi'] = [str(n) for n in group['NPI']]
+		group['npi'] = [int(n) for n in group['NPI']]
 
 	# I was alerted that some
 	if not npi_filter:
@@ -654,6 +654,9 @@ def in_network_file_to_csv(
 	As of 1/2/2023 the filename is extracted from the URL, so this
 	isn't an optional parameter.
 	"""
+	if npi_filter:
+		npi_filter = set(int(n) for n in list(npi_filter))
+
 	assert url is not None
 	assert validate_url(url)
 	make_dir(out_dir)

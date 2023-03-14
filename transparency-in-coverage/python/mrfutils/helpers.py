@@ -153,7 +153,7 @@ def filename_hasher(filename: str) -> int:
 
 	return filename_hash
 
-from urllib.parse import urlparse
+
 def validate_url(test_url: str) -> bool:
 	# https://stackoverflow.com/a/38020041
 	try:
