@@ -69,3 +69,62 @@ CREATE TABLE IF NOT EXISTS tin_rate_file (
     FOREIGN KEY (rate_id) REFERENCES rate(id),
     FOREIGN KEY (tin_id) REFERENCES tin(id)
 );
+
+
+    "toc": [
+        "id",
+        "reporting_entity_name",
+        "reporting_entity_type",
+        "filename",
+        "url",
+    ],
+    "toc_plan": [
+        "toc_id",
+        "toc_plan_file_link",
+        "plan_id",
+        "plan_name",
+        "plan_id_type",
+        "plan_market_type",
+    ],
+    "toc_file": [
+        "toc_id",
+        "toc_plan_file_link",
+        "id",
+        "description",
+        "filename",
+        "url",
+    ]
+
+-- for the index files
+
+CREATE TABLE IF NOT EXISTS toc (
+    id BIGINT UNSIGNED,
+    reporting_entity_name VARCHAR(200) NOT NULL,
+    reporting_entity_type VARCHAR(200) NOT NULL,
+    filename VARCHAR(1000) NOT NULL,
+    url TEXT,
+    PRIMARY KEY (id)
+);
+
+CREATE TABLE IF NOT EXISTS toc_plan (
+    id BIGINT UNSIGNED,
+    toc_id BIGINT UNSIGNED,
+    toc_plan_file_link BIGINT UNSIGNED,
+    plan_id VARCHAR(10),
+    plan_name VARCHAR(500),
+    plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
+    plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
+    PRIMARY KEY (id),
+    FOREIGN KEY (toc_id) REFERENCES toc(id)
+);
+
+CREATE TABLE IF NOT EXISTS toc_file (
+    toc_id BIGINT UNSIGNED,
+    toc_plan_file_link BIGINT UNSIGNED,
+    id BIGINT UNSIGNED,
+    description TEXT,
+    filename VARCHAR(1000),
+    url TEXT,
+    PRIMARY KEY (id),
+    FOREIGN KEY (toc_id) REFERENCES toc(id)
+);

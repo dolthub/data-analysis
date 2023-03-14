@@ -47,4 +47,28 @@ SCHEMA = {
         "npi",
         "tin_id",
     ],
+    "toc": [
+        "id",        
+        "reporting_entity_name",
+        "reporting_entity_type",
+        "filename",
+        "url",
+    ],
+    "toc_plan": [
+        "id",
+        "toc_id",
+        "toc_plan_file_link",
+        "plan_id",
+        "plan_name",
+        "plan_id_type",
+        "plan_market_type",
+    ],  
+    "toc_file": [
+        "id",
+        "toc_id",
+        "toc_plan_file_link",
+        "description",
+        "filename",
+        "url",
+    ]   
 }

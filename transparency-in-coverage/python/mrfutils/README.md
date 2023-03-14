@@ -90,11 +90,33 @@ python3 example_cli.py --url <url> --out-dir <output_dir> --code-file <code_file
 
 where the flags are
 ```
---npis <npifile.csv>
---codes <codesfile.csv>
+--npi-file <npifile.csv>
+--code-file <codesfile.csv>
 --out <outputdirectory>
 --url <mrf url>
 ```
+
+### Handling index/table_of_contents files
+
+If plan information isn't in the in-network file, then it's in an index file somewhere else. There's another tool in `mrfutils` called `toc_file_to_csv()` that you use the same way:
+```python
+toc_file_to_csv(url = 'http://my_index_file.com/thefileitself.json', out_dir = 'some_dir')
+```
+or with an optional `file` parameter (if you have the file saved to disk):
+```python
+toc_file_to_csv(file = 'local_file.json', url = 'http://my_index_file.com/thefileitself.json', out_dir = 'some_dir')
+```
+Note that you always have the pass the source URL.
+
+### Importing
+
+You can use the `import_in_network.sh` shell script to quickly import in-network files produced by `in_network_file_to_csv()`. The same goes for `import_toc.sh`.
+
+### Q: Why does `mrfutils` create so many duplicate rows in the CSVs?
+
+`mrfutils` doesn't know what data its seen before and will write everything as it sees it. For example, it writes a TIN value every time it comes across one while writing a rate. On the one hand, this means it only writes what it uses. On the other, it means that what it does use, it can write multiple times. The only way to avoid duplicating the information on saving is to either rewrite the program logic or to use a database. 
+
+If you're concerned about the size of the CSVs or duplicate rows, I recommend deduplicating using a dataframe library like pandas or polars after saving.
 
 #### Q: What if I want to use a local file?
 Pass the local file to `--file` and the url as `--url`. `mrfutils.py` will read from the local file but use the URL to get the filename. The URL that appears in the database will come from the URL. 

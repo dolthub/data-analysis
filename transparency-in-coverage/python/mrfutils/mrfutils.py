@@ -292,7 +292,7 @@ def process_arr(func, arr, *args, **kwargs):
 			processed_arr.append(processed_item)
 	return processed_arr
 
-
+from array import array
 def process_group(group: dict, npi_filter: set) -> dict | None:
 	try:
 		group['npi'] = [int(n) for n in group['npi']]
@@ -300,6 +300,8 @@ def process_group(group: dict, npi_filter: set) -> dict | None:
 		# I was alerted that sometimes this key is capitalized
 		# HOTFIX
 		group['npi'] = [int(n) for n in group['NPI']]
+
+	group['npi'] = array('L', group['npi'])
 
 	# I was alerted that some
 	if not npi_filter:
@@ -655,6 +657,7 @@ def in_network_file_to_csv(
 	isn't an optional parameter.
 	"""
 	if npi_filter:
+		log.debug('Converting npi_filter to ints from strings')
 		npi_filter = set(int(n) for n in list(npi_filter))
 
 	assert url is not None
@@ -720,3 +723,74 @@ def in_network_file_to_csv(
 
 	file_row.update(metadata.value)
 	write_table(file_row, 'file', out_dir)
+
+### TOOLS FOR PROCESSING INDEX FILES
+
+def gen_plan_file(parser):
+	plan_file = ijson.ObjectBuilder()
+	for prefix, event, value in parser:
+		plan_file.event(event, value)
+
+		if (prefix, event) == ('reporting_structure.item', 'end_map'):
+			yield plan_file.value
+			plan_file = ijson.ObjectBuilder()
+
+		elif (prefix, event, value) == ('reporting_structure', 'end_array', None):
+			return
+
+def write_plan_file(plan_file, toc_id, out_dir):
+	toc_plan_file_link = dicthasher(plan_file)
+	for plan in plan_file['reporting_plans']:
+
+		plan_row = append_hash(plan, 'id')
+
+		plan_row['toc_plan_file_link'] = toc_plan_file_link
+		plan_row['toc_id'] = toc_id
+
+		write_table(plan_row, 'toc_plan', out_dir)
+
+	for file in plan_file['in_network_files']:
+
+		url = file['location']
+		file_row = dict(
+			filename = extract_filename_from_url(url)
+		)
+		file_row = append_hash(file_row, 'id')
+
+		file_row['toc_plan_file_link'] = toc_plan_file_link
+		file_row['toc_id'] = toc_id
+		file_row['url'] = url
+		file_row['description'] = file['description']
+
+		write_table(file_row, 'toc_file', out_dir)
+
+def toc_file_to_csv(
+	url: str,
+	out_dir: str,
+	file:        str | None = None,
+) -> None:
+	assert url is not None
+	assert validate_url(url)
+	make_dir(out_dir)
+
+	if file is None:
+		file = url
+
+	with JSONOpen(file) as f:
+
+		parser = ijson.parse(f)
+		toc_row = dict(
+			filename = extract_filename_from_url(url)
+		)
+		toc_row = append_hash(toc_row, 'id')
+		toc_row['url'] = url
+		toc_id = toc_row['id']
+		metadata = ijson.ObjectBuilder()
+		for prefix, event, value in parser:
+			if (prefix, event, value) == ('reporting_structure', 'start_array', None):
+				for plan_file in gen_plan_file(parser):
+					write_plan_file(plan_file, toc_id, out_dir)
+			else:
+				metadata.event(event, value)
+	toc_row.update(metadata.value)
+	write_table(toc_row, 'toc', out_dir)
