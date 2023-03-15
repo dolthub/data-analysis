@@ -71,30 +71,6 @@ CREATE TABLE IF NOT EXISTS tin_rate_file (
 );
 
 
-    "toc": [
-        "id",
-        "reporting_entity_name",
-        "reporting_entity_type",
-        "filename",
-        "url",
-    ],
-    "toc_plan": [
-        "toc_id",
-        "toc_plan_file_link",
-        "plan_id",
-        "plan_name",
-        "plan_id_type",
-        "plan_market_type",
-    ],
-    "toc_file": [
-        "toc_id",
-        "toc_plan_file_link",
-        "id",
-        "description",
-        "filename",
-        "url",
-    ]
-
 -- for the index files
 
 CREATE TABLE IF NOT EXISTS toc (
