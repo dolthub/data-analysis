@@ -85,8 +85,7 @@ CREATE TABLE IF NOT EXISTS toc (
 CREATE TABLE IF NOT EXISTS toc_plan (
     id BIGINT UNSIGNED,
     toc_id BIGINT UNSIGNED,
-    toc_plan_file_link BIGINT UNSIGNED,
-    plan_id VARCHAR(10),
+    plan_id VARCHAR(20),
     plan_name VARCHAR(500),
     plan_id_type ENUM("ein", "hios") COLLATE utf8mb4_general_ci,
     plan_market_type ENUM("group", "individual") COLLATE utf8mb4_general_ci,
@@ -97,10 +96,18 @@ CREATE TABLE IF NOT EXISTS toc_plan (
 CREATE TABLE IF NOT EXISTS toc_file (
     id BIGINT UNSIGNED,
     toc_id BIGINT UNSIGNED,
-    toc_plan_file_link BIGINT UNSIGNED,
     description TEXT,
     filename VARCHAR(1000),
     url TEXT,
     PRIMARY KEY (id),
     FOREIGN KEY (toc_id) REFERENCES toc(id)
+);
+
+CREATE TABLE IF NOT EXISTS toc_plan_file (
+    link BIGINT UNSIGNED,
+    toc_plan_id BIGINT UNSIGNED,
+    toc_file_id BIGINT UNSIGNED,
+    PRIMARY KEY (link, toc_plan_id, toc_file_id),
+    FOREIGN KEY (toc_plan_id) REFERENCES toc_plan(id),
+    FOREIGN KEY (toc_file_id) REFERENCES toc_file(id)
 );

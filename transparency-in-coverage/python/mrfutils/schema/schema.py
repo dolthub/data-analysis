@@ -57,7 +57,7 @@ SCHEMA = {
     "toc_plan": [
         "id",
         "toc_id",
-        "toc_plan_file_link",
+        # "toc_plan_file_link",
         "plan_id",
         "plan_name",
         "plan_id_type",
@@ -66,9 +66,14 @@ SCHEMA = {
     "toc_file": [
         "id",
         "toc_id",
-        "toc_plan_file_link",
+        # "toc_plan_file_link",
         "description",
         "filename",
         "url",
-    ]   
+    ],
+    "toc_plan_file": [
+        "link",
+        "toc_plan_id",
+        "toc_file_id",
+    ],
 }

@@ -740,14 +740,15 @@ def gen_plan_file(parser):
 
 def write_plan_file(plan_file, toc_id, out_dir):
 	toc_plan_file_link = dicthasher(plan_file)
+	plan_rows = []
+	file_rows = []
 	for plan in plan_file['reporting_plans']:
 
 		plan_row = append_hash(plan, 'id')
-
-		plan_row['toc_plan_file_link'] = toc_plan_file_link
 		plan_row['toc_id'] = toc_id
 
 		write_table(plan_row, 'toc_plan', out_dir)
+		plan_rows.append(plan_row)
 
 	for file in plan_file['in_network_files']:
 
@@ -757,12 +758,21 @@ def write_plan_file(plan_file, toc_id, out_dir):
 		)
 		file_row = append_hash(file_row, 'id')
 
-		file_row['toc_plan_file_link'] = toc_plan_file_link
 		file_row['toc_id'] = toc_id
 		file_row['url'] = url
 		file_row['description'] = file['description']
 
 		write_table(file_row, 'toc_file', out_dir)
+		file_rows.append(file_row)
+
+	for plan_row in plan_rows:
+		for file_row in file_rows:
+			toc_plan_file_row = dict(
+				link = toc_plan_file_link,
+				toc_file_id = file_row['id'],
+				toc_plan_id = plan_row['id'],
+			)
+			write_table(toc_plan_file_row, 'toc_plan_file', out_dir)
 
 def toc_file_to_csv(
 	url: str,
