@@ -739,9 +739,14 @@ def gen_plan_file(parser):
 			return
 
 def write_plan_file(plan_file, toc_id, out_dir):
+
+	if not plan_file.get('in_network_files'):
+		return
+
 	toc_plan_file_link = dicthasher(plan_file)
 	plan_rows = []
 	file_rows = []
+
 	for plan in plan_file['reporting_plans']:
 
 		plan_row = append_hash(plan, 'id')
