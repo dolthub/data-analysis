@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from exceptions import InvalidMRF
+from mrfutils.exceptions import InvalidMRF
 
 log = logging.getLogger('mrfutils')
 log.setLevel(logging.INFO)
