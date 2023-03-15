@@ -1,6 +1,6 @@
 import ijson
 import logging
-from mrfutils import JSONOpen
+from mrfutils.helpers import JSONOpen
 
 log = logging.getLogger('mrfutils')
 log.setLevel(logging.DEBUG)
