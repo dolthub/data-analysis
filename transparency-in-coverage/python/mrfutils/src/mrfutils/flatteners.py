@@ -738,7 +738,7 @@ def gen_plan_file(parser):
 		elif (prefix, event, value) == ('reporting_structure', 'end_array', None):
 			return
 
-def write_plan_file(plan_file, toc_id, out_dir):
+def write_plan_file(plan_file, toc_id, out_dir, toc_id_set):
 
 	if not plan_file.get('in_network_files'):
 		return
@@ -767,8 +767,10 @@ def write_plan_file(plan_file, toc_id, out_dir):
 		file_row['url'] = url
 		file_row['description'] = file['description']
 
-		write_table(file_row, 'toc_file', out_dir)
-		file_rows.append(file_row)
+		if toc_id not in toc_id_set:
+			write_table(file_row, 'toc_file', out_dir)
+			file_rows.append(file_row)
+			toc_id_set.add(toc_id)
 
 	for plan_row in plan_rows:
 		for file_row in file_rows:
@@ -801,10 +803,13 @@ def toc_file_to_csv(
 		toc_row['url'] = url
 		toc_id = toc_row['id']
 		metadata = ijson.ObjectBuilder()
+
+		# Initialize set for deduplication
+		toc_id_set = set()
 		for prefix, event, value in parser:
 			if (prefix, event, value) == ('reporting_structure', 'start_array', None):
 				for plan_file in gen_plan_file(parser):
-					write_plan_file(plan_file, toc_id, out_dir)
+					write_plan_file(plan_file, toc_id, out_dir, toc_id_set)
 			else:
 				metadata.event(event, value)
 	toc_row.update(metadata.value)
