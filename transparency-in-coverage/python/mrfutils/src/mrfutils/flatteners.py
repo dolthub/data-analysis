@@ -292,6 +292,7 @@ def process_arr(func, arr, *args, **kwargs):
 			processed_arr.append(processed_item)
 	return processed_arr
 
+# experimental mod
 from array import array
 def process_group(group: dict, npi_filter: set) -> dict | None:
 	try:
@@ -303,13 +304,15 @@ def process_group(group: dict, npi_filter: set) -> dict | None:
 
 	group['npi'] = array('L', group['npi'])
 
-	# I was alerted that some
 	if not npi_filter:
 		return group
 
 	group['npi'] = [n for n in group['npi'] if n in npi_filter]
+
 	if not group['npi']:
 		return
+
+	group['npi'] = array('L', group['npi'])
 
 	return group
 
@@ -769,6 +772,9 @@ def write_plan_file(plan_file, toc_id, out_dir):
 
 		write_table(file_row, 'toc_file', out_dir)
 		file_rows.append(file_row)
+
+	print(len(plan_rows))
+	print(len(file_rows))
 
 	for plan_row in plan_rows:
 		for file_row in file_rows:
