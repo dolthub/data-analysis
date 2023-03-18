@@ -8,6 +8,7 @@ from itertools import chain
 from pathlib import Path
 from urllib.parse import urlparse
 
+import ijson
 import requests
 
 from mrfutils.exceptions import InvalidMRF
