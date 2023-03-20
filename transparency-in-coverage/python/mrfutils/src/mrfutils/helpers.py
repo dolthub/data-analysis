@@ -9,7 +9,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 import zipfile
 import io
-import heartrate; heartrate.trace(browser=True, daemon=True)
 
 import requests
 
@@ -37,8 +36,6 @@ def peek(iterator):
 	except StopIteration: return None, iterator
 	return next_, prepend(next_, iterator)
 
-
-import zipfile
 
 class JSONOpen:
 	"""
@@ -103,10 +100,8 @@ class JSONOpen:
 		return self.f
 
 
-
-
 	def __exit__(self, exc_type, exc_val, exc_tb):
-		if self.is_remote:
+		if self.is_remote and not self.suffix.endswith('.zip'):
 			self.s.close()
 			self.r.close()
 
