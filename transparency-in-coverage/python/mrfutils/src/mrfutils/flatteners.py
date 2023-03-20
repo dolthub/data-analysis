@@ -648,6 +648,7 @@ def in_network_file_to_csv(
 	url: str,
 	out_dir: str,
 	file:        str | None = None,
+	zip_file:    str | None = None,
 	code_filter: set | None = None,
 	npi_filter:  set | None = None,
 ) -> None:
@@ -673,7 +674,7 @@ def in_network_file_to_csv(
 	ref_map = None
 
 	metadata = ijson.ObjectBuilder()
-	parser = start_parser(file)
+	parser = start_parser(file, zip_file)
 
 	file_row = file_row_from_url(url)
 	file_row['url'] = url
