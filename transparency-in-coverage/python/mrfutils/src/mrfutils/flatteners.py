@@ -63,7 +63,7 @@ from mrfutils.schema.schema import SCHEMA
 
 log = logging.getLogger(__name__)
 logging.basicConfig(format='%(asctime)s - %(message)s')
-# log.setLevel(logging.DEBUG)
+log.setLevel(logging.DEBUG)
 
 # To distinguish data from rows
 Row = dict
@@ -292,6 +292,7 @@ def process_arr(func, arr, *args, **kwargs):
 			processed_arr.append(processed_item)
 	return processed_arr
 
+# experimental mod
 from array import array
 def process_group(group: dict, npi_filter: set) -> dict | None:
 	try:
@@ -301,19 +302,17 @@ def process_group(group: dict, npi_filter: set) -> dict | None:
 		# HOTFIX
 		group['npi'] = [int(n) for n in group['NPI']]
 
-	try:
-		group['npi'] = array('L', group['npi'])
-	except:
-		print(group['npi'])
-		raise
+	group['npi'] = array('L', group['npi'])
 
-	# I was alerted that some
 	if not npi_filter:
 		return group
 
 	group['npi'] = [n for n in group['npi'] if n in npi_filter]
+
 	if not group['npi']:
 		return
+
+	group['npi'] = array('L', group['npi'])
 
 	return group
 
@@ -743,7 +742,7 @@ def gen_plan_file(parser):
 		elif (prefix, event, value) == ('reporting_structure', 'end_array', None):
 			return
 
-def write_plan_file(plan_file, toc_id, out_dir, toc_id_set):
+def write_plan_file(plan_file, toc_id, out_dir):
 
 	if not plan_file.get('in_network_files'):
 		return
@@ -772,10 +771,11 @@ def write_plan_file(plan_file, toc_id, out_dir, toc_id_set):
 		file_row['url'] = url
 		file_row['description'] = file['description']
 
-		if toc_id not in toc_id_set:
-			write_table(file_row, 'toc_file', out_dir)
-			file_rows.append(file_row)
-			toc_id_set.add(toc_id)
+		write_table(file_row, 'toc_file', out_dir)
+		file_rows.append(file_row)
+
+	print(len(plan_rows))
+	print(len(file_rows))
 
 	for plan_row in plan_rows:
 		for file_row in file_rows:
@@ -808,13 +808,10 @@ def toc_file_to_csv(
 		toc_row['url'] = url
 		toc_id = toc_row['id']
 		metadata = ijson.ObjectBuilder()
-
-		# Initialize set for deduplication
-		toc_id_set = set()
 		for prefix, event, value in parser:
 			if (prefix, event, value) == ('reporting_structure', 'start_array', None):
 				for plan_file in gen_plan_file(parser):
-					write_plan_file(plan_file, toc_id, out_dir, toc_id_set)
+					write_plan_file(plan_file, toc_id, out_dir)
 			else:
 				metadata.event(event, value)
 	toc_row.update(metadata.value)
