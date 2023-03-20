@@ -697,7 +697,7 @@ def in_network_file_to_csv(
 		except StopIteration:
 			if completed: break
 			if ref_map is None: ref_map = {}
-			parser = start_parser(file)
+			parser = start_parser(file, zip_file)
 			ffwd(parser, to_prefix='', to_value='in_network')
 			prefix, event, value = ('', 'map_key', 'in_network')
 			prepend(('', 'map_key', 'in_network'), parser)
