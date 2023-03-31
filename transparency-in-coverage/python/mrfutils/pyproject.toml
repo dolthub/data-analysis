@@ -1,7 +1,11 @@
 [build-system]
+<<<<<<< HEAD
 requires = [
     "hatchling",
 ]
+=======
+requires = ["hatchling"]
+>>>>>>> 680227ed9b0ee6f479ab13ff940a46966b7367fe
 build-backend = "hatchling.build"
 
 [project]
@@ -27,4 +31,8 @@ dependencies = [
 
 [project.urls]
 "Homepage" = "https://github.com/dolthub/data-analysis/blob/main/transparency-in-coverage/python/mrfutils"
+<<<<<<< HEAD
 "Bug Tracker" = "https://github.com/dolthub/data-analysis/issues"
+=======
+"Bug Tracker" = "https://github.com/dolthub/data-analysis/issues"
+>>>>>>> 680227ed9b0ee6f479ab13ff940a46966b7367fe

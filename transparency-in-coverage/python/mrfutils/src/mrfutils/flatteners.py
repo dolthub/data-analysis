@@ -52,7 +52,11 @@ import aiohttp
 import ijson
 
 from mrfutils.helpers import *
+<<<<<<< HEAD:transparency-in-coverage/python/mrfutils/mrfutils.py
 from schema.schema import SCHEMA
+=======
+from mrfutils.schema.schema import SCHEMA
+>>>>>>> 680227ed9b0ee6f479ab13ff940a46966b7367fe:transparency-in-coverage/python/mrfutils/src/mrfutils/flatteners.py
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9/3.10
@@ -292,6 +296,7 @@ def process_arr(func, arr, *args, **kwargs):
 			processed_arr.append(processed_item)
 	return processed_arr
 
+# experimental mod
 from array import array
 def process_group(group: dict, npi_filter: set) -> dict | None:
 	try:
@@ -303,13 +308,15 @@ def process_group(group: dict, npi_filter: set) -> dict | None:
 
 	group['npi'] = array('L', group['npi'])
 
-	# I was alerted that some
 	if not npi_filter:
 		return group
 
 	group['npi'] = [n for n in group['npi'] if n in npi_filter]
+
 	if not group['npi']:
 		return
+
+	group['npi'] = array('L', group['npi'])
 
 	return group
 
@@ -769,6 +776,9 @@ def write_plan_file(plan_file, toc_id, out_dir):
 
 		write_table(file_row, 'toc_file', out_dir)
 		file_rows.append(file_row)
+
+	print(len(plan_rows))
+	print(len(file_rows))
 
 	for plan_row in plan_rows:
 		for file_row in file_rows:

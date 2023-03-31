@@ -15,61 +15,56 @@ Please let me know if you find any issues!
 2. we have a `file_rate` table to track which rates come from which files. This table is for bookkeeping and can be deleted if you trust the data.
 3. if a file has its `last_updated_on` anywhere but the top of the file, it's ignored. This was by design to make `mrfutils.py` easier to debug. Most files have it at the top, so this only affects a minority of them.
 
-### To get started
+### Getting started
 
-If you plan on running any of the examples in the `examples/` folder, go to `mrfutils/` (this directory) and do
+Go to the folder `python/mrfutils` (the same level as the `pyproject.toml`) and do
 
 ```
-pip install -e .
-pip install -r requirements.txt
+pip install .
 ```
 
-to make sure that this package is installed as a development module with the right requirements.
-
-Then go to `examples` and do:
+Then change directory to `examples` and do:
 
 ```bash
 python example_cli.py --file examplefile.json.gz --url 'http://example.com'
 ```
 This should produce a debug output that explains what it's writing.
 
-You'll want/need the `yajl2_c` backend to make `mrfutils` go fast. Do
+`mrfutils` goes acceptably fast as long as you have the `yajl` backend installed for `ijson`. On Mac, installing looks like:
 
 ```
 brew install yajl
 ```
 
-on Mac, (not sure about Windows instructions) or just comment out the line in `mrfutils.py` to avoid an `AssertionError`.
+### Explaining `example_cli`
 
-
-### The bare minimum
-
-After installing the package all you really need to do is call `json_mrf_to_csv` from `mrfutils`:
+`example_cli.py` just calls one function pretty much:
 
 ```python
->> > from mrfutils import in_network_file_to_csv
+from mrfutils import in_network_file_to_csv
 ```
 
-with the right arguments. 
+with the right arguments. Here's the signature.
 
 ```python
-def json_mrf_to_csv(
+def in_network_file_to_csv(
 	url: str,
 	out_dir: str,
 	file:        str | None = None,
-	code_filter: set | None = None, # not optional for the bounty
-	npi_filter:  set | None = None, # not optional for the bounty
+	code_filter: set | None = None, # not optional for the data bounty
+	npi_filter:  set | None = None, # not optional for the data bounty
 ) -> None:
 ```
 
 The examples show you how to pass in a list of NPIs (set of strings) and CPT codes (set of tuples).
 
-### Specify codes and NPI numbers
+### Adding an NPI/CPT code filter
 
 The amount of data in these files is staggering. MRFUtils will allow you to give it a list of billing codes and NPI numbers and then only take the prices from the MRF that match both the code and NPI.
 
-The codes and NPIs should be passed as CSV files.
+All of our data bounties require you to filter the NPIs/CPTs in some way. For convenience, you just pass them as files (I provide the files).
 
+The file you pass to `--code-file` (one of `example_cli`'s flags) looks something like:
 `codes.csv` looks something like
 ```
 CPT,12345
@@ -77,15 +72,16 @@ CPT,12346
 MS-DRG,123
 ```
 
-and `npis.csv`
+and the file you pass to `--npi-file` is some `npis.csv` like
 ```
 1234567890
 0123453598
 ```
-and so on. To run, first pick an `in-network-rates.json` file, and then do:
+
+To run, first pick an `in-network-rates.json` file, and then do:
 
 ```bash
-python3 example_cli.py --url <url> --out-dir <output_dir> --code-file <code_file_location> --npi-file <npi_file_location>
+python3 example_cli.py --out-dir <output_dir> --code-file <code_file_location> --npi-file <npi_file_location> --url <url>
 ```
 
 where the flags are
@@ -96,6 +92,7 @@ where the flags are
 --url <mrf url>
 ```
 
+**Note: You can find the NPI/code files for the hospitals bounty in `/data/hpt` (hospital price transparency)**
 ### Handling index/table_of_contents files
 
 If plan information isn't in the in-network file, then it's in an index file somewhere else. There's another tool in `mrfutils` called `toc_file_to_csv()` that you use the same way:
@@ -108,9 +105,50 @@ toc_file_to_csv(file = 'local_file.json', url = 'http://my_index_file.com/thefil
 ```
 Note that you always have the pass the source URL.
 
-### Importing
+### Importing to a dolt database
 
-You can use the `import_in_network.sh` shell script to quickly import in-network files produced by `in_network_file_to_csv()`. The same goes for `import_toc.sh`.
+#### Install Dolt
+
+Get Dolt by [following these instructions](https://docs.dolthub.com/introduction/installation).
+
+We're going to try importing to the [hospital price database](https://www.dolthub.com/repositories/dolthub/hospital-prices-allpayers/data/main). Go to the top right-hand corner of the screen and click "Clone". Take a note of wherever that folder is located.
+
+Then run this command:
+```sh
+python3 example_cli.py --out-dir test_dir --code-file data/hpt/70_shoppables.csv --npi-file data/hpt/hospital_npis.csv --url https://uhc-tic-mrf.azureedge.net/public-mrf/2023-03-01/2023-03-01_UnitedHealthcare-Insurance-Company-of-New-York_Third-Party-Administrator_Empire_CSP-477-A351_in-network-rates.json.gz
+```
+
+This will produce a list of csv files in the `test_dir` directory. To import these CSV files in the correct order, then go to `dolt_utils` and copy the `import_in_network.sh` into wherever you cloned the Dolt repo for hospital price transparency. Do
+
+```commandline
+> cp dolt_utils/import_in_network.sh hospital-prices-allpayers
+> cd hospital-prices-allpayers
+> chmod +x import_in_network.sh
+> ./import_in_network.sh ../examples/test_dir
+```
+
+You should see a successful import.
+
+### Handling local files
+
+`example_cli` can handle local files as long as you also pass the URL that that file is linked to:
+
+```
+python3 example_cli --file <local-file> --url <remote-url>
+```
+The URL flag is never optional, but the file flag is.
+
+The same is true for the function `in_network_file_to_csv()`. See the function signature above.
+
+### For index/table of contents files
+
+You can use the same workflow. We don't have an example for index files because it's simple.
+
+```python
+> python
+>>> from mrfutils import toc_file_to_csv
+>>> toc_file_to_csv(index_file_url, out_dir = 'some_dir')
+```
 
 #### Q: Why does `mrfutils` create so many duplicate rows in the CSVs?
 

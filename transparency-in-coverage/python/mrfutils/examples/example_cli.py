@@ -1,7 +1,7 @@
 """
 Example for how to use the functions in mrfutils.py
 
->>> python3 example_cli.py --url <your_url> --npis <csvfile> --codes <csvfile>
+>>> python3 example_cli.py --npi-file <csvfile> --code-file <csvfile> --url <your_url>
 
 If you plan on importing files with separate URLs, you can feed the URL
 to the URL parameter of `json_mrf_to_csv`. Just add an additional command
@@ -10,8 +10,13 @@ line argument to do that.
 import argparse
 import logging
 
+<<<<<<< HEAD
 from .helpers import import_csv_to_set
 from mrfutils import in_network_file_to_csv
+=======
+from mrfutils.helpers import import_csv_to_set
+from mrfutils.flatteners import in_network_file_to_csv
+>>>>>>> 680227ed9b0ee6f479ab13ff940a46966b7367fe
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
