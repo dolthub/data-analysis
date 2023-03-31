@@ -10,7 +10,7 @@ line argument to do that.
 import argparse
 import logging
 
-from helpers import import_csv_to_set
+from .helpers import import_csv_to_set
 from mrfutils import in_network_file_to_csv
 
 logging.basicConfig()
