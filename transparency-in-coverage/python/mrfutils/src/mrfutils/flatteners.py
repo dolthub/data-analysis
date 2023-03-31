@@ -52,11 +52,7 @@ import aiohttp
 import ijson
 
 from mrfutils.helpers import *
-<<<<<<< HEAD:transparency-in-coverage/python/mrfutils/mrfutils.py
-from schema.schema import SCHEMA
-=======
 from mrfutils.schema.schema import SCHEMA
->>>>>>> 680227ed9b0ee6f479ab13ff940a46966b7367fe:transparency-in-coverage/python/mrfutils/src/mrfutils/flatteners.py
 
 # You can remove this if necessary, but be warned
 # Right now this only works with python 3.9/3.10
