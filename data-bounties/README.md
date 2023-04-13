@@ -77,9 +77,9 @@ Here's an easy way to get those changes.
 
 ## Code of Conduct
 
-Trust, transparency, and attitude play a huge part in the success of producing a quality dataset via DoltHub's contest format. 
+Trust, transparency, and attitude play a huge part in the success of producing a quality dataset via DoltHub's contest format. Bounty hunters are usually smart people making money in their spare time to get experience with data engineering or building cool datasets.
 
-By participating, bounty hunters implicitly agree to the following **Code of Conduct**:
+Having said that, by participating, bounty hunters implicitly agree to the following **Code of Conduct**:
 
 1. I will treat all participants and channel members with politness and respect
 3. I have checked my submissions for mistakes to the best of my ability
