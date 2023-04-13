@@ -88,12 +88,16 @@ By participating, bounty hunters implicitly agree to the following **Code of Con
 Example violations of the Code of Conduct include:
 
 * negative talk about other people in the channel
-* regularly making low-quality submissions
-* not following bounty instructions
-* disguising another persons's submission as my own, or vice versa
+* regularly making low-quality submissions or ignoring instructions
+* excessive arguing
+* disguising another person's work or identity as one's own
 
 and in general, anything else that passes the common-sense test. Ask yourself if it's worth the risk. And if you have to ask, the answer is probably "no."
 
-Bounty hunters who violate the code of conduct won't be allowed to participate in bounties, and potentially forfeit their outstanding winnings, depending on the context. They may or may not be notified prior to taking action.
+Apart from @spacelove, no other DoltHub team members are involved in or influence the data bounties. They are engineering, fundraising, and handling paid customer services. It's an abuse of the DM system (and a general waste of time) to vent about data bounties to any of them. Do not do this.
+
+If it comes to light that you're working closely with (or sharing winnings) with a banned member, it is very likely that you'll be banned yourself, and forfeit your winnings, without warning.
+
+Bounty hunters who violate the code of conduct won't be allowed to participate in bounties, and potentially forfeit their outstanding winnings, depending on the context. They may or may not be banned from the Discord server. They may or may not be notified prior to taking action. 
 
 If you have questions, just DM me @spacelove on Discord.
