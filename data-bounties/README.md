@@ -81,10 +81,10 @@ Trust, transparency, and attitude play a huge part in the success of producing a
 
 By participating, bounty hunters implicitly agree to the following **Code of Conduct**:
 
-1. I will treat all participants and channel members with respect
-1. I have checked my submissions for mistakes
-1. The data that I submit is my own and not someone else's
-1. My wire address is my own and not someone else's
+1. I will treat all participants and channel members with politness and respect
+3. I have checked my submissions for mistakes to the best of my ability
+4. The data that I submit is my own and not someone else's
+5. The identity that I provide upon payment is my own and not someone else's
 
 Example violations of the Code of Conduct include:
 
