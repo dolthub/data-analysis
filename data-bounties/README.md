@@ -93,7 +93,7 @@ Example violations of the Code of Conduct include:
 * excessive arguing
 * disguising another person's work or identity as one's own
 
-and in general, anything else that passes the common-sense test. Ask yourself if it's worth the risk. And if you have to ask, the answer is probably "no."
+and in general, anything else that passes the common-sense test. Ask yourself if it's worth the risk. And if you have to ask, the answer is probably "no." We reserve the right to choose who we work with, for any reason.
 
 Apart from @spacelove, no other DoltHub team members are involved in or influence the data bounties. They are engineering, fundraising, and handling paid customer services. It's an abuse of the DM system (and a general waste of time) to vent about data bounties to any of them. Do not do this.
 
