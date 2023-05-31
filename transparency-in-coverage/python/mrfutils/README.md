@@ -37,12 +37,12 @@ Go to the folder `python/mrfutils` (the same level as the `pyproject.toml`) and 
 pip install .
 ```
 
-Then change directory to `examples` and do:
+In the main directory, run:
 
 ```bash
-python example_cli.py --file examplefile.json.gz --url 'http://example.com'
+python examples/example_cli.py --file examples/examplefile.json.gz --url 'http://example.com'
 ```
-This should produce a debug output that explains what it's writing.
+This should produce a debug output that explains what it's writing. Check the folder `csv_output` for the written files. There will be duplicate rows.
 
 `mrfutils` goes acceptably fast as long as you have the `yajl` backend installed for `ijson`. On Mac, installing looks like:
 
