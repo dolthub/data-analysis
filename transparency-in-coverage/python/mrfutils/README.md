@@ -166,7 +166,9 @@ You can use the same workflow. We don't have an example for index files because 
 
 #### Q: Why does `mrfutils` create so many duplicate rows in the CSVs?
 
-`mrfutils` doesn't know what data its seen before and will write everything as it sees it. For example, it writes a TIN value every time it comes across one while writing a rate. On the one hand, this means it only writes what it uses. On the other, it means that what it does use, it can write multiple times. The only way to avoid duplicating the information on saving is to either rewrite the program logic or to use a database. 
+`mrfutils` streams data in. It doesn't know what data its seen before and will write everything as it sees it. This means that if it sees a value twice, it'll write it twice.
+
+You could keep the hash ids in a set and check against it before writing. For the time being we don't do that.
 
 If you're concerned about the size of the CSVs or duplicate rows, I recommend deduplicating using a dataframe library like pandas or polars after saving.
 
