@@ -10,13 +10,8 @@ line argument to do that.
 import argparse
 import logging
 
-<<<<<<< HEAD
-from .helpers import import_csv_to_set
-from mrfutils import in_network_file_to_csv
-=======
 from mrfutils.helpers import import_csv_to_set
 from mrfutils.flatteners import in_network_file_to_csv
->>>>>>> 680227ed9b0ee6f479ab13ff940a46966b7367fe
 
 logging.basicConfig()
 log = logging.getLogger('mrfutils')
