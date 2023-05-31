@@ -17,6 +17,20 @@ Please let me know if you find any issues!
 
 ### Getting started
 
+If you just want this folder, you can do `pip install github-clone` followed by `ghclone https://github.com/dolthub/data-analysis/tree/main/transparency-in-coverage/python/mrfutils`. This will get you just the MRFUtils folder (minus the git repo).
+
+Python3.9 is recommended:
+
+```
+brew install python@3.9
+```
+
+and use a virtual environment:
+```
+virtualenv --python=/opt/homebrew/bin/python3.9 venv
+source venv/bin/activate.sh
+```
+
 Go to the folder `python/mrfutils` (the same level as the `pyproject.toml`) and do
 
 ```
