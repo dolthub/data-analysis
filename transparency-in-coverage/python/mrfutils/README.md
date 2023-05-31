@@ -42,7 +42,7 @@ In the main directory, run:
 ```bash
 python examples/example_cli.py --file examples/examplefile.json.gz --url 'http://example.com'
 ```
-This should produce a debug output that explains what it's writing. Check the folder `csv_output` for the written files. There will be duplicate rows.
+This should produce a debug output that explains what it's writing. Check the folder `csv_output` for the written files. There will be duplicate rows because there's just no way to keep track of what's duplicated without creating a databse, which is slow. If you're concerned about duplicates, it's easy enough to get rid of them after the fact.
 
 `mrfutils` goes acceptably fast as long as you have the `yajl` backend installed for `ijson`. On Mac, installing looks like:
 
