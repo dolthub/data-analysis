@@ -639,8 +639,8 @@ def swap_references(
 			yield item
 
 
-def start_parser(filename) -> Generator:
-	with JSONOpen(filename) as f:
+def start_parser(filename, zip_file=None) -> Generator:
+	with JSONOpen(filename, zip_file) as f:
 		yield from ijson.parse(f, use_float = True)
 
 
@@ -648,6 +648,7 @@ def in_network_file_to_csv(
 	url: str,
 	out_dir: str,
 	file:        str | None = None,
+	zip_file:    str | None = None,
 	code_filter: set | None = None,
 	npi_filter:  set | None = None,
 ) -> None:
@@ -673,7 +674,7 @@ def in_network_file_to_csv(
 	ref_map = None
 
 	metadata = ijson.ObjectBuilder()
-	parser = start_parser(file)
+	parser = start_parser(file, zip_file)
 
 	file_row = file_row_from_url(url)
 	file_row['url'] = url
@@ -695,7 +696,7 @@ def in_network_file_to_csv(
 		except StopIteration:
 			if completed: break
 			if ref_map is None: ref_map = {}
-			parser = start_parser(file)
+			parser = start_parser(file, zip_file)
 			ffwd(parser, to_prefix='', to_value='in_network')
 			prefix, event, value = ('', 'map_key', 'in_network')
 			prepend(('', 'map_key', 'in_network'), parser)
